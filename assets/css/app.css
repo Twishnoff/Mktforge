@@ -1,0 +1,406 @@
+/* ==========================================================================
+   Mktforge — shell styles
+   Palette and type are carried over from the portfolio site so the two
+   properties read as the same hand.
+   ========================================================================== */
+
+:root {
+  /* Surfaces */
+  --desk:        #E8DFC6;  /* nav + management bar (the cream "frame")      */
+  --paper:       #F6F1E6;  /* display field                                  */
+  --paper-dim:   #EDE6D3;  /* hover / scrollbar track                        */
+  --paper-line:  #CFC6AC;  /* hairlines and borders                          */
+
+  /* Ink */
+  --ink:         #20242B;
+  --ink-soft:    #3C4149;
+  --muted:       #7A7565;
+
+  /* Accent */
+  --accent:      #2F6F4E;
+  --accent-tint: #E4EEE7;
+
+  /* Type */
+  --font-body:    'IBM Plex Sans', system-ui, sans-serif;
+  --font-display: 'Newsreader', Georgia, serif;
+  --font-mono:    'IBM Plex Mono', 'Courier New', monospace;
+
+  /* Frame geometry.
+     The spec called for ~15% / ~5% / ~5%. Those ratios hold on a normal
+     desktop but break at the extremes (15% of a 2560px monitor is a 384px
+     nav; 15% of a 1024px laptop wraps the labels), so each one is expressed
+     as its ratio with a floor and a ceiling. */
+  --nav-w-open:  clamp(200px, 15vw, 260px);
+  --nav-w-min:   64px;
+  --nav-w:       var(--nav-w-open);
+  --mgmt-h:      56px;
+
+  --nav-pad-x:   14px;
+  --radius:      3px;
+  --ease:        180ms cubic-bezier(.4, 0, .2, 1);
+}
+
+body[data-nav="collapsed"] { --nav-w: var(--nav-w-min); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--desk);
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; color: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   App frame
+   The nav spans both rows (top of screen to bottom); the management bar
+   occupies the top row to the right of it; the display field takes the rest.
+   ========================================================================== */
+
+.app {
+  display: grid;
+  grid-template-columns: var(--nav-w) 1fr;
+  grid-template-rows: var(--mgmt-h) 1fr;
+  height: 100dvh;
+  transition: grid-template-columns var(--ease);
+}
+
+/* ==========================================================================
+   Navigation bar
+   ========================================================================== */
+
+.nav {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--desk);
+  border-right: 1px solid var(--paper-line);
+  overflow: hidden;
+}
+
+/* Logo block: exactly as tall as the management bar, so the wordmark sits on
+   the same optical line as the profile on the other side of the screen. */
+.nav__logo {
+  flex: 0 0 var(--mgmt-h);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--nav-pad-x);
+}
+
+.logo {
+  font-family: var(--font-display);
+  font-size: 22px;           /* smaller than the 56px management bar */
+  font-weight: 600;
+  letter-spacing: .06em;
+  color: var(--ink);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.logo__mark { display: none; }
+
+body[data-nav="collapsed"] .nav__logo { justify-content: center; padding: 0; }
+body[data-nav="collapsed"] .logo__full { display: none; }
+body[data-nav="collapsed"] .logo__mark { display: inline; }
+
+/* Module buttons start below the line where the management bar meets the nav */
+.nav__list {
+  flex: 1 1 auto;
+  list-style: none;
+  margin: 0;
+  padding: 22px 8px 8px;
+  overflow-y: auto;         /* room to grow when there are many modules */
+  overflow-x: hidden;
+}
+
+.nav__item + .nav__item { margin-top: 4px; }
+
+.nav__button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--ease), color var(--ease);
+}
+
+.nav__button:hover { background: var(--paper-dim); color: var(--ink); }
+
+.nav__button[aria-current="page"] {
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Active marker on the left edge of the button */
+.nav__button[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+}
+
+.nav__icon {
+  flex: 0 0 20px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+
+.nav__icon svg { width: 20px; height: 20px; display: block; }
+
+.nav__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Collapsed: icon only, with a tooltip on hover */
+body[data-nav="collapsed"] .nav__list { padding-left: 6px; padding-right: 6px; }
+body[data-nav="collapsed"] .nav__button { justify-content: center; padding: 10px 0; }
+body[data-nav="collapsed"] .nav__label { display: none; }
+
+body[data-nav="collapsed"] .nav__button::after {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 5px 9px;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 40;
+}
+
+body[data-nav="collapsed"] .nav__button:hover::after,
+body[data-nav="collapsed"] .nav__button:focus-visible::after { opacity: 1; }
+
+/* Minimize control, bottom-right of the nav */
+.nav__footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px var(--nav-pad-x) 14px;
+  border-top: 1px solid color-mix(in srgb, var(--paper-line) 60%, transparent);
+}
+
+body[data-nav="collapsed"] .nav__footer { justify-content: center; padding-left: 0; padding-right: 0; }
+
+.nav__minimize {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--ease), color var(--ease), border-color var(--ease);
+}
+
+.nav__minimize:hover {
+  background: var(--paper-dim);
+  border-color: var(--paper-line);
+  color: var(--ink);
+}
+
+.nav__minimize-icon {
+  width: 9px;
+  height: 9px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translate(1px, -1px);
+  transition: transform var(--ease);
+}
+
+body[data-nav="collapsed"] .nav__minimize-icon {
+  transform: rotate(-135deg) translate(1px, -1px);
+}
+
+/* ==========================================================================
+   Management bar
+   ========================================================================== */
+
+.mgmt {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 16px 0 20px;
+  background: var(--desk);
+  border-bottom: 1px solid var(--paper-line);
+}
+
+.mgmt__spacer { flex: 1 1 auto; }
+
+.profile { position: relative; }
+
+.profile__button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--ease), border-color var(--ease);
+}
+
+.profile__button:hover { background: var(--paper-dim); border-color: var(--paper-line); }
+
+.profile__avatar {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--paper-dim);
+  border: 1px solid var(--paper-line);
+  color: var(--muted);
+}
+
+.profile__avatar svg { width: 30px; height: 30px; display: block; }
+.profile__avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* The name is never truncated — a long name pushes everything else left,
+   which is the behaviour the spec asks for. */
+.profile__name {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.profile__caret {
+  width: 0;
+  height: 0;
+  border-left: 4.5px solid transparent;
+  border-right: 4.5px solid transparent;
+  border-top: 5px solid var(--muted);
+  transition: transform var(--ease);
+}
+
+.profile__button[aria-expanded="true"] .profile__caret { transform: rotate(180deg); }
+
+/* Dropdown */
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 170px;
+  padding: 5px;
+  background: var(--paper);
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 26px rgba(32, 36, 43, .14);
+  z-index: 50;
+}
+
+.menu[hidden] { display: none; }
+
+.menu__item {
+  display: block;
+  width: 100%;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu__item:hover { background: var(--paper-dim); color: var(--ink); }
+
+/* ==========================================================================
+   Display field — the only scrolling region
+   ========================================================================== */
+
+.display {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  overflow-y: scroll;   /* always reserve the track so content never shifts */
+  overflow-x: hidden;
+  background: var(--paper);
+  scrollbar-color: var(--paper-line) var(--paper-dim);
+  scrollbar-width: thin;
+}
+
+.display:focus { outline: none; }
+
+.display::-webkit-scrollbar { width: 12px; }
+.display::-webkit-scrollbar-track { background: var(--paper-dim); }
+.display::-webkit-scrollbar-thumb {
+  background: var(--paper-line);
+  border: 3px solid var(--paper-dim);
+  border-radius: 999px;
+}
+.display::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+.display__mount { min-height: 100%; }
+
+/* ==========================================================================
+   Crude small-screen fallback.
+   Desktop is the target for now; this only keeps things usable rather than
+   being a designed mobile layout.
+   ========================================================================== */
+
+@media (max-width: 860px) {
+  :root { --nav-w-open: var(--nav-w-min); }
+  body[data-nav="expanded"] .nav__label,
+  body[data-nav="expanded"] .logo__full { display: none; }
+  body[data-nav="expanded"] .logo__mark { display: inline; }
+  body[data-nav="expanded"] .nav__logo { justify-content: center; padding: 0; }
+  body[data-nav="expanded"] .nav__button { justify-content: center; padding: 10px 0; }
+  .nav__minimize { display: none; }
+}

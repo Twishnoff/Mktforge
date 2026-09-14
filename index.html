@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mktforge</title>
+<meta name="description" content="Mktforge — modular marketing workspace.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='14' fill='%232F6F4E'/><text x='50' y='70' font-size='62' font-family='Georgia,serif' fill='%23F6F1E6' text-anchor='middle'>M</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body data-nav="expanded">
+
+<div class="app">
+
+  <!-- ========== NAVIGATION BAR ========== -->
+  <nav class="nav" aria-label="Modules">
+    <div class="nav__logo">
+      <span class="logo" aria-label="Mktforge">
+        <span class="logo__full">LOGO</span>
+        <span class="logo__mark" aria-hidden="true">L</span>
+      </span>
+    </div>
+
+    <ul class="nav__list" id="nav-list" role="list">
+      <!-- module buttons are rendered here by app.js from the module registry -->
+    </ul>
+
+    <div class="nav__footer">
+      <button class="nav__minimize" id="nav-minimize" type="button"
+              aria-label="Minimize navigation" aria-expanded="true" title="Minimize navigation">
+        <span class="nav__minimize-icon" aria-hidden="true"></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ========== MANAGEMENT BAR ========== -->
+  <header class="mgmt">
+    <!-- future management-bar links go here, to the left of the profile -->
+    <div class="mgmt__spacer"></div>
+
+    <div class="profile" id="profile">
+      <button class="profile__button" id="profile-button" type="button"
+              aria-haspopup="menu" aria-expanded="false" aria-controls="profile-menu">
+        <span class="profile__avatar" id="profile-avatar" aria-hidden="true"></span>
+        <span class="profile__name" id="profile-name">&nbsp;</span>
+        <span class="profile__caret" aria-hidden="true"></span>
+      </button>
+
+      <div class="menu" id="profile-menu" role="menu" aria-labelledby="profile-button" hidden>
+        <button class="menu__item" type="button" role="menuitem" id="sign-out">Sign Out</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========== DISPLAY FIELD ========== -->
+  <main class="display" id="display" tabindex="-1">
+    <div class="display__mount" id="display-mount"></div>
+  </main>
+
+</div>
+
+<!-- Shell -->
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/app.js"></script>
+
+<!-- Modules: add one line per module. Each module lives in its own folder
+     and calls Mktforge.register(). Nothing else in the shell needs to change. -->
+<script src="modules/module-1/module-1.js"></script>
+
+</body>
+</html>
