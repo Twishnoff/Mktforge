@@ -312,7 +312,14 @@ window.MktforgePersonaPdf = (function () {
                pageWidth - MARGIN, pageHeight - 12, { align: 'right' });
     }
 
-    doc.save(`persona-${slugify(title)}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    const fileName = `persona-${slugify(title)}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    // Mktforge: download as "Persona Builder N.pdf" and keep a copy in My Company.
+    if (window.MktforgeData) {
+      return window.MktforgeData.savePdfDoc(doc, {
+        moduleId: 'persona-builder', moduleName: 'Persona Builder', fallbackName: fileName
+      });
+    }
+    doc.save(fileName);
   }
 
   return { build };

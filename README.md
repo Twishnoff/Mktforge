@@ -11,10 +11,13 @@ assets/img/                 logo (SVG lockup + mark, traced from mktforge-logo.p
 assets/js/config.js         public config for modules (no secrets)
 assets/js/icons.js          inline SVG icon set
 assets/js/auth.js           Firebase Authentication adapter
+assets/js/data.js           per-account data (Firestore): profile, saved PDFs, autofill
+assets/data/industries.js   Crunchbase industry list (suggestions)
 assets/js/login.js          login page logic
 assets/css/login.css        login page styles
-assets/js/app.js            shell logic + module registry
-modules/module-1/           example module (js + css)
+assets/js/app.js            shell logic + module registry + notices
+firestore.rules             Firestore security rules (paste into the console)
+modules/my-company/         My Company (profile + saved resources)
 modules/find-my-customer/   Find My Customer (ported from Customer-Intelligence)
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
 modules/battle-card-generator/  Battle Card Generator (ported from Battlecard-Generator)
@@ -37,7 +40,7 @@ then open http://localhost:8000
 
 ## Adding a module
 
-1. Copy `modules/module-1/` to `modules/your-module/` and rename the files.
+1. Create `modules/your-module/` with a JS and CSS file (any existing module is a template).
 2. Change `id`, `label`, and `icon` at the top of the JS file.
 3. Add one line to `index.html`:
    `<script src="modules/your-module/your-module.js"></script>`
@@ -90,6 +93,76 @@ ratio with a floor and a ceiling (`assets/css/app.css`, `:root`):
 | Nav, expanded   | `clamp(200px, 15vw, 260px)`    | 216px (15%)    |
 | Nav, minimized  | `64px`                         | 4.4%           |
 | Management bar  | `56px`                         | —              |
+
+
+## My Company
+
+The first nav button (factory icon). Replaced the old "Module 1" placeholder.
+
+- **Profile**: Company Name, Company URL, Your Industry, Target Job Titles,
+  Target Industries, Competitors. Empty rows are inputs; saved rows show the
+  value with an Edit button. Save writes the whole profile to the account.
+- **Your Industry / Target Industries** suggest from the Crunchbase glossary
+  (`assets/data/industries.js`) once two letters are typed. Anything can
+  still be entered.
+- **Tag fields**: Enter turns the text into a tag, × removes it, Backspace
+  in an empty box removes the last one. Competitors must be valid website
+  addresses (`rival.com` is fine; no `https://` needed). Text typed but not
+  yet entered is kept when Save is pressed.
+- **Your Saved Resources**: every PDF made in another module, newest first.
+  Click the name to open it; Delete asks for a second click, then removes the
+  file from the account.
+
+### Autofill
+
+When a module opens, still-empty fields are filled from the profile. Anything
+already typed is never overwritten.
+
+| Module | Field ← profile |
+|---|---|
+| Find My Customer | Company URL ← Company URL |
+| Persona Builder | Job Title ← first Target Job Title; Industry ← first Target Industry |
+| Battle Card Generator | Company URL; Competitor URL ← first Competitor; Job Title ← first Target Job Title; Industry ← first Target Industry |
+| Marketing Opportunities | Company URL; Job Titles 1–3 ← first three Target Job Titles; Industry ← first Target Industry |
+
+Persona Builder's email field is deliberately left alone.
+
+### Saved PDFs and naming
+
+Each module's PDF button now downloads the file as `<Module Name> N.pdf`
+(for example `Persona Builder 3.pdf`) and saves a copy to the account. N is a
+per-module counter stored on the account, so it keeps counting after a
+delete. If the account can't be reached, the download still happens under the
+module's old filename and a notice says the copy wasn't saved.
+
+### Storage (free tier)
+
+Everything is in **Cloud Firestore** on the free Spark plan:
+
+```
+users/{uid}                          profile, pdfCounters, email
+users/{uid}/files/{fileId}           name, moduleId, moduleName, size, chunks, createdAt
+users/{uid}/files/{fileId}/chunks/n  PDF bytes (≤700 KB per chunk)
+```
+
+Firebase Storage would be the usual home for files, but new buckets need the
+paid Blaze plan, so PDF bytes are split into Firestore Blob chunks instead.
+At a couple of users this sits well inside the free quotas (1 GiB stored,
+50k reads / 20k writes a day). A PDF costs roughly one write per 700 KB plus
+two. If PDFs ever get large or numerous, moving the bytes to Storage is a
+change inside `assets/js/data.js` only.
+
+In preview mode (Firebase not configured) the same API uses this browser's
+localStorage so the UI can still be tried.
+
+### One-time Firestore setup
+
+1. Firebase console → **Build → Firestore Database → Create database** →
+   Standard edition, any location near you → **Start in production mode**.
+2. **Firestore → Rules** → replace everything with `firestore.rules` from
+   this repo → **Publish**. The rules only let a signed-in, email-verified
+   user read and write their own `users/{uid}` records.
+3. No index is needed (the file list is a single-field sort).
 
 
 ## Find My Customer

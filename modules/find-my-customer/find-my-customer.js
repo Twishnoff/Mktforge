@@ -304,7 +304,7 @@
       await Mktforge.loadScript(JSPDF_SRC);
       await Mktforge.loadScript(AUTOTABLE_SRC);
       await Mktforge.loadScript(PDF_SRC);
-      window.MktforgeCustomerPdf.build({ companyUrl: state.runUrl, ...state.data });
+      await window.MktforgeCustomerPdf.build({ companyUrl: state.runUrl, ...state.data });
     } catch (err) {
       console.error('[Find My Customer] PDF export failed', err);
       if (mounted) showError('Could not generate the PDF. Please try again.');
@@ -345,6 +345,12 @@
     if (state.error) showError(state.error);
   }
 
+  /* Fill still-empty fields from My Company (assets/js/data.js). */
+  function autofill() {
+    if (!window.MktforgeData) return;
+    window.MktforgeData.prefill([[el.url, 'companyUrl']]);
+  }
+
   /* ---------- module contract ---------- */
 
   Mktforge.register({
@@ -371,6 +377,7 @@
       el.pdf.addEventListener('click', handlePdf);
 
       restore();
+      autofill();
     },
 
     unmount() {

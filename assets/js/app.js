@@ -8,10 +8,10 @@
    A module is a folder under /modules that loads one script and calls:
 
      Mktforge.register({
-       id:     'module-1',                        // unique; also the URL hash
-       label:  'Module 1',                        // nav button text
-       icon:   'user',                            // key in MktforgeIcons
-       styles: 'modules/module-1/module-1.css',   // optional, loaded on demand
+       id:     'my-company',                        // unique; also the URL hash
+       label:  'My Company',                        // nav button text
+       icon:   'factory',                           // key in MktforgeIcons
+       styles: 'modules/my-company/my-company.css', // optional, loaded on demand
        mount(container)   { ... },                // build your UI inside it
        unmount(container) { ... }                 // optional cleanup
      });
@@ -181,6 +181,33 @@ window.Mktforge = (() => {
     document.addEventListener('mktforge:user-changed', renderProfile);
   }
 
+  /* ---------- Notices ----------
+     Anything can raise a short message without touching the shell's DOM:
+     document.dispatchEvent(new CustomEvent('mktforge:notify',
+       { detail: { message, tone: 'info' | 'error' } })) */
+
+  function initNotices() {
+    const host = document.createElement('div');
+    host.className = 'toasts';
+    host.setAttribute('role', 'status');
+    host.setAttribute('aria-live', 'polite');
+    document.body.appendChild(host);
+
+    document.addEventListener('mktforge:notify', (e) => {
+      const { message, tone } = e.detail || {};
+      if (!message) return;
+      const t = document.createElement('div');
+      t.className = `toast${tone === 'error' ? ' toast--error' : ''}`;
+      t.textContent = message;
+      host.appendChild(t);
+      requestAnimationFrame(() => t.classList.add('is-in'));
+      setTimeout(() => {
+        t.classList.remove('is-in');
+        setTimeout(() => t.remove(), 300);
+      }, tone === 'error' ? 7000 : 4000);
+    });
+  }
+
   /* ---------- Display field ---------- */
 
   function ensureStyles(mod) {
@@ -230,7 +257,7 @@ window.Mktforge = (() => {
 
   /* ---------- Routing ----------
      Hash routing on purpose: GitHub Pages serves static files, so a real
-     path like /module-1 would 404 on refresh or on a shared link. */
+     path like /my-company would 404 on refresh or on a shared link. */
 
   function route() {
     const id = (location.hash || '').replace(/^#\/?/, '');
@@ -252,6 +279,7 @@ window.Mktforge = (() => {
     document.body.dataset.auth = 'ready';
 
     initNavToggle();
+    initNotices();
     renderProfile();
     initProfileMenu();
     renderNav();

@@ -490,7 +490,7 @@
     try {
       await Mktforge.loadScript(JSPDF_SRC);
       await Mktforge.loadScript('modules/persona-builder/persona-pdf.js');
-      window.MktforgePersonaPdf.build(state.persona);
+      await window.MktforgePersonaPdf.build(state.persona);
     } catch (err) {
       console.error('PDF export failed:', err);
       if (mounted) showFormError("Couldn't generate the PDF — please try again.");
@@ -532,6 +532,15 @@
     if (state.error) showFormError(state.error);
   }
 
+  /* Fill still-empty fields from My Company (assets/js/data.js). */
+  function autofill() {
+    if (!window.MktforgeData) return;
+    window.MktforgeData.prefill([
+      [el.jobTitle, (p) => p.targetTitles[0]],
+      [el.industry, (p) => p.targetIndustries[0]]
+    ]);
+  }
+
   /* ---------- module contract ---------- */
 
   Mktforge.register({
@@ -566,6 +575,7 @@
       restore();
       updateGenerateEnabled();
       initTurnstile();
+      autofill();
     },
 
     unmount() {

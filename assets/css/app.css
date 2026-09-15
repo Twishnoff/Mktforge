@@ -423,3 +423,36 @@ body[data-nav="collapsed"] .nav__minimize-icon {
   body[data-nav="expanded"] .nav__button { justify-content: center; padding: 10px 0; }
   .nav__minimize { display: none; }
 }
+
+/* ==========================================================================
+   Notices (mktforge:notify)
+   ========================================================================== */
+
+.toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  max-width: 360px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: #F6F1E6;
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: 0 6px 20px rgba(32, 36, 43, .18);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity var(--ease), transform var(--ease);
+}
+
+.toast.is-in { opacity: 1; transform: none; }
+.toast--error { background: #A8371F; }

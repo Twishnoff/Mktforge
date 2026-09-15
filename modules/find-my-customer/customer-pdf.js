@@ -184,7 +184,14 @@ window.MktforgeCustomerPdf = (function () {
       doc.text(`Page ${i} of ${pageCount}`, pageWidth - MARGIN, pageHeight - 20, { align: 'right' });
     }
 
-    doc.save(`find-my-customer-${slugify(run.companyUrl)}.pdf`);
+    const fileName = `find-my-customer-${slugify(run.companyUrl)}.pdf`;
+    // Mktforge: download as "Find My Customer N.pdf" and keep a copy in My Company.
+    if (window.MktforgeData) {
+      return window.MktforgeData.savePdfDoc(doc, {
+        moduleId: 'find-my-customer', moduleName: 'Find My Customer', fallbackName: fileName
+      });
+    }
+    doc.save(fileName);
   }
 
   return { build };

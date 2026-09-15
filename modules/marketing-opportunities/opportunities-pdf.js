@@ -143,7 +143,14 @@ window.MktforgeOpportunitiesPdf = (function () {
       doc.text(`Page ${i} of ${pageCount}`, pageWidth - MARGIN, pageHeight - 20, { align: 'right' });
     }
 
-    doc.save(`marketing-opportunities-${slugify(run.companyName || run.companyUrl)}.pdf`);
+    const fileName = `marketing-opportunities-${slugify(run.companyName || run.companyUrl)}.pdf`;
+    // Mktforge: download as "Marketing Opportunities N.pdf" and keep a copy in My Company.
+    if (window.MktforgeData) {
+      return window.MktforgeData.savePdfDoc(doc, {
+        moduleId: 'marketing-opportunities', moduleName: 'Marketing Opportunities', fallbackName: fileName
+      });
+    }
+    doc.save(fileName);
   }
 
   return { build };

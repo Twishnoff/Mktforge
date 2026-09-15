@@ -382,7 +382,7 @@
       await Mktforge.loadScript(JSPDF_SRC);
       await Mktforge.loadScript(AUTOTABLE_SRC);
       await Mktforge.loadScript(PDF_SRC);
-      window.MktforgeOpportunitiesPdf.build(state.run, { CATEGORY_LABELS, CATEGORY_ORDER, safeUrl });
+      await window.MktforgeOpportunitiesPdf.build(state.run, { CATEGORY_LABELS, CATEGORY_ORDER, safeUrl });
     } catch (err) {
       console.error('[Marketing Opportunities] PDF export failed', err);
       if (mounted) showError('Could not generate the PDF. Please try again.');
@@ -427,6 +427,18 @@
     if (state.error) showError(state.error);
   }
 
+  /* Fill still-empty fields from My Company (assets/js/data.js). */
+  function autofill() {
+    if (!window.MktforgeData) return;
+    window.MktforgeData.prefill([
+      [el.companyUrl, 'companyUrl'],
+      [el.jobTitle1,  (p) => p.targetTitles[0]],
+      [el.jobTitle2,  (p) => p.targetTitles[1]],
+      [el.jobTitle3,  (p) => p.targetTitles[2]],
+      [el.industry,   (p) => p.targetIndustries[0]]
+    ]);
+  }
+
   /* ---------- module contract ---------- */
 
   Mktforge.register({
@@ -458,6 +470,7 @@
 
       restore();
       updateSubmitEnabled();
+      autofill();
     },
 
     unmount() {

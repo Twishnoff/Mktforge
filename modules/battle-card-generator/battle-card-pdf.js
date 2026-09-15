@@ -578,7 +578,14 @@ window.MktforgeBattleCardPdf = (function () {
       });
     }
 
-    doc.save(`battle-card-${slugify(run.competitorName)}.pdf`);
+    const fileName = `battle-card-${slugify(run.competitorName)}.pdf`;
+    // Mktforge: download as "Battle Card Generator N.pdf" and keep a copy in My Company.
+    if (window.MktforgeData) {
+      return window.MktforgeData.savePdfDoc(doc, {
+        moduleId: 'battle-card-generator', moduleName: 'Battle Card Generator', fallbackName: fileName
+      });
+    }
+    doc.save(fileName);
   }
 
   return { build: buildPdf };

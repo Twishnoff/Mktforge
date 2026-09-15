@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// Mktforge — Cloud Firestore security rules
+// Paste into: Firebase console → Firestore Database → Rules → Publish.
+//
+// Every record lives under users/{uid}. Only the signed-in owner of that uid,
+// with a verified email address, can read or write it. Everything else is
+// denied by default.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+
+      match /files/{fileId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.name is string
+          && request.resource.data.name.size() <= 200
+          && request.resource.data.chunks is int
+          && request.resource.data.chunks <= 25;
+
+        match /chunks/{chunkId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid)
+            && request.resource.data.data is bytes
+            && request.resource.data.data.size() <= 750 * 1024;
+        }
+      }
+    }
+
+    function isOwner(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email_verified == true;
+    }
+  }
+}

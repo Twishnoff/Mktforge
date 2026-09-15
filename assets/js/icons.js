@@ -7,7 +7,17 @@
 
 window.MktforgeIcons = {
 
-  /* Generic user profile — the placeholder icon for Module 1 */
+  /* My Company — factory with a sawtooth roof and a smokestack */
+  factory: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2.8 20.5h18.4"/>
+              <path d="M3.8 20.5V9.2l4.6 3.1V9.2l4.6 3.1V9.2l3.4 2.3V3.5h3.8v17"/>
+              <rect x="6.4" y="15.6" width="2.2" height="2.2" rx=".3"/>
+              <rect x="10.9" y="15.6" width="2.2" height="2.2" rx=".3"/>
+              <rect x="15.4" y="15.6" width="2.2" height="2.2" rx=".3"/>
+            </svg>`,
+
+  /* Generic user profile — account avatar fallback */
   user: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
            <circle cx="12" cy="8" r="3.6"/>

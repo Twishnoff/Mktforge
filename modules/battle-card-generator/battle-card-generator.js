@@ -480,7 +480,7 @@ window.MktforgeBattleCardText = (function () {
     try {
       await Mktforge.loadScript(JSPDF_SRC);
       await Mktforge.loadScript(PDF_SRC);
-      window.MktforgeBattleCardPdf.build(state.run);
+      await window.MktforgeBattleCardPdf.build(state.run);
     } catch (err) {
       console.error('[Battle Card Generator] PDF export failed', err);
       if (mounted) showError('Could not generate the PDF. Please try again.');
@@ -524,6 +524,17 @@ window.MktforgeBattleCardText = (function () {
     if (state.error) showError(state.error);
   }
 
+  /* Fill still-empty fields from My Company (assets/js/data.js). */
+  function autofill() {
+    if (!window.MktforgeData) return;
+    window.MktforgeData.prefill([
+      [el.companyUrl,    'companyUrl'],
+      [el.competitorUrl, (p) => p.competitors[0]],
+      [el.jobTitle,      (p) => p.targetTitles[0]],
+      [el.industry,      (p) => p.targetIndustries[0]]
+    ]);
+  }
+
   /* ---------- module contract ---------- */
 
   Mktforge.register({
@@ -556,6 +567,7 @@ window.MktforgeBattleCardText = (function () {
 
       restore();
       updateGenerateEnabled();
+      autofill();
     },
 
     unmount() {

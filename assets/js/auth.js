@@ -132,6 +132,7 @@ window.MktforgeAuth = (() => {
 
     init,
     ready,
+    sdkVersion: SDK_VERSION,
     isConfigured,
     config: authCfg,
 
