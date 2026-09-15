@@ -99,7 +99,8 @@
     editing: new Set(),    // keys a person opened with Edit
     drafts: {},            // unsaved input per key, kept across navigation
     files: null,
-    filesError: ''
+    filesError: '',
+    renaming: null         // { id, value, error, saving } while a file name is being edited
   };
 
   let root = null;
@@ -255,17 +256,131 @@
         <table class="mc__table">
           <thead><tr><th scope="col">File</th><th scope="col">Module</th><th scope="col">Created</th><th scope="col"><span class="mc__sr">Actions</span></th></tr></thead>
           <tbody>
-            ${state.files.map((f) => `
-              <tr data-file="${esc(f.id)}">
-                <td><button type="button" class="mc__file" data-open="${esc(f.id)}">${esc(f.name)}.pdf</button>
-                    <span class="mc__meta">${esc(formatSize(f.size))}</span></td>
-                <td>${esc(f.moduleName || '')}</td>
-                <td>${esc(formatDate(f.createdAt))}</td>
-                <td class="mc__cell-action"><button type="button" class="mc__delete" data-delete="${esc(f.id)}">Delete</button></td>
-              </tr>`).join('')}
+            ${state.files.map((f) => fileRowHtml(f)).join('')}
           </tbody>
         </table>
       </div>`;
+
+    const r = state.renaming;
+    if (r) {
+      const input = q('[data-rename-input]');
+      if (!input) { state.renaming = null; return; }   // file was deleted elsewhere
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }
+
+  function fileRowHtml(f) {
+    const r = state.renaming && state.renaming.id === f.id ? state.renaming : null;
+    const nameCell = r
+      ? `<div class="mc__rename">
+           <input type="text" class="mc__rename-input" data-rename-input="${esc(f.id)}"
+                  value="${esc(r.value)}" maxlength="200" aria-label="New name for ${esc(f.name)}"
+                  aria-invalid="${r.error ? 'true' : 'false'}" ${r.saving ? 'disabled' : ''}
+                  aria-describedby="mc-rename-error">
+           <span class="mc__meta">.pdf</span>
+         </div>
+         <p class="mc__field-error" id="mc-rename-error" data-rename-error ${r.error ? '' : 'hidden'}>${esc(r.error || '')}</p>`
+      : `<button type="button" class="mc__file" data-open="${esc(f.id)}">${esc(f.name)}.pdf</button>
+         <span class="mc__meta">${esc(formatSize(f.size))}</span>`;
+    const renameBtn = r
+      ? `<button type="button" class="mc__rename-btn is-saving" data-rename-save="${esc(f.id)}"
+                 ${r.error || r.saving ? 'disabled' : ''}>${r.saving ? 'Saving…' : 'Save'}</button>`
+      : `<button type="button" class="mc__rename-btn" data-rename="${esc(f.id)}">Rename</button>`;
+    return `
+      <tr data-file="${esc(f.id)}"${r ? ' class="is-renaming"' : ''}>
+        <td class="mc__cell-name">${nameCell}</td>
+        <td>${esc(f.moduleName || '')}</td>
+        <td>${esc(formatDate(f.createdAt))}</td>
+        <td class="mc__cell-action">${renameBtn}<button type="button" class="mc__delete" data-delete="${esc(f.id)}">Delete</button></td>
+      </tr>`;
+  }
+
+  /* ---------- rename ---------- */
+
+  const RENAME_DUPLICATE = 'File name already exists. Choose another.';
+
+  const cleanFileName = (v) => String(v || '').trim().replace(/\.pdf$/i, '').trim();
+
+  function renameProblem(id, value) {
+    const name = cleanFileName(value);
+    if (!name) return 'Enter a file name.';
+    const lower = name.toLowerCase();
+    if ((state.files || []).some((f) => f.id !== id && f.name.trim().toLowerCase() === lower)) {
+      return RENAME_DUPLICATE;
+    }
+    return '';
+  }
+
+  // Updates the error line and the Save button without redrawing the row,
+  // so typing never loses focus.
+  function syncRenameUi() {
+    const r = state.renaming;
+    if (!r) return;
+    const input = q('[data-rename-input]');
+    const err = q('[data-rename-error]');
+    const save = q('[data-rename-save]');
+    if (input) input.setAttribute('aria-invalid', r.error ? 'true' : 'false');
+    if (err) { err.textContent = r.error || ''; err.hidden = !r.error; }
+    if (save) save.disabled = !!r.error || !!r.saving;
+  }
+
+  function startRename(id) {
+    const f = (state.files || []).find((x) => x.id === id);
+    if (!f) return;
+    state.renaming = { id, value: f.name, error: '', saving: false };
+    renderFiles();
+    const input = q('[data-rename-input]');
+    if (input) input.select();
+  }
+
+  function cancelRename() {
+    if (!state.renaming || state.renaming.saving) return;
+    state.renaming = null;
+    renderFiles();
+  }
+
+  async function saveRename() {
+    const r = state.renaming;
+    if (!r || r.saving) return;
+    const f = (state.files || []).find((x) => x.id === r.id);
+    const name = cleanFileName(r.value);
+    r.error = renameProblem(r.id, r.value);
+    if (r.error) { syncRenameUi(); return; }
+
+    if (f && f.name === name) {              // unchanged: just close the editor
+      state.renaming = null;
+      renderFiles();
+      return;
+    }
+
+    r.saving = true;
+    renderFiles();
+    try {
+      await Data().renameFile(r.id, name);
+      if (f) f.name = name;
+      if (state.renaming === r) state.renaming = null;
+    } catch (ex) {
+      console.error('[My Company] rename failed', ex);
+      r.saving = false;
+      r.error = ex && ex.code === 'duplicate' ? RENAME_DUPLICATE
+              : (ex && ex.code ? ex.message : 'Couldn’t rename that file. Please try again.');
+    }
+    if (mounted) renderFiles();
+  }
+
+  function handleFilesInput(e) {
+    const input = e.target.closest('[data-rename-input]');
+    if (!input || !state.renaming) return;
+    state.renaming.value = input.value;
+    state.renaming.error = renameProblem(state.renaming.id, input.value);
+    syncRenameUi();
+  }
+
+  function handleFilesKeydown(e) {
+    if (!e.target.closest('[data-rename-input]')) return;
+    if (e.key === 'Enter') { e.preventDefault(); saveRename(); }
+    else if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
   }
 
   /* ---------- row behaviour ---------- */
@@ -517,6 +632,10 @@
   }
 
   async function handleFilesClick(e) {
+    const renameBtn = e.target.closest('[data-rename]');
+    if (renameBtn) { startRename(renameBtn.dataset.rename); return; }
+    if (e.target.closest('[data-rename-save]')) { saveRename(); return; }
+
     const open = e.target.closest('[data-open]');
     if (open) {
       open.disabled = true;
@@ -601,6 +720,8 @@
         if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
       });
       q('[data-el="files"]').addEventListener('click', handleFilesClick);
+      q('[data-el="files"]').addEventListener('input', handleFilesInput);
+      q('[data-el="files"]').addEventListener('keydown', handleFilesKeydown);
 
       if (state.loaded) renderRows(); else load();
       renderFiles();

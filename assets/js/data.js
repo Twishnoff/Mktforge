@@ -29,6 +29,8 @@
      listFiles()                     -> Promise<[{ id, name, moduleName, size, createdAt }]>
      openFile(id)                    -> opens the PDF in a new tab
      deleteFile(id)                  -> Promise
+     renameFile(id, name)            -> Promise; rejects with code 'duplicate'
+     nameTaken(name, exceptId)       -> Promise<boolean> (case-insensitive)
      onFiles(fn)                     -> unsubscribe; fn() whenever the list changes
      prefill(pairs)                  -> fills EMPTY inputs from the profile
      util.normalizeUrl / util.isValidUrl
@@ -192,7 +194,27 @@ window.MktforgeData = (() => {
 
   /* ---------- files ---------- */
 
+  const sameName = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+
+  async function nameTaken(name, exceptId) {
+    const files = await listFiles();
+    return files.some((f) => f.id !== exceptId && sameName(f.name, name));
+  }
+
+  /* "<Module Name> N", where N is the account's per-module counter. If a
+     renamed file already uses that name, the counter keeps going. */
   async function reserveName(moduleId, moduleName) {
+    let taken = new Set();
+    try { taken = new Set((await listFiles()).map((f) => f.name.trim().toLowerCase())); }
+    catch (err) { console.warn('[Mktforge] could not check existing file names', err); }
+    for (let guard = 0; guard < 50; guard += 1) {
+      const name = await nextCounterName(moduleId, moduleName);
+      if (!taken.has(name.toLowerCase())) return name;
+    }
+    throw new Error('Could not find a free file name.');
+  }
+
+  async function nextCounterName(moduleId, moduleName) {
     if (isLocal()) {
       const data = localRead();
       data.pdfCounters = data.pdfCounters || {};
@@ -382,6 +404,27 @@ window.MktforgeData = (() => {
     fileListeners.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
   }
 
+  async function renameFile(id, rawName) {
+    const name = String(rawName || '').trim();
+    if (!name) throw Object.assign(new Error('Enter a file name.'), { code: 'empty' });
+    if (name.length > 200) throw Object.assign(new Error('That name is too long.'), { code: 'long' });
+    if (await nameTaken(name, id)) {
+      throw Object.assign(new Error('File name already exists. Choose another.'), { code: 'duplicate' });
+    }
+    if (isLocal()) {
+      const data = localRead();
+      const f = (data.files || []).find((x) => x.id === id);
+      if (!f) throw new Error('That file no longer exists.');
+      f.name = name;
+      localWrite(data);
+    } else {
+      const d = await getDb();
+      await withTimeout(filesRef(d).doc(id).update({ name }), TIMEOUT_MS, 'Renaming the PDF');
+    }
+    fileListeners.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
+    return name;
+  }
+
   function onFiles(fn) { fileListeners.add(fn); return () => fileListeners.delete(fn); }
 
   /* ---------- autofill for other modules ----------
@@ -404,7 +447,7 @@ window.MktforgeData = (() => {
 
   return {
     getProfile, saveProfile, onProfile,
-    savePdfDoc, listFiles, openFile, deleteFile, onFiles,
+    savePdfDoc, listFiles, openFile, deleteFile, renameFile, nameTaken, onFiles,
     prefill,
     get isLocal() { return isLocal(); },
     util: { normalizeUrl, isValidUrl }

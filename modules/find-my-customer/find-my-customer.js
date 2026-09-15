@@ -37,11 +37,6 @@
 
     <section class="fmc__submit" aria-label="Company inputs">
       <form class="fmc__form" data-el="form" autocomplete="off" novalidate>
-        <div class="fmc__field">
-          <label for="fmc-email">Email</label>
-          <input type="email" id="fmc-email" data-el="email" placeholder="you@company.com" required autocomplete="email">
-        </div>
-
         <div class="fmc__field fmc__field--wide">
           <label for="fmc-url">Company URL</label>
           <input type="text" id="fmc-url" data-el="url" placeholder="e.g. acme.com" required>
@@ -84,7 +79,8 @@
   /* Everything worth keeping when the user navigates to another module and
      comes back. Lives for the life of the page, not across a reload. */
   const state = {
-    form:     { email: '', url: '' },
+    form:     { url: '' },
+    urlSeed:  { seeded: false },   // My Company URL default, once per sign-in
     data:     null,     // last successful payload, as rendered
     runUrl:   '',       // the URL exactly as submitted for `data` (PDF header)
     lastUrl:  null,     // normalized URL of `data`, for the duplicate guard
@@ -218,11 +214,14 @@
     clearError();
     state.error = '';
 
-    const email  = el.email.value.trim();
+    const email  = window.MktforgeKit.accountEmail();
     const rawUrl = el.url.value.trim();
 
-    if (!email || !rawUrl) {
-      showError('Please enter both your email and a company URL.');
+    const noAccess = window.MktforgeKit.accessProblem();
+    if (noAccess) { showError(noAccess); return; }
+
+    if (!rawUrl) {
+      showError('Please enter a company URL.');
       return;
     }
 
@@ -261,7 +260,8 @@
       const { res, body } = await requestDashboard({ companyUrl: rawUrl, email });
 
       if (!res.ok || !body || body.status === 'error') {
-        fail((body && body.message) || 'Something went wrong. Please try again.');
+        const message = body && body.message;
+        fail(window.MktforgeKit.accessError(res.status, message) || message || 'Something went wrong. Please try again.');
         return;
       }
 
@@ -320,16 +320,10 @@
 
   function captureForm() {
     if (!el) return;
-    state.form = { email: el.email.value, url: el.url.value };
-  }
-
-  function signedInEmail() {
-    const u = window.MktforgeAuth && window.MktforgeAuth.getUser && window.MktforgeAuth.getUser();
-    return (u && u.uid !== 'local-preview' && u.email) || '';
+    state.form = { url: el.url.value };
   }
 
   function restore() {
-    el.email.value = state.form.email || signedInEmail();
     el.url.value   = state.form.url;
 
     if (state.running) {
@@ -345,10 +339,10 @@
     if (state.error) showError(state.error);
   }
 
-  /* Fill still-empty fields from My Company (assets/js/data.js). */
+  /* Company URL defaults to My Company's (assets/js/module-kit.js). */
   function autofill() {
-    if (!window.MktforgeData) return;
-    window.MktforgeData.prefill([[el.url, 'companyUrl']]);
+    if (!window.MktforgeKit) return;
+    window.MktforgeKit.seedCompanyUrl(el.url, state.urlSeed);
   }
 
   /* ---------- module contract ---------- */
@@ -366,7 +360,7 @@
 
       const q = (name) => container.querySelector(`[data-el="${name}"]`);
       el = {
-        form: q('form'), email: q('email'), url: q('url'), submit: q('submit'),
+        form: q('form'), url: q('url'), submit: q('submit'),
         error: q('error'), pdf: q('pdf'), status: q('status')
       };
 

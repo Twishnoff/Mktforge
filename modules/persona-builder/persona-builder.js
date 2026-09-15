@@ -30,11 +30,6 @@
     <section class="pb__submit" aria-label="Target persona inputs">
       <form class="pb__form" data-el="form" novalidate>
         <div class="pb__field">
-          <label for="pb-email">Email</label>
-          <input type="email" id="pb-email" data-el="email" placeholder="you@company.com" required autocomplete="email">
-        </div>
-
-        <div class="pb__field">
           <label for="pb-jobTitle">Job Title</label>
           <input type="text" id="pb-jobTitle" data-el="jobTitle" placeholder="e.g. Growth Marketing Manager" required>
         </div>
@@ -93,7 +88,7 @@
 
   /* ---------- module-scoped state (reset on every mount) ---------- */
 
-  let el = null;              // { form, email, ... } scoped element map
+  let el = null;              // { form, jobTitle, ... } scoped element map
   let boxes = null;
   let cfg = {};
   let turnstileToken = null;
@@ -110,7 +105,7 @@
      widget is destroyed on unmount, so a fresh one is always required before
      the next run. Old results stay on screen while that happens. */
   const state = {
-    form:    { email: '', jobTitle: '', companySize: '', industry: '' },
+    form:    { jobTitle: '', companySize: '', industry: '' },
     persona: null,
     status:  '',
     error:   '',
@@ -259,7 +254,6 @@
     if (!mounted) return;
 
     const missing = [];
-    if (!el.email.value.trim())       missing.push('email');
     if (!el.jobTitle.value.trim())    missing.push('job title');
     if (!el.companySize.value)        missing.push('company size');
     if (!turnstileToken)              missing.push('verification');
@@ -362,7 +356,7 @@
         const data = await resp.json();
         if (data && data.error) message = data.error;
       } catch (e) { /* keep the default message */ }
-      onError(message);
+      onError(window.MktforgeKit.accessError(resp.status, message) || message);
       return;
     }
 
@@ -389,7 +383,7 @@
 
         if (eventType === 'status') onStatus(data.message);
         else if (eventType === 'result') onResult(data);
-        else if (eventType === 'error') onError(data.message);
+        else if (eventType === 'error') onError(window.MktforgeKit.accessError(null, data.message) || data.message);
       }
     }
   }
@@ -405,6 +399,9 @@
       return;
     }
 
+    const noAccess = window.MktforgeKit.accessProblem();
+    if (noAccess) { showFormError(noAccess); return; }
+
     if (abortController) abortController.abort();   // supersede any earlier run
 
     captureForm();
@@ -418,7 +415,7 @@
     el.status.textContent = state.status;
 
     const payload = {
-      email: el.email.value.trim(),
+      email: window.MktforgeKit.accountEmail(),
       jobTitle: el.jobTitle.value.trim(),
       companySize: el.companySize.value,
       industry: el.industry.value.trim(),
@@ -507,7 +504,6 @@
   function captureForm() {
     if (!el) return;
     state.form = {
-      email:       el.email.value,
       jobTitle:    el.jobTitle.value,
       companySize: el.companySize.value,
       industry:    el.industry.value
@@ -515,7 +511,6 @@
   }
 
   function restore() {
-    el.email.value       = state.form.email;
     el.jobTitle.value    = state.form.jobTitle;
     el.companySize.value = state.form.companySize;
     el.industry.value    = state.form.industry;
@@ -532,13 +527,11 @@
     if (state.error) showFormError(state.error);
   }
 
-  /* Fill still-empty fields from My Company (assets/js/data.js). */
+  /* My Company values as drop-down choices (assets/js/module-kit.js). */
   function autofill() {
-    if (!window.MktforgeData) return;
-    window.MktforgeData.prefill([
-      [el.jobTitle, (p) => p.targetTitles[0]],
-      [el.industry, (p) => p.targetIndustries[0]]
-    ]);
+    if (!window.MktforgeKit) return;
+    window.MktforgeKit.attachPicker(el.jobTitle, (p) => p.targetTitles);
+    window.MktforgeKit.attachPicker(el.industry, (p) => p.targetIndustries);
   }
 
   /* ---------- module contract ---------- */
@@ -556,7 +549,7 @@
 
       const q = (name) => container.querySelector(`[data-el="${name}"]`);
       el = {
-        form: q('form'), email: q('email'), jobTitle: q('jobTitle'),
+        form: q('form'), jobTitle: q('jobTitle'),
         companySize: q('companySize'), industry: q('industry'),
         turnstile: q('turnstile'), turnstileNote: q('turnstileNote'),
         generate: q('generate'), hint: q('hint'),
@@ -566,7 +559,7 @@
       boxes = {};
       container.querySelectorAll('[data-box]').forEach((b) => { boxes[b.dataset.box] = b; });
 
-      [el.email, el.jobTitle, el.companySize].forEach((node) =>
+      [el.jobTitle, el.companySize].forEach((node) =>
         node.addEventListener('input', updateGenerateEnabled));
       el.companySize.addEventListener('change', updateGenerateEnabled);
       el.form.addEventListener('submit', handleSubmit);

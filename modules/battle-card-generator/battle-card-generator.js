@@ -150,10 +150,6 @@ window.MktforgeBattleCardText = (function () {
       <form class="bcg__form" data-el="form" autocomplete="off" novalidate>
         <div class="bcg__fields">
           <div class="bcg__field">
-            <label for="bcg-email">Email</label>
-            <input type="email" id="bcg-email" data-el="email" placeholder="you@company.com" autocomplete="email">
-          </div>
-          <div class="bcg__field">
             <label for="bcg-company">Company URL</label>
             <input type="text" id="bcg-company" data-el="companyUrl" placeholder="yourcompany.com">
           </div>
@@ -200,7 +196,8 @@ window.MktforgeBattleCardText = (function () {
   /* Kept across navigation for the life of the page, not across a reload.
      A run takes 30–90 seconds, so surviving a module switch matters here. */
   const state = {
-    form:    { email: '', companyUrl: '', competitorUrl: '', jobTitle: '', industry: '' },
+    form:    { companyUrl: '', competitorUrl: '', jobTitle: '', industry: '' },
+    urlSeed: { seeded: false },   // My Company URL default, once per sign-in
     run:     null,     // everything the page and the PDF need from the last success
     status:  '',
     error:   '',
@@ -337,13 +334,12 @@ window.MktforgeBattleCardText = (function () {
   /* ---------- validation ---------- */
 
   const REQUIRED = [
-    ['email', 'email'], ['companyUrl', 'company URL'],
+    ['companyUrl', 'company URL'],
     ['competitorUrl', 'competitor URL'], ['jobTitle', 'job title']
   ];
 
   function readForm() {
     return {
-      email:         el.email.value.trim(),
       companyUrl:    el.companyUrl.value.trim(),
       competitorUrl: el.competitorUrl.value.trim(),
       jobTitle:      el.jobTitle.value.trim(),
@@ -365,7 +361,6 @@ window.MktforgeBattleCardText = (function () {
     if (missing.length === 0) return null;
     if (missing.length >= 2) return 'Please Provide Required Information';
     return {
-      email: 'No Email Provided',
       companyUrl: 'Company URL Is Required',
       competitorUrl: 'Competitor URL Is Required',
       jobTitle: 'Job Title Is Required'
@@ -401,6 +396,9 @@ window.MktforgeBattleCardText = (function () {
     const problem = validate(f);
     if (problem) { showError(problem); return; }
 
+    const noAccess = window.MktforgeKit.accessProblem();
+    if (noAccess) { showError(noAccess); return; }
+
     if (!cfg.API_URL) {
       showError('Battle Card Generator isn’t configured — set battleCardGenerator.API_URL in assets/js/config.js.');
       return;
@@ -427,7 +425,7 @@ window.MktforgeBattleCardText = (function () {
 
     try {
       const { res, payload } = await requestBattleCard({
-        email: f.email,
+        email: window.MktforgeKit.accountEmail(),
         companyUrl: f.companyUrl,
         competitorUrl: f.competitorUrl,
         jobTitle: f.jobTitle,
@@ -436,7 +434,8 @@ window.MktforgeBattleCardText = (function () {
       });
 
       if (!res.ok || !payload || payload.status === 'error') {
-        fail((payload && payload.message) || 'Something went wrong. Please try again.');
+        const message = payload && payload.message;
+        fail(window.MktforgeKit.accessError(res.status, message) || message || 'Something went wrong. Please try again.');
         return;
       }
 
@@ -499,14 +498,8 @@ window.MktforgeBattleCardText = (function () {
     state.form = readForm();
   }
 
-  function signedInEmail() {
-    const u = window.MktforgeAuth && window.MktforgeAuth.getUser && window.MktforgeAuth.getUser();
-    return (u && u.uid !== 'local-preview' && u.email) || '';
-  }
-
   function restore() {
     const f = state.form;
-    el.email.value         = f.email || signedInEmail();
     el.companyUrl.value    = f.companyUrl;
     el.competitorUrl.value = f.competitorUrl;
     el.jobTitle.value      = f.jobTitle;
@@ -524,15 +517,13 @@ window.MktforgeBattleCardText = (function () {
     if (state.error) showError(state.error);
   }
 
-  /* Fill still-empty fields from My Company (assets/js/data.js). */
+  /* My Company defaults and drop-down choices (assets/js/module-kit.js). */
   function autofill() {
-    if (!window.MktforgeData) return;
-    window.MktforgeData.prefill([
-      [el.companyUrl,    'companyUrl'],
-      [el.competitorUrl, (p) => p.competitors[0]],
-      [el.jobTitle,      (p) => p.targetTitles[0]],
-      [el.industry,      (p) => p.targetIndustries[0]]
-    ]);
+    if (!window.MktforgeKit) return;
+    window.MktforgeKit.seedCompanyUrl(el.companyUrl, state.urlSeed);
+    window.MktforgeKit.attachPicker(el.competitorUrl, (p) => p.competitors);
+    window.MktforgeKit.attachPicker(el.jobTitle,      (p) => p.targetTitles);
+    window.MktforgeKit.attachPicker(el.industry,      (p) => p.targetIndustries);
   }
 
   /* ---------- module contract ---------- */
@@ -550,7 +541,7 @@ window.MktforgeBattleCardText = (function () {
 
       const q = (name) => container.querySelector(`[data-el="${name}"]`);
       el = {
-        form: q('form'), email: q('email'), companyUrl: q('companyUrl'),
+        form: q('form'), companyUrl: q('companyUrl'),
         competitorUrl: q('competitorUrl'), jobTitle: q('jobTitle'), industry: q('industry'),
         generate: q('generate'), hint: q('hint'), error: q('error'),
         pdf: q('pdf'), status: q('status')
@@ -560,7 +551,7 @@ window.MktforgeBattleCardText = (function () {
       boxes = {};
       container.querySelectorAll('[data-box]').forEach((b) => { boxes[b.dataset.box] = b; });
 
-      ['email', 'companyUrl', 'competitorUrl', 'jobTitle'].forEach((k) =>
+      ['companyUrl', 'competitorUrl', 'jobTitle'].forEach((k) =>
         el[k].addEventListener('input', updateGenerateEnabled));
       el.form.addEventListener('submit', handleSubmit);
       el.pdf.addEventListener('click', handlePdf);

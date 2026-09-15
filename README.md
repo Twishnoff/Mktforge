@@ -110,29 +110,55 @@ The first nav button (factory icon). Replaced the old "Module 1" placeholder.
   addresses (`rival.com` is fine; no `https://` needed). Text typed but not
   yet entered is kept when Save is pressed.
 - **Your Saved Resources**: every PDF made in another module, newest first.
-  Click the name to open it; Delete asks for a second click, then removes the
-  file from the account.
+  Click the name to open it. Rename turns the name into a text box and the
+  button into Save (Enter also saves, Escape cancels); a name another file
+  already uses (ignoring case) shows "File name already exists. Choose
+  another." and can't be saved. Delete asks for a second click, then removes
+  the file from the account.
 
-### Autofill
+### Account email
 
-When a module opens, still-empty fields are filled from the profile. Anything
-already typed is never overwritten.
+None of the tool modules ask for an email any more. Each request sends the
+signed-in account's address. If the account has no usable address, or a
+Worker refuses it (HTTP 401/403, or an error message about the email), the
+module shows: *Your account doesn't have access to this module. Request
+access from your administrator.* Other Worker errors are shown as before.
+The Workers' own allow-lists still decide who gets in, so the Mktforge
+account's email has to be on them.
 
-| Module | Field ← profile |
-|---|---|
-| Find My Customer | Company URL ← Company URL |
-| Persona Builder | Job Title ← first Target Job Title; Industry ← first Target Industry |
-| Battle Card Generator | Company URL; Competitor URL ← first Competitor; Job Title ← first Target Job Title; Industry ← first Target Industry |
-| Marketing Opportunities | Company URL; Job Titles 1–3 ← first three Target Job Titles; Industry ← first Target Industry |
+### Company URL default
 
-Persona Builder's email field is deliberately left alone.
+When a module with a Company URL field is opened for the first time after
+signing in, the field is filled with My Company's URL. From then on the field
+is the person's: edits (including clearing it) are kept while moving between
+modules. Signing out reloads the page, so the next sign-in starts from the My
+Company URL again. If My Company had no URL yet, the first open after one is
+saved fills it in.
+
+### Drop-down choices
+
+Clicking or tabbing into these fields opens a list of My Company values,
+narrowed as you type. Click (or arrow + Enter) to use one, or type anything
+else. Nothing is filled in automatically.
+
+| Module | Field | Choices from |
+|---|---|---|
+| Persona Builder | Job Title | Target Job Titles |
+| Persona Builder | Industry | Target Industries |
+| Battle Card Generator | Competitor URL | Competitors |
+| Battle Card Generator | Job Title | Target Job Titles |
+| Battle Card Generator | Industry | Target Industries |
+| Marketing Opportunities | all three Job Title fields | Target Job Titles |
+| Marketing Opportunities | Industry | Target Industries |
+
+Shared code: `assets/js/module-kit.js` (`MktforgeKit`).
 
 ### Saved PDFs and naming
 
 Each module's PDF button now downloads the file as `<Module Name> N.pdf`
 (for example `Persona Builder 3.pdf`) and saves a copy to the account. N is a
 per-module counter stored on the account, so it keeps counting after a
-delete. If the account can't be reached, the download still happens under the
+delete, and it skips any number whose name a renamed file already uses. If the account can't be reached, the download still happens under the
 module's old filename and a notice says the copy wasn't saved.
 
 ### Storage (free tier)
@@ -183,7 +209,7 @@ What changed in the port:
 - jsPDF and autoTable load on the first PDF click, not on page load
 - results, form values and an in-flight run survive navigating to another
   module and back, the same way Persona Builder's do
-- the email field is prefilled with the signed-in account's address
+- no email field; the signed-in account's address is sent (see My Company → Account email)
 
 ### Config
 
@@ -324,7 +350,7 @@ What changed in the port:
 - reference links are only made clickable when they are `http(s)` URLs
 - a run takes 30–90 seconds, so results, form values and an in-flight run
   survive switching modules (not a page reload)
-- the email field is prefilled with the signed-in account's address
+- no email field; the signed-in account's address is sent (see My Company → Account email)
 
 ### Config
 
@@ -373,7 +399,7 @@ What changed in the port:
 - only `http(s)` result URLs become links, on the page and in the PDF
 - results, form values and an in-flight run survive switching modules
   (not a page reload)
-- the email field is prefilled with the signed-in account's address
+- no email field; the signed-in account's address is sent (see My Company → Account email)
 
 ### Config
 

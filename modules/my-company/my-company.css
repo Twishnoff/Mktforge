@@ -363,6 +363,52 @@ a.mc__value:hover, .mc__chip a:hover { text-decoration: underline; }
 
 .mc__cell-action { width: 1%; text-align: right; }
 
+.mc__cell-action button + button { margin-left: 8px; }
+
+/* rename */
+
+.mc__cell-name { min-width: 240px; }
+
+.mc__rename {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mc input.mc__rename-input {
+  width: 100%;
+  min-width: 180px;
+  padding: 5px 9px;
+  font-size: 14px;
+}
+
+.mc__rename .mc__meta { margin-left: 0; }
+
+.mc__table .mc__field-error { white-space: normal; }
+
+.mc__rename-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--mc-line);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.mc__rename-btn:hover:not(:disabled) { background: var(--paper-dim); color: var(--ink); }
+
+.mc__rename-btn.is-saving {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #F2F7F4;
+}
+
+.mc__rename-btn.is-saving:hover:not(:disabled) { background: var(--accent); opacity: .9; color: #F2F7F4; }
+
+.mc__rename-btn:disabled { opacity: .45; cursor: not-allowed; }
+
 .mc__delete {
   padding: 4px 12px;
   border: 1px solid var(--mc-line);

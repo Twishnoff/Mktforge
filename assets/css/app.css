@@ -456,3 +456,39 @@ body[data-nav="collapsed"] .nav__minimize-icon {
 
 .toast.is-in { opacity: 1; transform: none; }
 .toast--error { background: #A8371F; }
+
+/* ==========================================================================
+   Picker (MktforgeKit.attachPicker) — My Company values under a text field
+   ========================================================================== */
+
+.mf-picker-host { position: relative; }
+
+.mf-picker {
+  position: absolute;
+  z-index: 20;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #FFFDF7;
+  border: 1px solid var(--paper-line);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(32, 36, 43, .12);
+  text-align: left;
+}
+
+.mf-picker[hidden] { display: none; }
+
+.mf-picker__option {
+  padding: 7px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ink);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.mf-picker__option:hover,
+.mf-picker__option.is-active { background: var(--accent-tint); }

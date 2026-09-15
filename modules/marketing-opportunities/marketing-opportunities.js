@@ -52,10 +52,6 @@
     <section class="mo__submit" aria-label="Search inputs">
       <form class="mo__form" data-el="form" autocomplete="off" novalidate>
         <div class="mo__row">
-          <div class="mo__field">
-            <label for="mo-email">Email</label>
-            <input type="email" id="mo-email" data-el="email" placeholder="you@company.com" autocomplete="email">
-          </div>
           <div class="mo__field mo__field--wide">
             <label for="mo-url">Company URL</label>
             <input type="text" id="mo-url" data-el="companyUrl" placeholder="yourcompany.com">
@@ -116,7 +112,8 @@
 
   /* Kept across navigation for the life of the page, not across a reload. */
   const state = {
-    form:    { email: '', companyUrl: '', jobTitle1: '', jobTitle2: '', jobTitle3: '', industry: '' },
+    form:    { companyUrl: '', jobTitle1: '', jobTitle2: '', jobTitle3: '', industry: '' },
+    urlSeed: { seeded: false },   // My Company URL default, once per sign-in
     run:     null,    // inputs + results of the last success (page and PDF)
     lastKey: null,    // normalized inputs of `run`, for the duplicate guard
     status:  '',
@@ -231,7 +228,6 @@
 
   function readForm() {
     return {
-      email:      el.email.value.trim(),
       companyUrl: el.companyUrl.value.trim(),
       jobTitle1:  el.jobTitle1.value.trim(),
       jobTitle2:  el.jobTitle2.value.trim(),
@@ -240,7 +236,7 @@
     };
   }
 
-  const REQUIRED = [['email', 'email'], ['companyUrl', 'company URL'], ['jobTitle1', 'a job title']];
+  const REQUIRED = [['companyUrl', 'company URL'], ['jobTitle1', 'a job title']];
 
   function updateSubmitEnabled() {
     if (!mounted) return;
@@ -256,7 +252,6 @@
     if (missing.length === 0) return null;
     if (missing.length >= 2) return 'Please Provide Required Information';
     return {
-      email: 'No Email Provided',
       jobTitle1: 'One Job Title Is Required',
       companyUrl: 'Company URL Is Required'
     }[missing[0]];
@@ -291,8 +286,12 @@
     const problem = validate(f);
     if (problem) { showError(problem); return; }
 
+    const noAccess = window.MktforgeKit.accessProblem();
+    if (noAccess) { showError(noAccess); return; }
+    const email = window.MktforgeKit.accountEmail();
+
     const jobTitles = [f.jobTitle1, f.jobTitle2, f.jobTitle3].filter(Boolean);
-    const key = normalizeKey({ email: f.email, companyUrl: f.companyUrl, jobTitles, industry: f.industry });
+    const key = normalizeKey({ email, companyUrl: f.companyUrl, jobTitles, industry: f.industry });
 
     if (state.lastKey && key === state.lastKey) {
       showError('Results for these inputs are already collected and shown below.');
@@ -326,7 +325,7 @@
 
     try {
       const { res, payload } = await requestOpportunities({
-        email: f.email,
+        email,
         companyUrl: f.companyUrl,
         jobTitles,
         industry: f.industry || null,
@@ -334,7 +333,8 @@
       });
 
       if (!res.ok || !payload || payload.status === 'error') {
-        fail((payload && payload.message) || 'Something went wrong. Please try again.');
+        const message = payload && payload.message;
+        fail(window.MktforgeKit.accessError(res.status, message) || message || 'Something went wrong. Please try again.');
         return;
       }
 
@@ -401,14 +401,8 @@
     state.form = readForm();
   }
 
-  function signedInEmail() {
-    const u = window.MktforgeAuth && window.MktforgeAuth.getUser && window.MktforgeAuth.getUser();
-    return (u && u.uid !== 'local-preview' && u.email) || '';
-  }
-
   function restore() {
     const f = state.form;
-    el.email.value      = f.email || signedInEmail();
     el.companyUrl.value = f.companyUrl;
     el.jobTitle1.value  = f.jobTitle1;
     el.jobTitle2.value  = f.jobTitle2;
@@ -427,16 +421,14 @@
     if (state.error) showError(state.error);
   }
 
-  /* Fill still-empty fields from My Company (assets/js/data.js). */
+  /* My Company defaults and drop-down choices (assets/js/module-kit.js). */
   function autofill() {
-    if (!window.MktforgeData) return;
-    window.MktforgeData.prefill([
-      [el.companyUrl, 'companyUrl'],
-      [el.jobTitle1,  (p) => p.targetTitles[0]],
-      [el.jobTitle2,  (p) => p.targetTitles[1]],
-      [el.jobTitle3,  (p) => p.targetTitles[2]],
-      [el.industry,   (p) => p.targetIndustries[0]]
-    ]);
+    if (!window.MktforgeKit) return;
+    const K = window.MktforgeKit;
+    K.seedCompanyUrl(el.companyUrl, state.urlSeed);
+    [el.jobTitle1, el.jobTitle2, el.jobTitle3].forEach((input) =>
+      K.attachPicker(input, (p) => p.targetTitles));
+    K.attachPicker(el.industry, (p) => p.targetIndustries);
   }
 
   /* ---------- module contract ---------- */
@@ -454,7 +446,7 @@
 
       const q = (name) => container.querySelector(`[data-el="${name}"]`);
       el = {
-        form: q('form'), email: q('email'), companyUrl: q('companyUrl'),
+        form: q('form'), companyUrl: q('companyUrl'),
         jobTitle1: q('jobTitle1'), jobTitle2: q('jobTitle2'), jobTitle3: q('jobTitle3'),
         industry: q('industry'), submit: q('submit'), hint: q('hint'),
         error: q('error'), pdf: q('pdf'), status: q('status'), count: q('count')
@@ -463,7 +455,7 @@
       boxes = {};
       container.querySelectorAll('[data-box]').forEach((b) => { boxes[b.dataset.box] = b; });
 
-      ['email', 'companyUrl', 'jobTitle1'].forEach((k) =>
+      ['companyUrl', 'jobTitle1'].forEach((k) =>
         el[k].addEventListener('input', updateSubmitEnabled));
       el.form.addEventListener('submit', handleSubmit);
       el.pdf.addEventListener('click', handlePdf);
