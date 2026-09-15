@@ -240,8 +240,8 @@ copies of the same frontend. If you change one, port the change to the other.
 ## Persona Builder
 
 A port of the standalone [Persona Drafter](https://twishnoff.github.io/Persona-Drafter/)
-into a Mktforge module. Same Cloudflare Worker, same Turnstile site key, same
-SSE contract, same six result boxes and the same templated jsPDF export.
+into a Mktforge module. Same Cloudflare Worker, same SSE contract, same six
+result boxes and the same templated jsPDF export.
 
 What changed in the port:
 
@@ -249,49 +249,35 @@ What changed in the port:
 - the palette and type come from Mktforge's tokens; the dark-mode block was dropped
 - every DOM lookup is scoped to the container `mount()` hands it, so nothing
   reaches outside the module
-- Turnstile loads when the module opens; jsPDF loads on the first PDF click,
-  not on every page load
-- an in-flight run is aborted if you navigate to another module mid-research
+- **no Turnstile checkbox** (see below); jsPDF loads on the first PDF click
 - the results grid and form use `auto-fit` grids rather than viewport media
   queries, because the display field changes width when the nav is minimized
 
 ### Config
 
-`assets/js/config.js` holds `API_BASE_URL` and `TURNSTILE_SITE_KEY`. Both are
-public by design — the Turnstile *secret* and the model API keys stay in the
-Worker. Nothing else is needed to run it.
+`assets/js/config.js` → `personaBuilder.API_BASE_URL`. Public by design; the
+model API keys stay in the Worker.
+
+### No Turnstile in Mktforge
+
+Every Persona Builder request carries `Authorization: Bearer <Firebase ID
+token>`. The Worker verifies that token (`mktforge-auth.js`, applied
+separately in the Persona Drafter Worker) and skips its Turnstile check when
+it's valid. Requests without a valid token, including every request from the
+standalone site, still have to pass Turnstile. If the account has no token,
+or the Worker refuses it, the module shows the "doesn't have access" message.
+
+**Deploy order:** update the Worker first, then this site. Until the Worker
+has the change, Persona Builder requests from Mktforge are rejected.
 
 ### Origins
 
-The Worker's CORS allowlist and the Turnstile widget's hostname list are both
-keyed to the origin. `twishnoff.github.io/Mktforge` and
-`twishnoff.github.io/Persona-Drafter` are the **same origin**
-(`https://twishnoff.github.io`), so no changes are needed on either side.
-
-Two cases that would need a change:
-
-- **A custom domain for Mktforge.** Add it to the Worker's allowed origins and
-  to the Turnstile widget's hostnames.
-- **Local testing of this module.** Opening from disk sends `Origin: null` and
-  Turnstile won't render at all. To test locally, serve over HTTP
-  (`python3 -m http.server 8000`) and add `http://localhost:8000` to the
-  Worker's allowed origins plus `localhost` to the Turnstile hostname list.
-  Everything else in Mktforge previews fine straight off disk.
-
-### Gotcha: Turnstile and dynamically loaded scripts
-
-Turnstile inspects its own `<script>` tag and refuses to initialize if it
-carries `async` or `defer` — `turnstile.ready()` throws
-*"Remove async/defer from the Turnstile api.js script tag"*. Because the shell
-injects the script at runtime, two rules apply:
-
-- load it with `Mktforge.loadScript(src, { async: false })`
-- don't call `turnstile.ready()` at all; the tag's `onload` has already fired,
-  so `turnstile.render()` can be called directly
-
-The widget slot shows its own status line and the Generate button says what is
-still missing, so a failure here is visible rather than a permanently grey
-button.
+The Worker's CORS allowlist is keyed to the origin, and must list
+`authorization` in `Access-Control-Allow-Headers`.
+`twishnoff.github.io/Mktforge` and `twishnoff.github.io/Persona-Drafter` are
+the **same origin** (`https://twishnoff.github.io`). A custom domain for
+Mktforge, or `http://localhost:8000` for local testing, needs adding to the
+Worker's allowed origins.
 
 ### State when you navigate away
 
@@ -307,9 +293,8 @@ Two deliberate choices:
 - **A run in flight is not cancelled** when you leave. The callbacks write into
   `state` and check `mounted` before touching any DOM, so research started
   before you navigated away finishes safely and is painted when you return.
-- **The Turnstile token is not kept.** Tokens are single-use and the widget is
-  destroyed on unmount, so a fresh verification is always needed before the
-  next run — while the previous results stay on screen.
+- **Generate stays disabled while a run is in flight**, including after you
+  come back to the module mid-run.
 
 Any module can do the same thing: keep what matters in the closure, restore it
 at the top of `mount()`. The shell doesn't need to know.
@@ -461,12 +446,11 @@ in an empty app, but it's worth closing:
 - Delete unexpected accounts in **Authentication → Users**.
 - Any per-user data must be protected by security rules keyed to the signed-in
   `uid`, so one account can never read another's.
-- **The one that costs money:** the Persona Drafter Worker. Mktforge now sends
+- **The one that costs money:** the Persona Drafter Worker. Mktforge sends
   `Authorization: Bearer <firebase id token>` with every Persona Builder
-  request (see `MktforgeAuth.getIdToken()`). The Worker side of that lock —
-  `require-user.js` plus integration notes — ships separately into the
-  Persona-Drafter repo. Until it's deployed the header is simply ignored and
-  the endpoint stays open to anyone who finds it.
+  request (see `MktforgeAuth.getIdToken()`), and the Worker uses a valid token
+  only to skip Turnstile. The standalone site stays open to anyone who passes
+  Turnstile.
 
 ### Keying user data
 

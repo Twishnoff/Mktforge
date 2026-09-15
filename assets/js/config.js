@@ -43,8 +43,9 @@ window.MKTFORGE_CONFIG = {
   },
 
   personaBuilder: {
-    API_BASE_URL: 'https://persona-drafter-api.tyler-wishnoff.workers.dev',
-    TURNSTILE_SITE_KEY: '0x4AAAAAAEhj_UpeZip62a9o'
+    // No Turnstile here: the Worker skips it for requests with a valid
+    // Mktforge sign-in token. The standalone site keeps its checkbox.
+    API_BASE_URL: 'https://persona-drafter-api.tyler-wishnoff.workers.dev'
   },
 
   battleCardGenerator: {

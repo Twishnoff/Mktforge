@@ -1,12 +1,15 @@
 /* ==========================================================================
    Persona Builder — Mktforge module
    Ported from the standalone Persona Drafter (twishnoff.github.io/Persona-Drafter).
-   Same Cloudflare Worker, same Turnstile site key, same SSE contract, same
-   six result boxes. What changed:
+   Same Cloudflare Worker, same SSE contract, same six result boxes.
+   What changed:
      - the page's own header/footer are gone; the shell provides the frame
      - every DOM lookup is scoped to the container the shell hands mount(),
        so nothing reaches outside this module
-     - Turnstile and jsPDF load on demand instead of on every page load
+     - no Turnstile checkbox: the Worker skips that check when the request
+       carries a valid Mktforge sign-in token (Authorization: Bearer ...).
+       The standalone site still shows it.
+     - jsPDF loads on demand instead of on every page load
      - an in-flight run is aborted if the user navigates to another module
 
    Field names must keep matching worker/src/lib/schema.js (finalize_persona).
@@ -14,7 +17,6 @@
 
 (function () {
 
-  const TURNSTILE_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
   const JSPDF_SRC     = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 
   const MARKUP = `
@@ -48,12 +50,6 @@
         <div class="pb__field">
           <label for="pb-industry">Industry <span class="pb__optional">(optional)</span></label>
           <input type="text" id="pb-industry" data-el="industry" placeholder="e.g. Fintech">
-        </div>
-
-        <div class="pb__field pb__field--turnstile">
-          <label>Verification</label>
-          <div data-el="turnstile"></div>
-          <p class="pb__note" data-el="turnstileNote">Loading verification…</p>
         </div>
 
         <div class="pb__field pb__submit-row">
@@ -91,19 +87,12 @@
   let el = null;              // { form, jobTitle, ... } scoped element map
   let boxes = null;
   let cfg = {};
-  let turnstileToken = null;
-  let turnstileWidgetId = null;
   let abortController = null;
   let mounted = false;
 
   /* Everything worth keeping when the user navigates to another module and
      comes back. This closure outlives mount/unmount, so it survives for the
-     life of the page — but not a reload. Persisting across sessions or
-     devices needs a real store; this is the free half of that problem.
-
-     Note what is NOT kept: the Turnstile token. Tokens are single-use and the
-     widget is destroyed on unmount, so a fresh one is always required before
-     the next run. Old results stay on screen while that happens. */
+     life of the page — but not a reload. */
   const state = {
     form:    { jobTitle: '', companySize: '', industry: '' },
     persona: null,
@@ -248,7 +237,7 @@
     renderRankList('development', persona.development_priorities, 'No priorities found.');
   }
 
-  /* ---------- Turnstile ---------- */
+  /* ---------- form readiness ---------- */
 
   function updateGenerateEnabled() {
     if (!mounted) return;
@@ -256,77 +245,9 @@
     const missing = [];
     if (!el.jobTitle.value.trim())    missing.push('job title');
     if (!el.companySize.value)        missing.push('company size');
-    if (!turnstileToken)              missing.push('verification');
 
-    el.generate.disabled = missing.length > 0;
-
-    // A disabled button with no explanation is the worst possible failure
-    // mode — if the captcha silently fails to load there is nothing on
-    // screen telling you why nothing happens.
-    el.hint.textContent = missing.length ? `Still needed: ${missing.join(', ')}.` : '';
-  }
-
-  function setTurnstileNote(msg, isError) {
-    if (!mounted || !el.turnstileNote) return;
-    el.turnstileNote.textContent = msg || '';
-    el.turnstileNote.hidden = !msg;
-    el.turnstileNote.classList.toggle('is-error', !!isError);
-  }
-
-  async function initTurnstile() {
-    if (!cfg.TURNSTILE_SITE_KEY) {
-      setTurnstileNote('No Turnstile site key set in assets/js/config.js.', true);
-      return;
-    }
-
-    setTurnstileNote('Loading verification\u2026');
-
-    try {
-      // async:false matters. Turnstile inspects its own <script> tag and
-      // refuses to initialize when it carries async or defer.
-      await Mktforge.loadScript(TURNSTILE_SRC, { async: false });
-    } catch (err) {
-      console.error(err);
-      if (mounted) setTurnstileNote("Couldn't reach Cloudflare to load the verification widget.", true);
-      return;
-    }
-
-    if (!mounted) return;
-
-    if (!window.turnstile || typeof window.turnstile.render !== 'function') {
-      setTurnstileNote('Verification script loaded but did not initialize.', true);
-      return;
-    }
-
-    // Deliberately NOT calling turnstile.ready(): on a script tag injected
-    // at runtime it throws ("Remove async/defer ... before using
-    // turnstile.ready()"). The tag's own onload has already fired by this
-    // point, so the API is initialized and render() can be called directly.
-    try {
-      turnstileWidgetId = window.turnstile.render(el.turnstile, {
-        sitekey: cfg.TURNSTILE_SITE_KEY,
-        callback: (token) => {
-          turnstileToken = token;
-          setTurnstileNote('');
-          updateGenerateEnabled();
-        },
-        'expired-callback': () => {
-          turnstileToken = null;
-          setTurnstileNote('Verification expired — tick the box again.');
-          updateGenerateEnabled();
-        },
-        'error-callback': (code) => {
-          turnstileToken = null;
-          console.error('[Persona Builder] Turnstile error', code);
-          setTurnstileNote(`Verification failed (${code || 'unknown'}). If this page is on a new domain, add it to the Turnstile widget's hostname list.`, true);
-          updateGenerateEnabled();
-        }
-      });
-      setTurnstileNote('');
-    } catch (err) {
-      console.error('[Persona Builder] Turnstile render failed', err);
-      setTurnstileNote('Verification widget failed to render — see the browser console.', true);
-    }
+    el.generate.disabled = state.running || missing.length > 0;
+    el.hint.textContent = !state.running && missing.length ? `Still needed: ${missing.join(', ')}.` : '';
   }
 
   /* ---------- SSE over fetch (EventSource can't POST a body) ---------- */
@@ -335,13 +256,18 @@
     abortController = new AbortController();
 
     // Prove which account is calling. The Worker verifies this signature
-    // against Google's public keys before spending any API budget — the
-    // email in the body below is not trusted for anything.
+    // against Google's public keys, and a valid one is what lets it skip the
+    // Turnstile check the standalone site needs. The email in the body is
+    // not trusted for anything.
     const headers = { 'content-type': 'application/json' };
     const token = await (window.MktforgeAuth.getIdToken
       ? window.MktforgeAuth.getIdToken()
       : Promise.resolve(null));
-    if (token) headers.authorization = `Bearer ${token}`;
+    if (!token) {
+      onError(window.MktforgeKit.NO_ACCESS);
+      return;
+    }
+    headers.authorization = `Bearer ${token}`;
 
     const resp = await fetch(`${cfg.API_BASE_URL}/api/generate`, {
       method: 'POST',
@@ -410,6 +336,7 @@
     state.persona = null;
     state.error = '';
     state.running = true;
+    updateGenerateEnabled();
     state.status = 'Conducting Research…';
     setAllBoxesLoading();
     el.status.textContent = state.status;
@@ -418,8 +345,7 @@
       email: window.MktforgeKit.accountEmail(),
       jobTitle: el.jobTitle.value.trim(),
       companySize: el.companySize.value,
-      industry: el.industry.value.trim(),
-      turnstileToken
+      industry: el.industry.value.trim()
     };
 
     try {
@@ -466,11 +392,6 @@
     } finally {
       state.running = false;
       abortController = null;
-      // Turnstile tokens are single-use; reset the widget for the next run.
-      if (mounted && window.turnstile && turnstileWidgetId !== null) {
-        window.turnstile.reset(turnstileWidgetId);
-      }
-      turnstileToken = null;
       updateGenerateEnabled();
     }
   }
@@ -551,7 +472,6 @@
       el = {
         form: q('form'), jobTitle: q('jobTitle'),
         companySize: q('companySize'), industry: q('industry'),
-        turnstile: q('turnstile'), turnstileNote: q('turnstileNote'),
         generate: q('generate'), hint: q('hint'),
         error: q('error'), pdf: q('pdf'), status: q('status')
       };
@@ -567,7 +487,6 @@
 
       restore();
       updateGenerateEnabled();
-      initTurnstile();
       autofill();
     },
 
@@ -579,12 +498,6 @@
       // losing a minute of work is the exact frustration this is meant to fix;
       // the callbacks above write into `state` and check `mounted` before
       // touching any DOM, so it finishes safely with nothing on screen.
-
-      if (window.turnstile && turnstileWidgetId !== null) {
-        try { window.turnstile.remove(turnstileWidgetId); } catch (e) {}
-      }
-      turnstileWidgetId = null;
-      turnstileToken = null;      // single-use; a fresh widget issues a new one
       el = null;
       boxes = null;
       // Listeners die with the DOM nodes the shell clears.

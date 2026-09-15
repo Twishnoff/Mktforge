@@ -98,8 +98,6 @@
 
 .pb select { appearance: auto; }
 
-.pb__field--turnstile { justify-content: flex-end; }
-
 .pb__submit-row {
   grid-column: 1 / -1;
   flex-direction: row;
@@ -332,19 +330,7 @@
   color: var(--pb-soft);
 }
 
-/* --- Verification slot + disabled-button hint ---
-   Both exist so a failure is never silent: an empty captcha area used to
-   leave a permanently grey button with nothing explaining why. */
-
-.pb__note {
-  margin: 0;
-  font-size: 12px;
-  color: var(--pb-faint);
-}
-
-.pb__note[hidden] { display: none; }
-
-.pb__note.is-error { color: var(--pb-crit); }
+/* --- disabled-button hint: a grey button always says what's missing --- */
 
 .pb__hint {
   margin: 0;
@@ -352,4 +338,3 @@
   color: var(--pb-faint);
 }
 
-.pb__field--turnstile { justify-content: flex-start; gap: 6px; }
