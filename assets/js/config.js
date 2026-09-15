@@ -52,6 +52,13 @@ window.MKTFORGE_CONFIG = {
     // The Worker's CORS only allows Content-Type today — leave false until
     // it verifies Firebase ID tokens and allows Authorization. See README.
     SEND_AUTH_TOKEN: false
+  },
+
+  marketingOpportunities: {
+    API_URL: 'https://syndication-event-finder.tyler-wishnoff.workers.dev',
+    // The Worker's CORS only allows Content-Type today — leave false until
+    // it verifies Firebase ID tokens and allows Authorization. See README.
+    SEND_AUTH_TOKEN: false
   }
 
 };

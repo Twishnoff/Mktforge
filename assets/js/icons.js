@@ -41,6 +41,15 @@ window.MktforgeIcons = {
              <path d="m5 14 4 4"/><path d="m7 17-3 3"/><path d="m3 19 2 2"/>
            </svg>`,
 
+  /* Marketing Opportunities — megaphone */
+  megaphone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3.5 10v4a1 1 0 0 0 1 1H7l7.5 4.5V4.5L7 9H4.5a1 1 0 0 0-1 1z"/>
+                <path d="M7 15l1.3 4.6a1 1 0 0 0 1 .7h1a1 1 0 0 0 .9-1.3L10 15.8"/>
+                <path d="M18 9.2a4 4 0 0 1 0 5.6"/>
+                <path d="M20.3 7a7 7 0 0 1 0 10"/>
+              </svg>`,
+
   /* A few spares so new modules have something to point at */
   grid: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

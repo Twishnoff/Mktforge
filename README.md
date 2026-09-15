@@ -17,6 +17,7 @@ modules/module-1/           example module (js + css)
 modules/find-my-customer/   Find My Customer (ported from Customer-Intelligence)
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
 modules/battle-card-generator/  Battle Card Generator (ported from Battlecard-Generator)
+modules/marketing-opportunities/  Marketing Opportunities (ported from Syndication & Event Finder)
 ```
 
 ## Running it locally
@@ -269,6 +270,52 @@ then set this to `true`.
 The Worker's `ALLOWED_ORIGIN` defaults to `*`. If it has been set to
 `https://twishnoff.github.io`, Mktforge on GitHub Pages is covered. A custom
 domain or `http://localhost:8000` would need adding.
+
+### Drift
+
+The standalone site and this module are now two copies of the same frontend.
+If you change one, port the change to the other.
+
+
+## Marketing Opportunities
+
+A port of the standalone
+[Syndication & Event Finder](https://github.com/Twishnoff/Syndication-And-Events-Finder)
+into a Mktforge module, built the same way as the other ported tools. Same
+Cloudflare Worker, same JSON request and response, same uncapped "All Results"
+table plus seven category boxes (15 rows each), same "already collected"
+guard, and the same jsPDF + autoTable report with clickable links. Its nav
+button sits directly below Battle Card Generator, with a megaphone icon.
+
+What changed in the port:
+
+- its page header is gone; palette and type come from Mktforge's tokens (the
+  PDF's blue is now the Mktforge green)
+- jsPDF, autoTable and `opportunities-pdf.js` load on the first PDF click
+- All Results shows a count, and scrolls inside its box (with a sticky
+  header) after about 520px so a long list doesn't push the category boxes
+  far down the page
+- the Search button says which required fields are still missing
+- only `http(s)` result URLs become links, on the page and in the PDF
+- results, form values and an in-flight run survive switching modules
+  (not a page reload)
+- the email field is prefilled with the signed-in account's address
+
+### Config
+
+`assets/js/config.js` → `marketingOpportunities.API_URL` is the Worker URL.
+
+Like Battle Card Generator, this Worker checks the submitted email against a
+Google Doc allow-list, so the signed-in account's email must be on it.
+
+`SEND_AUTH_TOKEN` is `false` for the same reason as Battle Card Generator:
+the Worker's CORS response only allows `Content-Type`, so an `Authorization`
+header would get the request blocked by the browser.
+
+### Origins
+
+The Worker's `ALLOWED_ORIGIN` defaults to `*`. If it has been set to
+`https://twishnoff.github.io`, Mktforge on GitHub Pages is covered.
 
 ### Drift
 
