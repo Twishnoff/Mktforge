@@ -74,6 +74,10 @@ button { font: inherit; color: inherit; }
    occupies the top row to the right of it; the display field takes the rest.
    ========================================================================== */
 
+/* Hidden until the auth check finishes, so a signed-out visitor never sees a
+   flash of the app before being sent to the login page. */
+body[data-auth="pending"] .app { visibility: hidden; }
+
 .app {
   display: grid;
   grid-template-columns: var(--nav-w) 1fr;

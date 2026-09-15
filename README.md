@@ -4,11 +4,14 @@ Front-end shell: navigation bar, management bar, display field. No build step,
 no dependencies, no framework. Push the folder to GitHub Pages and it runs.
 
 ```
-index.html                  the frame
+index.html                  the frame (requires a signed-in user)
+login.html                  sign in / create account / verify / reset
 assets/css/app.css          shell styles + design tokens
 assets/js/config.js         public config for modules (no secrets)
 assets/js/icons.js          inline SVG icon set
-assets/js/auth.js           auth adapter  <- the only file real sign-in touches
+assets/js/auth.js           Firebase Authentication adapter
+assets/js/login.js          login page logic
+assets/css/login.css        login page styles
 assets/js/app.js            shell logic + module registry
 modules/module-1/           example module (js + css)
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
@@ -66,9 +69,9 @@ Every path in the project is relative, so it works at any base URL —
 - **Static host, public source.** Anything in this repo is readable by anyone.
   No API keys, no private user data in the client. When a module needs either,
   it needs a proxy (Cloudflare Worker / Vercel function) in front of it.
-- **Accounts are stubbed.** `assets/js/auth.js` returns a hardcoded user and
-  Sign Out does nothing. Swap that file's two functions for a real provider
-  and no UI code changes.
+- **The login page gates data, not code.** Every file here is public and
+  anyone can edit the JavaScript in their own browser to skip the redirect.
+  See "Authentication" below for where the real boundary has to live.
 - **Desktop-first.** Below 860px the nav forces itself to the icon rail so
   things stay usable, but mobile hasn't been designed.
 
@@ -146,3 +149,61 @@ button.
 The standalone site and this module are now two copies of the same frontend.
 A change to one needs porting to the other — or retire the standalone site and
 make Mktforge the only home.
+
+
+## Authentication
+
+Firebase Authentication, email + password, with a verified email required
+before the app opens. Loaded as compat scripts from Google's CDN, so there is
+still no build step.
+
+Passwords never touch this codebase. Firebase hashes and salts them (scrypt)
+on Google's servers; Mktforge only ever hands the plaintext straight to the
+Firebase SDK over TLS and forgets it.
+
+### One-time setup
+
+1. [console.firebase.google.com](https://console.firebase.google.com) → **Add
+   project**. Analytics is optional — off is fine. No credit card needed; this
+   all runs on the free Spark plan (50,000 monthly active users).
+2. **Build → Authentication → Get started → Sign-in method → Email/Password →
+   Enable → Save.** Leave "Email link (passwordless)" off.
+3. **Project settings (gear) → General → Your apps → Web (`</>`)**. Register
+   the app, skip Firebase Hosting, and copy the `firebaseConfig` object.
+4. Paste those six values into the `firebase` block in `assets/js/config.js`.
+5. **Authentication → Settings → Authorized domains → Add domain** →
+   `twishnoff.github.io`. Without this, sign-in fails with
+   `auth/unauthorized-domain`. `localhost` is already on the list.
+6. Optional: **Authentication → Templates** to change the sender name and
+   wording of the verification and reset emails.
+
+Until step 4 is done the login page says so and the app runs unauthenticated
+so the UI can still be previewed. That self-disables the moment real
+credentials are in place.
+
+### Locking it down to just you
+
+By default anyone who finds `login.html` can create an account. They would land
+in an empty app, but it's worth closing:
+
+- Delete unexpected accounts in **Authentication → Users**.
+- Any per-user data must be protected by security rules keyed to the signed-in
+  `uid`, so one account can never read another's.
+- **The one that costs money:** the Persona Drafter Worker currently trusts
+  anyone with a Turnstile token. It should verify the caller's Firebase ID
+  token and check the `uid` against an allowlist before spending API budget.
+  That change lives in the Worker, not here.
+
+### Keying user data
+
+Key records on `user.uid`, never on `user.email`. The uid is permanent; an
+email address can be changed by its owner, and every record keyed to the old
+address is orphaned the moment they do. Keep the email as a field on the
+record for display and lookup.
+
+### Emails
+
+Verification and password-reset emails are sent by Firebase from
+`noreply@<project-id>.firebaseapp.com`. No SMTP setup, no cost. They can land
+in spam — the verify screen says to check there. A custom sending domain is
+configurable later if it becomes a nuisance.

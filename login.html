@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sign in · Mktforge</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='14' fill='%232F6F4E'/><text x='50' y='70' font-size='62' font-family='Georgia,serif' fill='%23F6F1E6' text-anchor='middle'>M</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<link rel="stylesheet" href="assets/css/login.css">
+</head>
+<body class="login-body">
+
+<main class="login">
+
+  <div class="login__logo"><span class="logo">LOGO</span></div>
+
+  <!-- ===================== SIGN IN ===================== -->
+  <section class="card" id="view-signin">
+    <h1 class="card__title">Sign in</h1>
+
+    <form id="form-signin" novalidate>
+      <div class="field">
+        <label for="signin-email">Email</label>
+        <input type="email" id="signin-email" autocomplete="email" required placeholder="you@company.com">
+      </div>
+
+      <div class="field">
+        <label for="signin-password">Password</label>
+        <input type="password" id="signin-password" autocomplete="current-password" required placeholder="••••••••">
+      </div>
+
+      <p class="msg" id="signin-msg" role="alert" hidden></p>
+
+      <div class="actions">
+        <button type="submit" class="btn" id="signin-btn">Sign In</button>
+      </div>
+    </form>
+
+    <p class="switch">Don't have an account? <a href="#" id="go-create"><strong>Create account</strong></a></p>
+    <p class="switch switch--quiet"><a href="#" id="go-reset">Forgot your password?</a></p>
+  </section>
+
+  <!-- ===================== CREATE ACCOUNT ===================== -->
+  <section class="card" id="view-create" hidden>
+    <h1 class="card__title">Create account</h1>
+
+    <form id="form-create" novalidate>
+      <div class="field">
+        <label for="create-email">Email</label>
+        <input type="email" id="create-email" autocomplete="email" required placeholder="you@company.com">
+      </div>
+
+      <div class="field">
+        <label for="create-password">Password</label>
+        <input type="password" id="create-password" autocomplete="new-password" required placeholder="At least 8 characters">
+      </div>
+
+      <div class="field">
+        <label for="create-password2">Re-enter password</label>
+        <input type="password" id="create-password2" autocomplete="new-password" required placeholder="••••••••">
+      </div>
+
+      <p class="msg" id="create-msg" role="alert" hidden></p>
+
+      <div class="actions">
+        <button type="submit" class="btn" id="create-btn">Create Account</button>
+      </div>
+    </form>
+
+    <p class="switch">Already have an account? <a href="#" id="go-signin"><strong>Sign in</strong></a></p>
+  </section>
+
+  <!-- ===================== VERIFY EMAIL ===================== -->
+  <section class="card" id="view-verify" hidden>
+    <h1 class="card__title">Check your email</h1>
+    <p class="card__lede">
+      We sent a verification link to <strong id="verify-email">your address</strong>.
+      Click it, then come back here and continue.
+    </p>
+
+    <p class="msg" id="verify-msg" role="alert" hidden></p>
+
+    <div class="actions actions--stack">
+      <button type="button" class="btn" id="verify-continue">I've verified — continue</button>
+      <button type="button" class="btn btn--quiet" id="verify-resend">Resend the email</button>
+    </div>
+
+    <p class="switch switch--quiet"><a href="#" id="verify-signout">Use a different account</a></p>
+  </section>
+
+  <!-- ===================== RESET PASSWORD ===================== -->
+  <section class="card" id="view-reset" hidden>
+    <h1 class="card__title">Reset password</h1>
+    <p class="card__lede">Enter your email and we'll send you a link to set a new password.</p>
+
+    <form id="form-reset" novalidate>
+      <div class="field">
+        <label for="reset-email">Email</label>
+        <input type="email" id="reset-email" autocomplete="email" required placeholder="you@company.com">
+      </div>
+
+      <p class="msg" id="reset-msg" role="alert" hidden></p>
+
+      <div class="actions">
+        <button type="submit" class="btn" id="reset-btn">Send reset link</button>
+      </div>
+    </form>
+
+    <p class="switch"><a href="#" id="reset-back"><strong>Back to sign in</strong></a></p>
+  </section>
+
+  <p class="login__note" id="config-warning" hidden>
+    Firebase isn't configured yet — fill in the <code>firebase</code> block in
+    <code>assets/js/config.js</code>. See README.md.
+  </p>
+
+</main>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/login.js"></script>
+
+</body>
+</html>

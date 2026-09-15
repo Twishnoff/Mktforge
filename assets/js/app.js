@@ -136,11 +136,14 @@ window.Mktforge = (() => {
   /* ---------- Management bar: profile ---------- */
 
   function renderProfile() {
+    // getUser() is null in the instant between signing out and the redirect,
+    // so nothing here may assume there is an account.
     const user = window.MktforgeAuth.getUser();
-    document.getElementById('profile-name').textContent = window.MktforgeAuth.getDisplayName();
+    document.getElementById('profile-name').textContent =
+      window.MktforgeAuth.getDisplayName() || '';
 
     const avatar = document.getElementById('profile-avatar');
-    avatar.innerHTML = user.avatar
+    avatar.innerHTML = (user && user.avatar)
       ? `<img src="${user.avatar}" alt="">`
       : window.MktforgeIcons.user;
   }
@@ -165,9 +168,14 @@ window.Mktforge = (() => {
       if (e.key === 'Escape' && !menu.hidden) { close(); button.focus(); }
     });
 
-    document.getElementById('sign-out').addEventListener('click', () => {
+    document.getElementById('sign-out').addEventListener('click', async () => {
       close();
-      window.MktforgeAuth.signOut();
+      try {
+        await window.MktforgeAuth.signOut();     // ends the session, then
+      } catch (err) {                            // sends them to the login page
+        console.error(err);
+        window.location.href = window.MktforgeAuth.config.loginPage;
+      }
     });
 
     document.addEventListener('mktforge:user-changed', renderProfile);
@@ -234,7 +242,15 @@ window.Mktforge = (() => {
 
   /* ---------- Boot ---------- */
 
-  function boot() {
+  async function boot() {
+    // Gate first: requireAuth() redirects to the login page when there is no
+    // usable session, so nothing below runs for a signed-out visitor. This is
+    // a convenience, NOT a security boundary — see the note in auth.js.
+    const user = await window.MktforgeAuth.requireAuth();
+    if (!user) return;                    // redirecting; don't paint the shell
+
+    document.body.dataset.auth = 'ready';
+
     initNavToggle();
     renderProfile();
     initProfileMenu();
@@ -249,7 +265,14 @@ window.Mktforge = (() => {
     }
   }
 
-  document.addEventListener('DOMContentLoaded', boot);
+  document.addEventListener('DOMContentLoaded', () => {
+    boot().catch((err) => {
+      console.error('[Mktforge] boot failed', err);
+      document.body.dataset.auth = 'ready';
+      document.getElementById('display-mount').innerHTML =
+        `<div style="padding:48px;color:#A8371F">Couldn't start the app — see the browser console.</div>`;
+    });
+  });
 
   return {
     register,
