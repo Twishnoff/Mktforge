@@ -56,11 +56,14 @@
         </div>
 
         <div class="pb__field pb__field--turnstile">
+          <label>Verification</label>
           <div data-el="turnstile"></div>
+          <p class="pb__note" data-el="turnstileNote">Loading verification…</p>
         </div>
 
         <div class="pb__field pb__submit-row">
           <button type="submit" class="pb__btn" data-el="generate" disabled>Generate Persona</button>
+          <p class="pb__hint" data-el="hint" aria-live="polite"></p>
           <p class="pb__error" data-el="error" role="alert" hidden></p>
         </div>
       </form>
@@ -239,33 +242,82 @@
 
   function updateGenerateEnabled() {
     if (!mounted) return;
-    const ready =
-      el.email.value.trim() &&
-      el.jobTitle.value.trim() &&
-      el.companySize.value &&
-      !!turnstileToken;
-    el.generate.disabled = !ready;
+
+    const missing = [];
+    if (!el.email.value.trim())       missing.push('email');
+    if (!el.jobTitle.value.trim())    missing.push('job title');
+    if (!el.companySize.value)        missing.push('company size');
+    if (!turnstileToken)              missing.push('verification');
+
+    el.generate.disabled = missing.length > 0;
+
+    // A disabled button with no explanation is the worst possible failure
+    // mode — if the captcha silently fails to load there is nothing on
+    // screen telling you why nothing happens.
+    el.hint.textContent = missing.length ? `Still needed: ${missing.join(', ')}.` : '';
+  }
+
+  function setTurnstileNote(msg, isError) {
+    if (!mounted || !el.turnstileNote) return;
+    el.turnstileNote.textContent = msg || '';
+    el.turnstileNote.hidden = !msg;
+    el.turnstileNote.classList.toggle('is-error', !!isError);
   }
 
   async function initTurnstile() {
-    if (!cfg.TURNSTILE_SITE_KEY) return;
-    try {
-      await Mktforge.loadScript(TURNSTILE_SRC);
-    } catch (err) {
-      console.error(err);
-      if (mounted) showFormError("Couldn't load the captcha — check your connection and reload.");
+    if (!cfg.TURNSTILE_SITE_KEY) {
+      setTurnstileNote('No Turnstile site key set in assets/js/config.js.', true);
       return;
     }
-    if (!mounted || !window.turnstile) return;
 
-    window.turnstile.ready(() => {
-      if (!mounted) return;
+    setTurnstileNote('Loading verification\u2026');
+
+    try {
+      // async:false matters. Turnstile inspects its own <script> tag and
+      // refuses to initialize when it carries async or defer.
+      await Mktforge.loadScript(TURNSTILE_SRC, { async: false });
+    } catch (err) {
+      console.error(err);
+      if (mounted) setTurnstileNote("Couldn't reach Cloudflare to load the verification widget.", true);
+      return;
+    }
+
+    if (!mounted) return;
+
+    if (!window.turnstile || typeof window.turnstile.render !== 'function') {
+      setTurnstileNote('Verification script loaded but did not initialize.', true);
+      return;
+    }
+
+    // Deliberately NOT calling turnstile.ready(): on a script tag injected
+    // at runtime it throws ("Remove async/defer ... before using
+    // turnstile.ready()"). The tag's own onload has already fired by this
+    // point, so the API is initialized and render() can be called directly.
+    try {
       turnstileWidgetId = window.turnstile.render(el.turnstile, {
         sitekey: cfg.TURNSTILE_SITE_KEY,
-        callback: (token) => { turnstileToken = token; updateGenerateEnabled(); },
-        'expired-callback': () => { turnstileToken = null; updateGenerateEnabled(); }
+        callback: (token) => {
+          turnstileToken = token;
+          setTurnstileNote('');
+          updateGenerateEnabled();
+        },
+        'expired-callback': () => {
+          turnstileToken = null;
+          setTurnstileNote('Verification expired — tick the box again.');
+          updateGenerateEnabled();
+        },
+        'error-callback': (code) => {
+          turnstileToken = null;
+          console.error('[Persona Builder] Turnstile error', code);
+          setTurnstileNote(`Verification failed (${code || 'unknown'}). If this page is on a new domain, add it to the Turnstile widget's hostname list.`, true);
+          updateGenerateEnabled();
+        }
       });
-    });
+      setTurnstileNote('');
+    } catch (err) {
+      console.error('[Persona Builder] Turnstile render failed', err);
+      setTurnstileNote('Verification widget failed to render — see the browser console.', true);
+    }
   }
 
   /* ---------- SSE over fetch (EventSource can't POST a body) ---------- */
@@ -424,7 +476,8 @@
       el = {
         form: q('form'), email: q('email'), jobTitle: q('jobTitle'),
         companySize: q('companySize'), industry: q('industry'),
-        turnstile: q('turnstile'), generate: q('generate'),
+        turnstile: q('turnstile'), turnstileNote: q('turnstileNote'),
+        generate: q('generate'), hint: q('hint'),
         error: q('error'), pdf: q('pdf'), status: q('status')
       };
 
@@ -437,6 +490,7 @@
       el.form.addEventListener('submit', handleSubmit);
       el.pdf.addEventListener('click', handlePdf);
 
+      updateGenerateEnabled();
       initTurnstile();
     },
 

@@ -52,13 +52,17 @@ window.Mktforge = (() => {
 
   const scriptCache = new Map();
 
-  function loadScript(src, attrs = {}) {
+  function loadScript(src, opts = {}) {
     if (scriptCache.has(src)) return scriptCache.get(src);
+
+    const { async = true, attrs = {} } = opts;
 
     const p = new Promise((resolve, reject) => {
       const el = document.createElement('script');
       el.src = src;
-      el.async = true;
+      // Some third-party scripts refuse to initialize if the tag carries
+      // async/defer — Cloudflare Turnstile is one — so this is opt-out.
+      el.async = async;
       Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
       el.onload = () => resolve(src);
       el.onerror = () => {

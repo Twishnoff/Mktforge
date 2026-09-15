@@ -126,6 +126,21 @@ Two cases that would need a change:
   Worker's allowed origins plus `localhost` to the Turnstile hostname list.
   Everything else in Mktforge previews fine straight off disk.
 
+### Gotcha: Turnstile and dynamically loaded scripts
+
+Turnstile inspects its own `<script>` tag and refuses to initialize if it
+carries `async` or `defer` — `turnstile.ready()` throws
+*"Remove async/defer from the Turnstile api.js script tag"*. Because the shell
+injects the script at runtime, two rules apply:
+
+- load it with `Mktforge.loadScript(src, { async: false })`
+- don't call `turnstile.ready()` at all; the tag's `onload` has already fired,
+  so `turnstile.render()` can be called directly
+
+The widget slot shows its own status line and the Generate button says what is
+still missing, so a failure here is visible rather than a permanently grey
+button.
+
 ### Drift
 
 The standalone site and this module are now two copies of the same frontend.
