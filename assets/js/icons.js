@@ -14,6 +14,15 @@ window.MktforgeIcons = {
            <path d="M4.5 20c0-3.6 3.4-5.8 7.5-5.8s7.5 2.2 7.5 5.8"/>
          </svg>`,
 
+  /* Find My Customer — targeting crosshairs */
+  crosshair: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="7.5"/>
+                <circle cx="12" cy="12" r="2.2"/>
+                <path d="M12 1.8v5"/><path d="M12 17.2v5"/>
+                <path d="M1.8 12h5"/><path d="M17.2 12h5"/>
+              </svg>`,
+
   /* Persona Builder — profile card with a magnifier */
   persona: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

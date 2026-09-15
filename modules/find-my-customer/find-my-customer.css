@@ -1,0 +1,288 @@
+/* ==========================================================================
+   Find My Customer — module styles
+   Ported from Customer-Intelligence's style.css, rescoped under .fmc and
+   remapped onto Mktforge's tokens so it sits beside Persona Builder.
+   Widths respond to the container (auto-fit grid), not the viewport,
+   because the display field changes width when the nav is minimized.
+   ========================================================================== */
+
+.fmc {
+  --fmc-surface: #FFFDF7;
+  --fmc-sunken:  var(--paper-dim);
+  --fmc-line:    var(--paper-line);
+  --fmc-ink:     var(--ink);
+  --fmc-soft:    var(--ink-soft);
+  --fmc-faint:   var(--muted);
+  --fmc-accent:  var(--accent);
+  --fmc-accent-soft: var(--accent-tint);
+  --fmc-crit:      #A8371F;
+  --fmc-crit-soft: #F6E4E0;
+  --fmc-shadow: 0 1px 2px rgba(32,36,43,.05), 0 6px 18px rgba(32,36,43,.045);
+  --fmc-radius: 8px;
+
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 36px 32px 64px;
+  color: var(--fmc-ink);
+  line-height: 1.55;
+}
+
+/* --- Module header --- */
+
+.fmc__eyebrow {
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--fmc-accent);
+}
+
+.fmc__title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.fmc__dek { margin: 0; max-width: 62ch; color: var(--fmc-soft); }
+
+/* --- Submission box --- */
+
+.fmc__submit {
+  background: var(--fmc-surface);
+  border: 1px solid var(--fmc-line);
+  border-radius: var(--fmc-radius);
+  box-shadow: var(--fmc-shadow);
+  padding: 24px;
+  margin: 28px 0;
+}
+
+.fmc__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 18px;
+}
+
+.fmc__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 200px; }
+.fmc__field--wide { flex: 2 1 300px; }
+.fmc__field--action { flex: 0 0 auto; }
+
+.fmc__field label { font-size: 13px; font-weight: 600; }
+
+.fmc input[type="email"],
+.fmc input[type="text"] {
+  font: inherit;
+  font-size: 14.5px;
+  padding: 10px 12px;
+  border: 1px solid var(--fmc-line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--fmc-ink);
+  min-width: 0;
+}
+
+.fmc input:focus,
+.fmc button:focus-visible {
+  outline: 2px solid var(--fmc-accent);
+  outline-offset: 1px;
+}
+
+.fmc__btn {
+  font: inherit;
+  font-weight: 600;
+  font-size: 14.5px;
+  padding: 11px 26px;
+  border-radius: 999px;
+  border: none;
+  background: var(--fmc-accent);
+  color: #F2F7F4;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity .15s ease;
+}
+
+.fmc__btn:hover:not(:disabled) { opacity: .9; }
+
+.fmc__btn:disabled {
+  background: var(--fmc-sunken);
+  color: var(--fmc-faint);
+  cursor: not-allowed;
+}
+
+.fmc__error {
+  margin: 16px 0 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--fmc-crit-soft);
+  color: var(--fmc-crit);
+  font-size: 13.5px;
+}
+
+.fmc__error[hidden] { display: none; }
+
+/* --- Results grid --- */
+
+.fmc__grid {
+  display: grid;
+  /* Two columns at most (like the original), one when the field is narrow. */
+  grid-template-columns: repeat(auto-fit, minmax(max(300px, calc((100% - 14px) / 2)), 1fr));
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.fmc__box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 160px;
+  min-width: 0;
+  padding: 16px 18px 18px;
+  background: var(--fmc-surface);
+  border: 1px solid var(--fmc-line);
+  border-radius: var(--fmc-radius);
+  box-shadow: var(--fmc-shadow);
+}
+
+.fmc__box--wide { grid-column: 1 / -1; }
+
+.fmc__box h2 {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.fmc__box-body { flex: 1; font-size: 13.5px; overflow-x: auto; }
+
+.fmc__box-body.is-placeholder,
+.fmc__box-body.is-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 90px;
+}
+
+.fmc__box-body.is-placeholder { color: var(--fmc-faint); font-style: italic; }
+.fmc__box-body.is-loading { gap: 8px; }
+
+.fmc__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fmc-accent);
+  animation: fmc-pulse 1.2s infinite ease-in-out;
+}
+
+.fmc__dot:nth-child(2) { animation-delay: .2s; }
+.fmc__dot:nth-child(3) { animation-delay: .4s; }
+
+@keyframes fmc-pulse {
+  0%, 80%, 100% { opacity: .25; transform: scale(.85); }
+  40%           { opacity: 1;   transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fmc__dot { animation: none; opacity: .7; }
+}
+
+/* --- Customer table --- */
+
+.fmc__box table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+.fmc__box th {
+  padding: 0 8px 6px 0;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--fmc-faint);
+}
+
+.fmc__box td {
+  padding: 7px 8px 7px 0;
+  border-top: 1px solid var(--fmc-line);
+  vertical-align: top;
+}
+
+/* --- Job titles --- */
+
+.fmc__titles { list-style: none; margin: 0; padding: 0; }
+
+.fmc__titles li {
+  padding: 7px 0;
+  border-top: 1px solid var(--fmc-line);
+  font-size: 13px;
+}
+
+.fmc__titles li:first-child { border-top: none; padding-top: 0; }
+
+/* --- Pain point groups --- */
+
+.fmc__group + .fmc__group { margin-top: 14px; }
+
+.fmc__group h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fmc-accent);
+}
+
+.fmc__group ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.fmc__group li + li { margin-top: 3px; }
+
+/* --- Top needs --- */
+
+.fmc__needs-title { margin: 0 0 10px; font-weight: 600; font-size: 14px; }
+
+.fmc__rank {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  counter-reset: fmc-rank;
+}
+
+.fmc__rank li {
+  counter-increment: fmc-rank;
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.fmc__rank li::before {
+  content: counter(fmc-rank);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--fmc-accent-soft);
+  color: var(--fmc-accent);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+/* --- PDF export row --- */
+
+.fmc__pdf-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.fmc__status {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 13px;
+  color: var(--fmc-soft);
+}

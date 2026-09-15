@@ -35,6 +35,13 @@ window.MKTFORGE_CONFIG = {
     loginPage: 'login.html'
   },
 
+  findMyCustomer: {
+    API_URL: 'https://customer-overview-dashboard.tyler-wishnoff.workers.dev/api/dashboard',
+    // Leave false until the Worker verifies Firebase ID tokens and lists
+    // Authorization in Access-Control-Allow-Headers — see README.
+    SEND_AUTH_TOKEN: false
+  },
+
   personaBuilder: {
     API_BASE_URL: 'https://persona-drafter-api.tyler-wishnoff.workers.dev',
     TURNSTILE_SITE_KEY: '0x4AAAAAAEhj_UpeZip62a9o'

@@ -14,6 +14,7 @@ assets/js/login.js          login page logic
 assets/css/login.css        login page styles
 assets/js/app.js            shell logic + module registry
 modules/module-1/           example module (js + css)
+modules/find-my-customer/   Find My Customer (ported from Customer-Intelligence)
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
 ```
 
@@ -86,6 +87,52 @@ ratio with a floor and a ceiling (`assets/css/app.css`, `:root`):
 | Nav, expanded   | `clamp(200px, 15vw, 260px)`    | 216px (15%)    |
 | Nav, minimized  | `64px`                         | 4.4%           |
 | Management bar  | `56px`                         | —              |
+
+
+## Find My Customer
+
+A port of the standalone Customer Overview Dashboard
+([Customer-Intelligence](https://github.com/Twishnoff/Customer-Intelligence))
+into a Mktforge module, built the same way as Persona Builder. Same Cloudflare
+Worker (`/api/dashboard`), same JSON request and response, same five result
+boxes, same "already collected" guard, and the same jsPDF + autoTable report.
+Its nav button sits directly above Persona Builder, with a crosshairs icon.
+
+What changed in the port:
+
+- its page header is gone — the shell provides the frame
+- palette and type come from Mktforge's tokens (the PDF's blue is now the
+  Mktforge green)
+- every DOM lookup is scoped to the container `mount()` hands it
+- jsPDF and autoTable load on the first PDF click, not on page load
+- results, form values and an in-flight run survive navigating to another
+  module and back, the same way Persona Builder's do
+- the email field is prefilled with the signed-in account's address
+
+### Config
+
+`assets/js/config.js` → `findMyCustomer.API_URL` is the Worker endpoint
+(public by design; the model API keys stay in the Worker).
+
+`findMyCustomer.SEND_AUTH_TOKEN` is `false`. Persona Builder sends
+`Authorization: Bearer <firebase id token>`, but the Customer Intelligence
+Worker has never received that header. If the Worker's
+`Access-Control-Allow-Headers` doesn't list `Authorization`, the browser
+blocks the request. Once the Worker verifies Firebase tokens (same
+`require-user.js` approach as Persona Drafter) and allows the header, set it
+to `true`. Until then, this endpoint is as open as the standalone site.
+
+### Origins
+
+`twishnoff.github.io/Mktforge` and the standalone dashboard share the origin
+`https://twishnoff.github.io`, so if the Worker already allows that origin
+nothing changes. A custom domain or `http://localhost:8000` needs adding to
+the Worker's allowed origins. This module has no Turnstile widget.
+
+### Drift
+
+As with Persona Builder, the standalone site and this module are now two
+copies of the same frontend. If you change one, port the change to the other.
 
 
 ## Persona Builder
