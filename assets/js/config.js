@@ -19,12 +19,12 @@ window.MKTFORGE_CONFIG = {
      README.md has the full click-by-click setup.
      ---------------------------------------------------------------------- */
   firebase: {
-    apiKey:            'PASTE_API_KEY',
-    authDomain:        'PASTE_PROJECT_ID.firebaseapp.com',
-    projectId:         'PASTE_PROJECT_ID',
-    storageBucket:     'PASTE_PROJECT_ID.firebasestorage.app',
-    messagingSenderId: 'PASTE_SENDER_ID',
-    appId:             'PASTE_APP_ID'
+    apiKey:            'AIzaSyDJreuKMDStRQtogE8kyWiGkbXa_WkW7hU',
+    authDomain:        'mktforge.firebaseapp.com',
+    projectId:         'mktforge',
+    storageBucket:     'mktforge.firebasestorage.app',
+    messagingSenderId: '756951502720',
+    appId:             '1:756951502720:web:697675239c75d33c493b65'
   },
 
   auth: {
