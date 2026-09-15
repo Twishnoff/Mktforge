@@ -44,6 +44,34 @@ window.Mktforge = (() => {
     if (booted) { renderNav(); route(); }   // allows lazy registration later
   }
 
+  /* ---------- Lazy script loading ----------
+     Lets a module pull in a heavy third-party library only when it is
+     actually opened, instead of putting it in the initial page load.
+     Uses a <script> tag rather than fetch/import so it also works when the
+     project is opened straight off disk. */
+
+  const scriptCache = new Map();
+
+  function loadScript(src, attrs = {}) {
+    if (scriptCache.has(src)) return scriptCache.get(src);
+
+    const p = new Promise((resolve, reject) => {
+      const el = document.createElement('script');
+      el.src = src;
+      el.async = true;
+      Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+      el.onload = () => resolve(src);
+      el.onerror = () => {
+        scriptCache.delete(src);
+        reject(new Error(`[Mktforge] failed to load ${src}`));
+      };
+      document.head.appendChild(el);
+    });
+
+    scriptCache.set(src, p);
+    return p;
+  }
+
   /* ---------- Navigation bar ---------- */
 
   function renderNav() {
@@ -221,6 +249,7 @@ window.Mktforge = (() => {
 
   return {
     register,
+    loadScript,
     get modules() { return modules.slice(); },
     get activeId() { return activeId; },
     go(id) { location.hash = `#/${id}`; }

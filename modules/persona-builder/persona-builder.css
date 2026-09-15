@@ -1,0 +1,333 @@
+/* ==========================================================================
+   Persona Builder — module styles
+   Ported from Persona Drafter's styles.css, rescoped under .pb and remapped
+   onto Mktforge's tokens. The standalone tool's own palette, dark-mode block,
+   site header/footer and Fraunces/Source Sans font stack are gone — the shell
+   supplies all of that now.
+
+   Widths use auto-fit grids rather than viewport media queries, because the
+   display field changes width when the nav is minimized; the layout has to
+   respond to its container, not the window.
+   ========================================================================== */
+
+.pb {
+  --pb-surface: #FFFDF7;
+  --pb-sunken:  var(--paper-dim);
+  --pb-line:    var(--paper-line);
+  --pb-ink:     var(--ink);
+  --pb-soft:    var(--ink-soft);
+  --pb-faint:   var(--muted);
+  --pb-accent:  var(--accent);
+  --pb-accent-soft: var(--accent-tint);
+  --pb-accent-line: #BDD2C8;
+  --pb-crit:      #A8371F;
+  --pb-crit-soft: #F6E4E0;
+  --pb-shadow: 0 1px 2px rgba(32,36,43,.05), 0 6px 18px rgba(32,36,43,.045);
+  --pb-radius: 8px;
+
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 36px 32px 64px;
+  color: var(--pb-ink);
+  line-height: 1.55;
+}
+
+/* --- Module header --- */
+
+.pb__eyebrow {
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--pb-accent);
+}
+
+.pb__title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--pb-ink);
+}
+
+.pb__dek { margin: 0; max-width: 62ch; color: var(--pb-soft); }
+
+/* --- Submission box --- */
+
+.pb__submit {
+  background: var(--pb-surface);
+  border: 1px solid var(--pb-line);
+  border-radius: var(--pb-radius);
+  box-shadow: var(--pb-shadow);
+  padding: 24px;
+  margin: 28px 0;
+}
+
+.pb__form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px 18px;
+}
+
+.pb__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+.pb__field label { font-size: 13px; font-weight: 600; color: var(--pb-ink); }
+.pb__optional { font-weight: 400; color: var(--pb-faint); }
+
+.pb input[type="email"],
+.pb input[type="text"],
+.pb select {
+  font: inherit;
+  font-size: 14.5px;
+  padding: 10px 12px;
+  border: 1px solid var(--pb-line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--pb-ink);
+  min-width: 0;
+}
+
+.pb input:focus,
+.pb select:focus,
+.pb button:focus-visible {
+  outline: 2px solid var(--pb-accent);
+  outline-offset: 1px;
+}
+
+.pb select { appearance: auto; }
+
+.pb__field--turnstile { justify-content: flex-end; }
+
+.pb__submit-row {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.pb__btn {
+  font: inherit;
+  font-weight: 600;
+  font-size: 14.5px;
+  padding: 11px 26px;
+  border-radius: 999px;
+  border: none;
+  background: var(--pb-accent);
+  color: #F2F7F4;
+  cursor: pointer;
+  transition: opacity .15s ease;
+}
+
+.pb__btn:hover:not(:disabled) { opacity: .9; }
+
+.pb__btn:disabled {
+  background: var(--pb-sunken);
+  color: var(--pb-faint);
+  cursor: not-allowed;
+}
+
+.pb__error {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--pb-crit-soft);
+  color: var(--pb-crit);
+  font-size: 13.5px;
+}
+
+/* --- Results grid --- */
+
+.pb__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.pb__box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 180px;
+  padding: 16px 18px 18px;
+  background: var(--pb-surface);
+  border: 1px solid var(--pb-line);
+  border-radius: var(--pb-radius);
+  box-shadow: var(--pb-shadow);
+}
+
+.pb__box h2 {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pb-ink);
+}
+
+.pb__box-body { flex: 1; font-size: 13.5px; color: var(--pb-ink); }
+
+.pb__box-body.is-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  color: var(--pb-faint);
+  font-style: italic;
+}
+
+.pb__box-body.is-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 100px;
+}
+
+.pb__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pb-accent);
+  animation: pb-pulse 1.2s infinite ease-in-out;
+}
+
+.pb__dot:nth-child(2) { animation-delay: .2s; }
+.pb__dot:nth-child(3) { animation-delay: .4s; }
+
+@keyframes pb-pulse {
+  0%, 80%, 100% { opacity: .25; transform: scale(.85); }
+  40%           { opacity: 1;   transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb__dot { animation: none; opacity: .7; }
+}
+
+/* --- Overview key/value list --- */
+
+.pb__kv { display: grid; gap: 6px; }
+
+.pb__kv-row {
+  display: grid;
+  grid-template-columns: 148px 1fr;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.pb__k { color: var(--pb-soft); font-weight: 600; }
+.pb__v a { color: var(--pb-accent); }
+
+/* --- Tables (profiles, gather) --- */
+
+.pb__box table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+.pb__box th {
+  padding: 0 6px 6px 0;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--pb-faint);
+}
+
+.pb__box td {
+  padding: 6px 6px 6px 0;
+  border-top: 1px solid var(--pb-line);
+  vertical-align: top;
+}
+
+.pb__box a { color: var(--pb-accent); }
+
+/* --- Ranked lists (priorities) --- */
+
+.pb__rank {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  counter-reset: pb-rank;
+}
+
+.pb__rank li {
+  counter-increment: pb-rank;
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.pb__rank li::before {
+  content: counter(pb-rank);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--pb-accent-soft);
+  color: var(--pb-accent);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+/* --- Org chart --- */
+
+.pb__orgchart { display: grid; justify-items: center; gap: 6px; padding: 4px 0; }
+
+.pb__tier {
+  min-width: 60%;
+  padding: 8px 12px;
+  background: var(--pb-sunken);
+  border: 1px solid var(--pb-line);
+  border-radius: 6px;
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.pb__tier.is-this-role {
+  background: var(--pb-accent-soft);
+  border-color: var(--pb-accent-line);
+  font-weight: 600;
+}
+
+.pb__tier-label {
+  display: block;
+  margin-bottom: 2px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--pb-faint);
+}
+
+.pb__connector { width: 1px; height: 12px; background: var(--pb-line); }
+
+.pb__branches { display: flex; gap: 10px; width: 100%; justify-content: center; }
+.pb__branches .pb__tier { flex: 1; min-width: 0; }
+
+.pb__empty { color: var(--pb-faint); font-size: 12.5px; font-style: italic; margin: 0; }
+
+/* --- PDF export row --- */
+
+.pb__pdf-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.pb__status {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 13px;
+  color: var(--pb-soft);
+}

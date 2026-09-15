@@ -14,6 +14,15 @@ window.MktforgeIcons = {
            <path d="M4.5 20c0-3.6 3.4-5.8 7.5-5.8s7.5 2.2 7.5 5.8"/>
          </svg>`,
 
+  /* Persona Builder — profile card with a magnifier */
+  persona: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2.6" y="4.5" width="18.8" height="15" rx="2"/>
+              <circle cx="9" cy="10.4" r="2.2"/>
+              <path d="M5.6 15.8c.5-1.7 1.8-2.6 3.4-2.6s2.9.9 3.4 2.6"/>
+              <path d="M15.4 9.6h3.4"/><path d="M15.4 12.6h3.4"/>
+            </svg>`,
+
   /* A few spares so new modules have something to point at */
   grid: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
