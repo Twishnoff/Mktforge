@@ -96,9 +96,22 @@ body[data-auth="pending"] .app { visibility: hidden; }
   display: flex;
   flex-direction: column;
   min-width: 0;
+  position: relative;
   background: var(--desk);
-  border-right: 1px solid var(--paper-line);
   overflow: hidden;
+}
+
+/* The nav's right edge line starts below the management bar, so the logo
+   block and the bar read as one continuous top strip. */
+.nav::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--mgmt-h) - 1px);   /* meets the bar's bottom border */
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--paper-line);
+  pointer-events: none;
 }
 
 /* Logo block: exactly as tall as the management bar, so the wordmark sits on
@@ -110,21 +123,18 @@ body[data-auth="pending"] .app { visibility: hidden; }
   padding: 0 var(--nav-pad-x);
 }
 
-.logo {
-  font-family: var(--font-display);
-  font-size: 22px;           /* smaller than the 56px management bar */
-  font-weight: 600;
-  letter-spacing: .06em;
-  color: var(--ink);
-  line-height: 1;
-  white-space: nowrap;
-}
+/* Logo files live in assets/img: the full lockup (squares + wordmark) and
+   the squares on their own for the minimized nav. Both are SVG traced from
+   mktforge-logo.png, so they stay sharp at any size. */
+.logo { display: flex; align-items: center; line-height: 0; }
 
-.logo__mark { display: none; }
+.logo img { display: block; height: 24px; width: auto; }
+
+.logo .logo__mark { display: none; }
 
 body[data-nav="collapsed"] .nav__logo { justify-content: center; padding: 0; }
-body[data-nav="collapsed"] .logo__full { display: none; }
-body[data-nav="collapsed"] .logo__mark { display: inline; }
+body[data-nav="collapsed"] .logo .logo__full { display: none; }
+body[data-nav="collapsed"] .logo .logo__mark { display: block; }
 
 /* Module buttons start below the line where the management bar meets the nav */
 .nav__list {
@@ -407,8 +417,8 @@ body[data-nav="collapsed"] .nav__minimize-icon {
 @media (max-width: 860px) {
   :root { --nav-w-open: var(--nav-w-min); }
   body[data-nav="expanded"] .nav__label,
-  body[data-nav="expanded"] .logo__full { display: none; }
-  body[data-nav="expanded"] .logo__mark { display: inline; }
+  body[data-nav="expanded"] .logo .logo__full { display: none; }
+  body[data-nav="expanded"] .logo .logo__mark { display: block; }
   body[data-nav="expanded"] .nav__logo { justify-content: center; padding: 0; }
   body[data-nav="expanded"] .nav__button { justify-content: center; padding: 10px 0; }
   .nav__minimize { display: none; }

@@ -23,12 +23,10 @@
   margin-bottom: 22px;
 }
 
-.login__logo .logo {
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  color: var(--ink);
+.login__logo img {
+  display: block;
+  width: 198px;
+  height: auto;
 }
 
 .card {

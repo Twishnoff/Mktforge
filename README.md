@@ -7,6 +7,7 @@ no dependencies, no framework. Push the folder to GitHub Pages and it runs.
 index.html                  the frame (requires a signed-in user)
 login.html                  sign in / create account / verify / reset
 assets/css/app.css          shell styles + design tokens
+assets/img/                 logo (SVG lockup + mark, traced from mktforge-logo.png), favicon
 assets/js/config.js         public config for modules (no secrets)
 assets/js/icons.js          inline SVG icon set
 assets/js/auth.js           Firebase Authentication adapter
