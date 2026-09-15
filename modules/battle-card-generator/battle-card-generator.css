@@ -1,0 +1,317 @@
+/* ==========================================================================
+   Battle Card Generator — module styles
+   Ported from Battlecard-Generator's style.css, rescoped under .bcg and
+   remapped onto Mktforge's tokens so it sits beside Persona Builder and
+   Find My Customer. Grids respond to the container, not the viewport,
+   because the display field changes width when the nav is minimized.
+   ========================================================================== */
+
+.bcg {
+  --bcg-surface: #FFFDF7;
+  --bcg-sunken:  var(--paper-dim);
+  --bcg-line:    var(--paper-line);
+  --bcg-ink:     var(--ink);
+  --bcg-soft:    var(--ink-soft);
+  --bcg-faint:   var(--muted);
+  --bcg-accent:  var(--accent);
+  --bcg-accent-soft: var(--accent-tint);
+  --bcg-crit:      #A8371F;
+  --bcg-crit-soft: #F6E4E0;
+  --bcg-shadow: 0 1px 2px rgba(32,36,43,.05), 0 6px 18px rgba(32,36,43,.045);
+  --bcg-radius: 8px;
+
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 36px 32px 64px;
+  color: var(--bcg-ink);
+  line-height: 1.55;
+}
+
+/* --- Module header --- */
+
+.bcg__eyebrow {
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--bcg-accent);
+}
+
+.bcg__title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.bcg__dek { margin: 0; max-width: 62ch; color: var(--bcg-soft); }
+
+/* --- Submission box --- */
+
+.bcg__submit {
+  background: var(--bcg-surface);
+  border: 1px solid var(--bcg-line);
+  border-radius: var(--bcg-radius);
+  box-shadow: var(--bcg-shadow);
+  padding: 24px;
+  margin: 28px 0;
+}
+
+.bcg__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px 18px;
+}
+
+.bcg__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bcg__field label { font-size: 13px; font-weight: 600; }
+.bcg__optional { font-weight: 400; color: var(--bcg-faint); }
+
+.bcg input[type="email"],
+.bcg input[type="text"] {
+  font: inherit;
+  font-size: 14.5px;
+  padding: 10px 12px;
+  border: 1px solid var(--bcg-line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--bcg-ink);
+  min-width: 0;
+}
+
+.bcg input:focus,
+.bcg button:focus-visible,
+.bcg a:focus-visible {
+  outline: 2px solid var(--bcg-accent);
+  outline-offset: 1px;
+}
+
+.bcg__submit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.bcg__btn {
+  font: inherit;
+  font-weight: 600;
+  font-size: 14.5px;
+  padding: 11px 26px;
+  border-radius: 999px;
+  border: none;
+  background: var(--bcg-accent);
+  color: #F2F7F4;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity .15s ease;
+}
+
+.bcg__btn:hover:not(:disabled) { opacity: .9; }
+
+.bcg__btn:disabled {
+  background: var(--bcg-sunken);
+  color: var(--bcg-faint);
+  cursor: not-allowed;
+}
+
+.bcg__hint { margin: 0; font-size: 12.5px; color: var(--bcg-faint); }
+
+.bcg__error {
+  margin: 16px 0 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--bcg-crit-soft);
+  color: var(--bcg-crit);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+.bcg__error[hidden] { display: none; }
+
+/* --- Results grid: three columns at most, like the original --- */
+
+.bcg__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(290px, calc((100% - 28px) / 3)), 1fr));
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.bcg__box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 170px;
+  min-width: 0;
+  padding: 16px 18px 18px;
+  background: var(--bcg-surface);
+  border: 1px solid var(--bcg-line);
+  border-radius: var(--bcg-radius);
+  box-shadow: var(--bcg-shadow);
+}
+
+.bcg__box h2 {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.bcg__box-body { flex: 1; font-size: 13px; overflow-x: auto; }
+.bcg__box-body p { margin: 0; }
+
+.bcg__box-body.is-placeholder,
+.bcg__box-body.is-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+}
+
+.bcg__box-body.is-placeholder { color: var(--bcg-faint); font-style: italic; }
+.bcg__box-body.is-loading { gap: 8px; }
+
+.bcg__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bcg-accent);
+  animation: bcg-pulse 1.2s infinite ease-in-out;
+}
+
+.bcg__dot:nth-child(2) { animation-delay: .2s; }
+.bcg__dot:nth-child(3) { animation-delay: .4s; }
+
+@keyframes bcg-pulse {
+  0%, 80%, 100% { opacity: .25; transform: scale(.85); }
+  40%           { opacity: 1;   transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bcg__dot { animation: none; opacity: .7; }
+}
+
+/* --- Competitor and Product --- */
+
+.bcg__kv + .bcg__kv { margin-top: 8px; }
+
+.bcg__k {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--bcg-faint);
+}
+
+/* --- Tables --- */
+
+.bcg__box table { width: 100%; border-collapse: collapse; }
+
+.bcg__box td {
+  padding: 7px 8px 7px 0;
+  border-top: 1px solid var(--bcg-line);
+  vertical-align: top;
+}
+
+.bcg__box tr:first-child td { border-top: none; padding-top: 0; }
+
+.bcg__name { font-weight: 600; width: 36%; }
+
+.bcg__box a { color: var(--bcg-accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.bcg__box a:hover { text-decoration: underline; }
+
+/* --- Lettered badges (initiatives and the features tied to them) --- */
+
+.bcg__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--bcg-accent-soft);
+  color: var(--bcg-accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.bcg__initiative { display: flex; align-items: flex-start; gap: 10px; }
+.bcg__initiative + .bcg__initiative { margin-top: 8px; }
+
+.bcg__feature-col { width: 40%; }
+
+.bcg__feature {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.bcg__feature strong { align-self: flex-start; }
+
+.bcg__badge--lg {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  font-size: 22px;
+}
+
+.bcg__compete {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--bcg-crit);
+  color: #FFF;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+/* --- Customer references --- */
+
+.bcg__tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bcg-accent-soft);
+  color: var(--bcg-accent);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.bcg__refs td:last-child { text-align: right; white-space: nowrap; }
+.bcg__none { color: var(--bcg-faint); }
+
+/* --- Talking points / pricing --- */
+
+.bcg__qa + .bcg__qa { margin-top: 12px; }
+.bcg__q { font-weight: 600; }
+.bcg__a { color: var(--bcg-soft); margin-top: 2px; }
+.bcg__muted { color: var(--bcg-faint); font-style: italic; }
+
+/* --- PDF export row --- */
+
+.bcg__pdf-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.bcg__status {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 13px;
+  color: var(--bcg-soft);
+}

@@ -16,6 +16,7 @@ assets/js/app.js            shell logic + module registry
 modules/module-1/           example module (js + css)
 modules/find-my-customer/   Find My Customer (ported from Customer-Intelligence)
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
+modules/battle-card-generator/  Battle Card Generator (ported from Battlecard-Generator)
 ```
 
 ## Running it locally
@@ -217,6 +218,62 @@ at the top of `mount()`. The shell doesn't need to know.
 The standalone site and this module are now two copies of the same frontend.
 A change to one needs porting to the other — or retire the standalone site and
 make Mktforge the only home.
+
+
+## Battle Card Generator
+
+A port of the standalone
+[Competitive Battle Card Generator](https://github.com/Twishnoff/Battlecard-Generator)
+into a Mktforge module, built the same way as Persona Builder and Find My
+Customer. Same Cloudflare Worker, same JSON request and response, same nine
+boxes, same copy-length rules, and the same landscape jsPDF battle card. Its
+nav button sits directly below Persona Builder, with a crossed-swords icon.
+
+```
+modules/battle-card-generator/
+  battle-card-generator.js    page, renderers, shared copy-length rules
+  battle-card-pdf.js          PDF engine, loaded on the first PDF click
+  battle-card-generator.css
+```
+
+What changed in the port:
+
+- the page header (including the repo and request-access links) is gone
+- palette and type come from Mktforge's tokens. The PDF still uses the
+  researched company's brand color from the Worker, falling back to Mktforge
+  green instead of blue.
+- the copy caps (300 / 220 / 1100 / 130 / 1300 / 40 characters) live in one
+  shared object, `MktforgeBattleCardText`, used by both the page and the PDF,
+  so the two still can't drift apart
+- the Generate button says which required fields are still missing
+- reference links are only made clickable when they are `http(s)` URLs
+- a run takes 30–90 seconds, so results, form values and an in-flight run
+  survive switching modules (not a page reload)
+- the email field is prefilled with the signed-in account's address
+
+### Config
+
+`assets/js/config.js` → `battleCardGenerator.API_URL` is the Worker URL.
+
+The Worker checks the submitted email against its Google Doc allow-list, so
+the signed-in Mktforge account's email must be on that list.
+
+`SEND_AUTH_TOKEN` is `false`. The Worker's CORS response only allows the
+`Content-Type` header, so an `Authorization` header would get the request
+blocked by the browser. To lock this Worker to Mktforge accounts, add Firebase
+token verification to it, add `Authorization` to `Access-Control-Allow-Headers`,
+then set this to `true`.
+
+### Origins
+
+The Worker's `ALLOWED_ORIGIN` defaults to `*`. If it has been set to
+`https://twishnoff.github.io`, Mktforge on GitHub Pages is covered. A custom
+domain or `http://localhost:8000` would need adding.
+
+### Drift
+
+The standalone site and this module are now two copies of the same frontend.
+If you change one, port the change to the other.
 
 
 ## Authentication

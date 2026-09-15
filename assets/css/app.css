@@ -188,8 +188,13 @@ body[data-nav="collapsed"] .logo__mark { display: inline; }
 .nav__icon svg { width: 20px; height: 20px; display: block; }
 
 .nav__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Long module names wrap to a second line rather than being cut off —
+     "Battle Card Generator" doesn't fit one line at the 200–230px nav widths
+     most laptops get. */
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.3;
+  overflow-wrap: break-word;
 }
 
 /* Collapsed: icon only, with a tooltip on hover */

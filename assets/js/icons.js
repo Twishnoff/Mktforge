@@ -32,6 +32,15 @@ window.MktforgeIcons = {
               <path d="M15.4 9.6h3.4"/><path d="M15.4 12.6h3.4"/>
             </svg>`,
 
+  /* Battle Card Generator — two crossed swords */
+  swords: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+             <path d="M14.5 17.5 3 6V3h3l11.5 11.5"/>
+             <path d="m13 19 6-6"/><path d="m16 16 4 4"/><path d="m19 21 2-2"/>
+             <path d="M14.5 6.5 18 3h3v3l-3.5 3.5"/>
+             <path d="m5 14 4 4"/><path d="m7 17-3 3"/><path d="m3 19 2 2"/>
+           </svg>`,
+
   /* A few spares so new modules have something to point at */
   grid: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
