@@ -98,9 +98,24 @@
   let cfg = {};
   let turnstileToken = null;
   let turnstileWidgetId = null;
-  let lastPersona = null;
   let abortController = null;
   let mounted = false;
+
+  /* Everything worth keeping when the user navigates to another module and
+     comes back. This closure outlives mount/unmount, so it survives for the
+     life of the page — but not a reload. Persisting across sessions or
+     devices needs a real store; this is the free half of that problem.
+
+     Note what is NOT kept: the Turnstile token. Tokens are single-use and the
+     widget is destroyed on unmount, so a fresh one is always required before
+     the next run. Old results stay on screen while that happens. */
+  const state = {
+    form:    { email: '', jobTitle: '', companySize: '', industry: '' },
+    persona: null,
+    status:  '',
+    error:   '',
+    running: false
+  };
 
   /* ---------- helpers ---------- */
 
@@ -325,9 +340,18 @@
   async function streamGenerate(payload, { onStatus, onResult, onError }) {
     abortController = new AbortController();
 
+    // Prove which account is calling. The Worker verifies this signature
+    // against Google's public keys before spending any API budget — the
+    // email in the body below is not trusted for anything.
+    const headers = { 'content-type': 'application/json' };
+    const token = await (window.MktforgeAuth.getIdToken
+      ? window.MktforgeAuth.getIdToken()
+      : Promise.resolve(null));
+    if (token) headers.authorization = `Bearer ${token}`;
+
     const resp = await fetch(`${cfg.API_BASE_URL}/api/generate`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
       signal: abortController.signal
     });
@@ -381,11 +405,17 @@
       return;
     }
 
+    if (abortController) abortController.abort();   // supersede any earlier run
+
+    captureForm();
     el.generate.disabled = true;
     el.pdf.disabled = true;
-    lastPersona = null;
+    state.persona = null;
+    state.error = '';
+    state.running = true;
+    state.status = 'Conducting Research…';
     setAllBoxesLoading();
-    el.status.textContent = 'Conducting Research…';
+    el.status.textContent = state.status;
 
     const payload = {
       email: el.email.value.trim(),
@@ -398,33 +428,46 @@
     try {
       await streamGenerate(payload, {
         onStatus: (message) => {
-          if (mounted) el.status.textContent = message || 'Conducting Research…';
+          state.status = message || 'Conducting Research…';
+          if (mounted) el.status.textContent = state.status;
         },
         onResult: (data) => {
-          if (!mounted) return;
-          lastPersona = data.persona;
-          renderPersona(data.persona);
-          el.status.textContent = data.partial
+          // Recorded whether or not this module is on screen — a run started
+          // before navigating away finishes into state and is painted on the
+          // way back in.
+          state.persona = data.persona;
+          state.status = data.partial
             ? 'Done — research budget ran out before every box was fully filled in.'
             : 'Research complete.';
-          el.pdf.disabled = false;
+          if (mounted) {
+            renderPersona(data.persona);
+            el.status.textContent = state.status;
+            el.pdf.disabled = false;
+          }
         },
         onError: (message) => {
-          if (!mounted) return;
-          setAllBoxesPlaceholder();
-          showFormError(message || 'Something went wrong. Please try again.');
-          el.status.textContent = '';
+          state.error = message || 'Something went wrong. Please try again.';
+          state.status = '';
+          state.persona = null;
+          if (mounted) {
+            setAllBoxesPlaceholder();
+            showFormError(state.error);
+            el.status.textContent = '';
+          }
         }
       });
     } catch (err) {
-      if (err && err.name === 'AbortError') return;   // user left the module
+      if (err && err.name === 'AbortError') return;   // superseded by a new run
       console.error(err);
+      state.error = 'Network error — please try again.';
+      state.status = '';
       if (mounted) {
         setAllBoxesPlaceholder();
-        showFormError('Network error — please try again.');
+        showFormError(state.error);
         el.status.textContent = '';
       }
     } finally {
+      state.running = false;
       abortController = null;
       // Turnstile tokens are single-use; reset the widget for the next run.
       if (mounted && window.turnstile && turnstileWidgetId !== null) {
@@ -438,7 +481,7 @@
   /* ---------- PDF export (jsPDF loads on first click) ---------- */
 
   async function handlePdf() {
-    if (!lastPersona) return;
+    if (!state.persona) return;
 
     const original = el.pdf.textContent;
     el.pdf.disabled = true;
@@ -447,7 +490,7 @@
     try {
       await Mktforge.loadScript(JSPDF_SRC);
       await Mktforge.loadScript('modules/persona-builder/persona-pdf.js');
-      window.MktforgePersonaPdf.build(lastPersona);
+      window.MktforgePersonaPdf.build(state.persona);
     } catch (err) {
       console.error('PDF export failed:', err);
       if (mounted) showFormError("Couldn't generate the PDF — please try again.");
@@ -457,6 +500,36 @@
         el.pdf.textContent = original;
       }
     }
+  }
+
+  /* ---------- carrying state across mount/unmount ---------- */
+
+  function captureForm() {
+    if (!el) return;
+    state.form = {
+      email:       el.email.value,
+      jobTitle:    el.jobTitle.value,
+      companySize: el.companySize.value,
+      industry:    el.industry.value
+    };
+  }
+
+  function restore() {
+    el.email.value       = state.form.email;
+    el.jobTitle.value    = state.form.jobTitle;
+    el.companySize.value = state.form.companySize;
+    el.industry.value    = state.form.industry;
+
+    if (state.running) {
+      setAllBoxesLoading();
+      el.status.textContent = state.status || 'Conducting Research…';
+    } else if (state.persona) {
+      renderPersona(state.persona);
+      el.status.textContent = state.status;
+      el.pdf.disabled = false;
+    }
+
+    if (state.error) showFormError(state.error);
   }
 
   /* ---------- module contract ---------- */
@@ -490,19 +563,25 @@
       el.form.addEventListener('submit', handleSubmit);
       el.pdf.addEventListener('click', handlePdf);
 
+      restore();
       updateGenerateEnabled();
       initTurnstile();
     },
 
     unmount() {
+      captureForm();
       mounted = false;
-      if (abortController) { abortController.abort(); abortController = null; }
+
+      // A run in flight is deliberately NOT aborted. Leaving mid-research and
+      // losing a minute of work is the exact frustration this is meant to fix;
+      // the callbacks above write into `state` and check `mounted` before
+      // touching any DOM, so it finishes safely with nothing on screen.
+
       if (window.turnstile && turnstileWidgetId !== null) {
         try { window.turnstile.remove(turnstileWidgetId); } catch (e) {}
       }
       turnstileWidgetId = null;
-      turnstileToken = null;
-      lastPersona = null;
+      turnstileToken = null;      // single-use; a fresh widget issues a new one
       el = null;
       boxes = null;
       // Listeners die with the DOM nodes the shell clears.

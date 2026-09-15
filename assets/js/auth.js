@@ -180,6 +180,17 @@ window.MktforgeAuth = (() => {
       return publicUser();
     },
 
+    /**
+     * The signed JWT to send to a Worker as `Authorization: Bearer <token>`.
+     * Firebase refreshes it automatically; it's valid for about an hour, so
+     * fetch it per request rather than holding on to one.
+     */
+    async getIdToken(forceRefresh) {
+      await init();
+      if (!auth || !auth.currentUser) return null;
+      return auth.currentUser.getIdToken(!!forceRefresh);
+    },
+
     async signOut() {
       await init();
       if (auth) await auth.signOut();

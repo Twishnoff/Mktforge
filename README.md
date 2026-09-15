@@ -144,6 +144,27 @@ The widget slot shows its own status line and the Generate button says what is
 still missing, so a failure here is visible rather than a permanently grey
 button.
 
+### State when you navigate away
+
+Persona Builder keeps its results, its form values and any in-flight run when
+you switch to another module and come back. The state lives in the module's
+own closure, which outlives `mount()`/`unmount()` — so it survives navigation
+but not a page reload, and it doesn't follow you to another device. Crossing
+sessions or devices needs a real store (Firestore is already in the Firebase
+project); this is the free half of that problem.
+
+Two deliberate choices:
+
+- **A run in flight is not cancelled** when you leave. The callbacks write into
+  `state` and check `mounted` before touching any DOM, so research started
+  before you navigated away finishes safely and is painted when you return.
+- **The Turnstile token is not kept.** Tokens are single-use and the widget is
+  destroyed on unmount, so a fresh verification is always needed before the
+  next run — while the previous results stay on screen.
+
+Any module can do the same thing: keep what matters in the closure, restore it
+at the top of `mount()`. The shell doesn't need to know.
+
 ### Drift
 
 The standalone site and this module are now two copies of the same frontend.
@@ -189,10 +210,12 @@ in an empty app, but it's worth closing:
 - Delete unexpected accounts in **Authentication → Users**.
 - Any per-user data must be protected by security rules keyed to the signed-in
   `uid`, so one account can never read another's.
-- **The one that costs money:** the Persona Drafter Worker currently trusts
-  anyone with a Turnstile token. It should verify the caller's Firebase ID
-  token and check the `uid` against an allowlist before spending API budget.
-  That change lives in the Worker, not here.
+- **The one that costs money:** the Persona Drafter Worker. Mktforge now sends
+  `Authorization: Bearer <firebase id token>` with every Persona Builder
+  request (see `MktforgeAuth.getIdToken()`). The Worker side of that lock —
+  `require-user.js` plus integration notes — ships separately into the
+  Persona-Drafter repo. Until it's deployed the header is simply ignored and
+  the endpoint stays open to anyone who finds it.
 
 ### Keying user data
 
