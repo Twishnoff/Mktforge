@@ -19,7 +19,7 @@ assets/js/app.js            shell logic + module registry + notices
 firestore.rules             Firestore security rules (paste into the console)
 modules/my-company/         My Company (profile + saved resources)
 modules/find-my-customer/   Find My Customer (ported from Customer-Intelligence)
-modules/draft-messaging/    Draft Messaging (placeholder: "Module Coming Soon")
+modules/draft-messaging/    Draft Messaging (positioning, framework stages 0–5)
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
 modules/battle-card-generator/  Battle Card Generator (ported from Battlecard-Generator)
 modules/marketing-opportunities/  Marketing Opportunities (ported from Syndication & Event Finder)
@@ -267,6 +267,105 @@ the Worker's allowed origins. This module has no Turnstile widget.
 
 As with Persona Builder, the standalone site and this module are now two
 copies of the same frontend. If you change one, port the change to the other.
+
+
+## Draft Messaging
+
+Stages 0–5 of the Draft Messaging Framework: input audit, competitive
+alternatives, differentiators, value ladder, champion & situation, and market
+category. Nav button below Find My Customer (piece-of-paper icon). Backend:
+its own Cloudflare Worker, `Draft-Messaging-Worker` (separate folder/repo).
+
+```
+modules/draft-messaging/
+  draft-messaging.js     page, question table, saved-resource reader, renderers
+  messaging-pdf.js       text-first portrait PDF, loaded on the first PDF click
+  draft-messaging.css
+```
+
+### Run inputs
+
+| Field | Drop-down from My Company | Notes |
+|---|---|---|
+| Company URL | — | My Company's URL by default (same rule as other modules) |
+| Primary Champion | Target Job Titles | any title can be typed |
+| Closest Competitor | Competitors | any valid website address can be typed |
+| Target Industry (optional) | Target Industries | a typed value that isn't a Target Industry or an exact list entry is matched to the closest entry in `assets/data/industries.js`, shown under the field ("Matched to “FinTech”.") and used for the run |
+
+### Fill in the blanks
+
+A three-column table: question, text box, buttons.
+
+| Row state | Box | Buttons |
+|---|---|---|
+| locked (no champion / competitor chosen yet) | disabled | Draft Answer (disabled) |
+| open (nothing saved) | editable | Draft Answer |
+| saved | read-only | Edit |
+| editing (after Edit) | editable | Draft Answer above Save |
+
+- **Draft Answer** writes a first pass from the company site, web search and
+  saved reports into the box, overwriting what's there, and ends it with a
+  "Sources:" line. Anything unconfirmed starts with "Assumption:".
+- A row's **Save** saves only that row. The **Save** at the bottom right saves
+  every open or editing row that has text. Saving an emptied editing row
+  deletes that answer and the row goes back to Draft Answer.
+- Unsaved text is kept while switching modules (not across a reload).
+- The two **Required** questions (product summary; live vs. roadmap
+  features) must be saved before Generate Positioning is enabled. Only saved
+  answers are sent; the hint says so when there's unsaved text.
+
+Where answers are saved (`users/{uid}.draftMessaging.answers`, one flat map):
+
+| Key | Questions |
+|---|---|
+| `company__<id>` | summary, live_features, hidden_strengths, best_customers, self_description, category_appetite, proof, customer_language |
+| `competitor__<competitor host>__<id>` | alternatives, competitor_corrections |
+| `champion__<title slug>__<id>` | trigger, excluded_tasks |
+
+Switching the Primary Champion or Closest Competitor shows that selection's
+answers. Question wording lives twice — `QUESTIONS` in the module and
+`src/questions.js` in the Worker — keep the ids in step.
+
+### Saved resources
+
+Before a draft or a run, every PDF in Your Saved Resources is read in the
+browser with pdf.js (loaded from cdnjs on first use; text is cached for the
+page's life).
+
+- **Priority**: PDFs whose text mentions the Primary Champion, or the
+  competitor's domain (or its name, 4+ letters). Up to 6 go to the Worker in
+  full (16k characters each).
+- **Other**: everything else goes as a short summary. Each summary is made
+  once by the Worker (`/api/digest`, a small model) and stored on the file
+  record (`files/{id}.digest`), so later runs don't pay for it again. A
+  summary that names the champion or competitor promotes the file to
+  priority. Up to 30 are sent.
+- The line under the run inputs says which reports were used, and warns when
+  there's no Persona Builder report for the chosen champion (the Worker then
+  researches their priorities and marks them "Researched").
+
+### Generate Positioning
+
+Streams from the Worker (`/api/positioning`, Server-Sent Events) into six
+boxes as each stage finishes. Four model calls: stage 0 (with web search),
+stages 1–2 (with web search), stages 3–4, stage 5. Takes about 1–3 minutes.
+Results and an in-flight run survive switching modules; the nav light shows
+progress. **Create Positioning PDF** downloads `Draft Messaging N.pdf` and
+saves it to My Company. The PDF starts with the positioning summary and ends
+with the answers the run used, all as real text, so the next module (stages
+6–9) can read it.
+
+### Config and Worker
+
+`assets/js/config.js` → `draftMessaging.API_BASE_URL`. Every request sends
+`Authorization: Bearer <Firebase ID token>`; the Worker verifies it and then
+checks the account's email against the shared approved-emails Google Doc.
+Deploy steps are in the Worker's README.
+
+### Firestore rules
+
+`firestore.rules` now caps the stored summary at 20 KB. Re-publish the rules
+(Firestore → Rules) to apply the cap; everything works without it.
 
 
 ## Persona Builder

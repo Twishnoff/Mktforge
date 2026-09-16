@@ -8,8 +8,10 @@
    plan — so PDF bytes are split into chunks and kept as Firestore Blobs.
 
    LAYOUT (everything keyed on uid, never on email)
-     users/{uid}                        { profile: {...}, pdfCounters: { moduleId: n } }
-     users/{uid}/files/{fileId}         { name, moduleId, moduleName, size, chunks, createdAt }
+     users/{uid}                        { profile: {...}, pdfCounters: { moduleId: n },
+                                          draftMessaging: { answers: { key: text } } }
+     users/{uid}/files/{fileId}         { name, moduleId, moduleName, size, chunks, createdAt,
+                                          digest? (JSON string, Draft Messaging's summary) }
      users/{uid}/files/{fileId}/chunks/{i}   { data: Blob }
 
    Security rules that make this private live in firestore.rules.
@@ -32,6 +34,11 @@
      renameFile(id, name)            -> Promise; rejects with code 'duplicate'
      nameTaken(name, exceptId)       -> Promise<boolean> (case-insensitive)
      onFiles(fn)                     -> unsubscribe; fn() whenever the list changes
+     readFile(id)                    -> Promise<{ name, blob }>
+     getFileDigest(id)               -> Promise<object|null> cached summary of a PDF
+     setFileDigest(id, digest)       -> Promise; stores that summary on the file
+     getMessagingAnswers()           -> Promise<{ key: text }> (Draft Messaging)
+     saveMessagingAnswers(changes)   -> Promise; { key: text } sets, { key: null } clears
      prefill(pairs)                  -> fills EMPTY inputs from the profile
      util.normalizeUrl / util.isValidUrl
    ========================================================================== */
@@ -313,7 +320,7 @@ window.MktforgeData = (() => {
   async function listFiles() {
     if (isLocal()) {
       return (localRead().files || [])
-        .map(({ dataUrl, ...rest }) => rest)
+        .map(({ dataUrl, digest, ...rest }) => rest)
         .sort((a, b) => b.createdAt - a.createdAt);
     }
     const d = await getDb();
@@ -427,6 +434,95 @@ window.MktforgeData = (() => {
 
   function onFiles(fn) { fileListeners.add(fn); return () => fileListeners.delete(fn); }
 
+  /* ---------- PDF digests (Draft Messaging) ----------
+     A short machine summary of a saved PDF, made once and kept on the
+     file's own record so later runs don't pay to summarize it again.
+     Stored as a JSON string (≤ 20 KB, see firestore.rules). */
+
+  const DIGEST_MAX = 20000;
+
+  async function getFileDigest(id) {
+    let raw = null;
+    if (isLocal()) {
+      const f = (localRead().files || []).find((x) => x.id === id);
+      raw = f ? f.digest : null;
+    } else {
+      const d = await getDb();
+      const snap = await withTimeout(filesRef(d).doc(id).get(), TIMEOUT_MS, 'Reading a saved resource');
+      raw = snap.exists ? snap.data().digest : null;
+    }
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) { return null; }
+  }
+
+  async function setFileDigest(id, digest) {
+    const raw = JSON.stringify(digest || null);
+    if (raw.length > DIGEST_MAX) throw new Error('Summary is too large to store.');
+    if (isLocal()) {
+      const data = localRead();
+      const f = (data.files || []).find((x) => x.id === id);
+      if (!f) return;
+      f.digest = raw;
+      localWrite(data);
+      return;
+    }
+    const d = await getDb();
+    await withTimeout(filesRef(d).doc(id).set({ digest: raw }, { merge: true }),
+                      TIMEOUT_MS, 'Saving a summary');
+  }
+
+  /* ---------- Draft Messaging answers ----------
+     One flat map on the account record. Keys carry their own scope:
+       company__<question>
+       competitor__<competitor slug>__<question>
+       champion__<title slug>__<question>
+     so switching the Primary Champion or Closest Competitor simply reads
+     different keys. */
+
+  const KEY_RE = /^[a-z0-9_-]{1,200}$/;
+  let answersCache = null;
+
+  async function getMessagingAnswers({ fresh = false } = {}) {
+    if (answersCache && !fresh) return { ...answersCache };
+    let raw;
+    if (isLocal()) {
+      raw = localRead().messagingAnswers;
+    } else {
+      const d = await getDb();
+      const snap = await withTimeout(userRef(d).get(), TIMEOUT_MS, 'Loading your answers');
+      raw = snap.exists && snap.data().draftMessaging ? snap.data().draftMessaging.answers : null;
+    }
+    answersCache = {};
+    Object.entries(raw || {}).forEach(([k, v]) => {
+      if (KEY_RE.test(k) && typeof v === 'string' && v.trim()) answersCache[k] = v;
+    });
+    return { ...answersCache };
+  }
+
+  async function saveMessagingAnswers(changes) {
+    const entries = Object.entries(changes || {}).filter(([k]) => KEY_RE.test(k));
+    if (!entries.length) return getMessagingAnswers();
+    const clean = entries.map(([k, v]) => [k, typeof v === 'string' && v.trim() ? v.trim() : null]);
+
+    if (isLocal()) {
+      const data = localRead();
+      data.messagingAnswers = data.messagingAnswers || {};
+      clean.forEach(([k, v]) => { if (v === null) delete data.messagingAnswers[k]; else data.messagingAnswers[k] = v; });
+      localWrite(data);
+    } else {
+      const d = await getDb();
+      const del = firebase.firestore.FieldValue.delete();
+      const answers = {};
+      clean.forEach(([k, v]) => { answers[k] = v === null ? del : v; });
+      await withTimeout(userRef(d).set({ draftMessaging: { answers } }, { merge: true }),
+                        TIMEOUT_MS, 'Saving your answers');
+    }
+    const next = answersCache ? { ...answersCache } : await getMessagingAnswers({ fresh: true });
+    clean.forEach(([k, v]) => { if (v === null) delete next[k]; else next[k] = v; });
+    answersCache = next;
+    return { ...next };
+  }
+
   /* ---------- autofill for other modules ----------
      prefill([[inputEl, 'companyUrl'], [inputEl, p => p.targetTitles[0]]])
      Only fills inputs that are still empty when the profile arrives, and
@@ -448,6 +544,8 @@ window.MktforgeData = (() => {
   return {
     getProfile, saveProfile, onProfile,
     savePdfDoc, listFiles, openFile, deleteFile, renameFile, nameTaken, onFiles,
+    readFile, getFileDigest, setFileDigest,
+    getMessagingAnswers, saveMessagingAnswers,
     prefill,
     get isLocal() { return isLocal(); },
     util: { normalizeUrl, isValidUrl }

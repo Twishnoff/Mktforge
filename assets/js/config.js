@@ -55,6 +55,12 @@ window.MKTFORGE_CONFIG = {
     SEND_AUTH_TOKEN: false
   },
 
+  draftMessaging: {
+    // Its own Worker (Draft-Messaging-Worker). Every request carries the
+    // Firebase ID token, which the Worker verifies — see README.
+    API_BASE_URL: 'https://draft-messaging.tyler-wishnoff.workers.dev'
+  },
+
   marketingOpportunities: {
     API_URL: 'https://syndication-event-finder.tyler-wishnoff.workers.dev',
     // The Worker's CORS only allows Content-Type today — leave false until
