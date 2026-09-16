@@ -60,6 +60,18 @@ window.MktforgeIcons = {
                 <path d="M20.3 7a7 7 0 0 1 0 10"/>
               </svg>`,
 
+  /* Build Positioning — tower crane lifting a block */
+  crane: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3.5 21h8"/>
+            <path d="M5.5 21V5.5"/><path d="M9.5 21V5.5"/>
+            <path d="M5.5 10.5l4-3"/><path d="M5.5 15.5l4-3"/><path d="M5.5 20.5l4-3"/>
+            <path d="M3 5.5h18.5"/>
+            <path d="M5.5 5.5 7.5 2.5 9.5 5.5"/>
+            <path d="M17.5 5.5v6"/>
+            <rect x="15" y="11.5" width="5" height="4" rx=".6"/>
+          </svg>`,
+
   /* A few spares so new modules have something to point at */
   grid: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

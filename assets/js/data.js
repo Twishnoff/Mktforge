@@ -9,9 +9,9 @@
 
    LAYOUT (everything keyed on uid, never on email)
      users/{uid}                        { profile: {...}, pdfCounters: { moduleId: n },
-                                          draftMessaging: { answers: { key: text } } }
+                                          buildPositioning: { answers: { key: text } } }
      users/{uid}/files/{fileId}         { name, moduleId, moduleName, size, chunks, createdAt,
-                                          digest? (JSON string, Draft Messaging's summary) }
+                                          digest? (JSON string, Build Positioning's summary) }
      users/{uid}/files/{fileId}/chunks/{i}   { data: Blob }
 
    Security rules that make this private live in firestore.rules.
@@ -37,8 +37,8 @@
      readFile(id)                    -> Promise<{ name, blob }>
      getFileDigest(id)               -> Promise<object|null> cached summary of a PDF
      setFileDigest(id, digest)       -> Promise; stores that summary on the file
-     getMessagingAnswers()           -> Promise<{ key: text }> (Draft Messaging)
-     saveMessagingAnswers(changes)   -> Promise; { key: text } sets, { key: null } clears
+     getPositioningAnswers()         -> Promise<{ key: text }> (Build Positioning)
+     savePositioningAnswers(changes) -> Promise; { key: text } sets, { key: null } clears
      prefill(pairs)                  -> fills EMPTY inputs from the profile
      util.normalizeUrl / util.isValidUrl
    ========================================================================== */
@@ -434,7 +434,7 @@ window.MktforgeData = (() => {
 
   function onFiles(fn) { fileListeners.add(fn); return () => fileListeners.delete(fn); }
 
-  /* ---------- PDF digests (Draft Messaging) ----------
+  /* ---------- PDF digests (Build Positioning) ----------
      A short machine summary of a saved PDF, made once and kept on the
      file's own record so later runs don't pay to summarize it again.
      Stored as a JSON string (≤ 20 KB, see firestore.rules). */
@@ -471,7 +471,7 @@ window.MktforgeData = (() => {
                       TIMEOUT_MS, 'Saving a summary');
   }
 
-  /* ---------- Draft Messaging answers ----------
+  /* ---------- Build Positioning answers ----------
      One flat map on the account record. Keys carry their own scope:
        company__<question>
        competitor__<competitor slug>__<question>
@@ -482,15 +482,15 @@ window.MktforgeData = (() => {
   const KEY_RE = /^[a-z0-9_-]{1,200}$/;
   let answersCache = null;
 
-  async function getMessagingAnswers({ fresh = false } = {}) {
+  async function getPositioningAnswers({ fresh = false } = {}) {
     if (answersCache && !fresh) return { ...answersCache };
     let raw;
     if (isLocal()) {
-      raw = localRead().messagingAnswers;
+      raw = localRead().positioningAnswers;
     } else {
       const d = await getDb();
       const snap = await withTimeout(userRef(d).get(), TIMEOUT_MS, 'Loading your answers');
-      raw = snap.exists && snap.data().draftMessaging ? snap.data().draftMessaging.answers : null;
+      raw = snap.exists && snap.data().buildPositioning ? snap.data().buildPositioning.answers : null;
     }
     answersCache = {};
     Object.entries(raw || {}).forEach(([k, v]) => {
@@ -499,25 +499,25 @@ window.MktforgeData = (() => {
     return { ...answersCache };
   }
 
-  async function saveMessagingAnswers(changes) {
+  async function savePositioningAnswers(changes) {
     const entries = Object.entries(changes || {}).filter(([k]) => KEY_RE.test(k));
-    if (!entries.length) return getMessagingAnswers();
+    if (!entries.length) return getPositioningAnswers();
     const clean = entries.map(([k, v]) => [k, typeof v === 'string' && v.trim() ? v.trim() : null]);
 
     if (isLocal()) {
       const data = localRead();
-      data.messagingAnswers = data.messagingAnswers || {};
-      clean.forEach(([k, v]) => { if (v === null) delete data.messagingAnswers[k]; else data.messagingAnswers[k] = v; });
+      data.positioningAnswers = data.positioningAnswers || {};
+      clean.forEach(([k, v]) => { if (v === null) delete data.positioningAnswers[k]; else data.positioningAnswers[k] = v; });
       localWrite(data);
     } else {
       const d = await getDb();
       const del = firebase.firestore.FieldValue.delete();
       const answers = {};
       clean.forEach(([k, v]) => { answers[k] = v === null ? del : v; });
-      await withTimeout(userRef(d).set({ draftMessaging: { answers } }, { merge: true }),
+      await withTimeout(userRef(d).set({ buildPositioning: { answers } }, { merge: true }),
                         TIMEOUT_MS, 'Saving your answers');
     }
-    const next = answersCache ? { ...answersCache } : await getMessagingAnswers({ fresh: true });
+    const next = answersCache ? { ...answersCache } : await getPositioningAnswers({ fresh: true });
     clean.forEach(([k, v]) => { if (v === null) delete next[k]; else next[k] = v; });
     answersCache = next;
     return { ...next };
@@ -545,7 +545,7 @@ window.MktforgeData = (() => {
     getProfile, saveProfile, onProfile,
     savePdfDoc, listFiles, openFile, deleteFile, renameFile, nameTaken, onFiles,
     readFile, getFileDigest, setFileDigest,
-    getMessagingAnswers, saveMessagingAnswers,
+    getPositioningAnswers, savePositioningAnswers,
     prefill,
     get isLocal() { return isLocal(); },
     util: { normalizeUrl, isValidUrl }

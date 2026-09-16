@@ -55,8 +55,9 @@ window.MKTFORGE_CONFIG = {
     SEND_AUTH_TOKEN: false
   },
 
-  draftMessaging: {
-    // Its own Worker (Draft-Messaging-Worker). Every request carries the
+  buildPositioning: {
+    // Its own Worker (Draft-Messaging-Worker, deployed as "draft-messaging").
+    // Every request carries the
     // Firebase ID token, which the Worker verifies — see README.
     API_BASE_URL: 'https://draft-messaging.tyler-wishnoff.workers.dev'
   },

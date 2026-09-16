@@ -19,7 +19,8 @@ assets/js/app.js            shell logic + module registry + notices
 firestore.rules             Firestore security rules (paste into the console)
 modules/my-company/         My Company (profile + saved resources)
 modules/find-my-customer/   Find My Customer (ported from Customer-Intelligence)
-modules/draft-messaging/    Draft Messaging (positioning, framework stages 0–5)
+modules/build-positioning/  Build Positioning (positioning, framework stages 0–5)
+modules/draft-messaging/    Draft Messaging (placeholder: "Module Coming Soon")
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
 modules/battle-card-generator/  Battle Card Generator (ported from Battlecard-Generator)
 modules/marketing-opportunities/  Marketing Opportunities (ported from Syndication & Event Finder)
@@ -269,18 +270,20 @@ As with Persona Builder, the standalone site and this module are now two
 copies of the same frontend. If you change one, port the change to the other.
 
 
-## Draft Messaging
+## Build Positioning
 
 Stages 0–5 of the Draft Messaging Framework: input audit, competitive
 alternatives, differentiators, value ladder, champion & situation, and market
-category. Nav button below Find My Customer (piece-of-paper icon). Backend:
-its own Cloudflare Worker, `Draft-Messaging-Worker` (separate folder/repo).
+category. Nav button below Marketing Opportunities (crane icon); the
+**Draft Messaging** placeholder ("Module Coming Soon", page icon) sits below
+it and will hold stages 6–9. Backend: its own Cloudflare Worker,
+`Draft-Messaging-Worker` (separate folder/repo, deployed as `draft-messaging`).
 
 ```
-modules/draft-messaging/
-  draft-messaging.js     page, question table, saved-resource reader, renderers
-  messaging-pdf.js       text-first portrait PDF, loaded on the first PDF click
-  draft-messaging.css
+modules/build-positioning/
+  build-positioning.js   page, question table, saved-resource reader, renderers
+  positioning-pdf.js     text-first portrait PDF, loaded on the first PDF click
+  build-positioning.css  (classes prefixed .bpos)
 ```
 
 ### Run inputs
@@ -314,7 +317,7 @@ A three-column table: question, text box, buttons.
   features) must be saved before Generate Positioning is enabled. Only saved
   answers are sent; the hint says so when there's unsaved text.
 
-Where answers are saved (`users/{uid}.draftMessaging.answers`, one flat map):
+Where answers are saved (`users/{uid}.buildPositioning.answers`, one flat map):
 
 | Key | Questions |
 |---|---|
@@ -325,6 +328,13 @@ Where answers are saved (`users/{uid}.draftMessaging.answers`, one flat map):
 Switching the Primary Champion or Closest Competitor shows that selection's
 answers. Question wording lives twice — `QUESTIONS` in the module and
 `src/questions.js` in the Worker — keep the ids in step.
+
+### Nav light
+
+The dot next to Build Positioning (shown while you're on another module)
+stays yellow while a positioning run or **any** Draft Answer is still in
+flight. When the last one finishes it turns green, or red if any of them
+failed, until you open the module.
 
 ### Saved resources
 
@@ -350,14 +360,14 @@ Streams from the Worker (`/api/positioning`, Server-Sent Events) into six
 boxes as each stage finishes. Four model calls: stage 0 (with web search),
 stages 1–2 (with web search), stages 3–4, stage 5. Takes about 1–3 minutes.
 Results and an in-flight run survive switching modules; the nav light shows
-progress. **Create Positioning PDF** downloads `Draft Messaging N.pdf` and
+progress. **Create Positioning PDF** downloads `Build Positioning N.pdf` and
 saves it to My Company. The PDF starts with the positioning summary and ends
 with the answers the run used, all as real text, so the next module (stages
 6–9) can read it.
 
 ### Config and Worker
 
-`assets/js/config.js` → `draftMessaging.API_BASE_URL`. Every request sends
+`assets/js/config.js` → `buildPositioning.API_BASE_URL`. Every request sends
 `Authorization: Bearer <Firebase ID token>`; the Worker verifies it and then
 checks the account's email against the shared approved-emails Google Doc.
 Deploy steps are in the Worker's README.
