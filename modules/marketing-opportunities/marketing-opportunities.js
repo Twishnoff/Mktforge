@@ -43,10 +43,9 @@
 
     <header class="mo__head">
       <p class="mo__eyebrow">Marketing Opportunities</p>
-      <h1 class="mo__title">Find where your buyers pay attention</h1>
-      <p class="mo__dek">Enter your company and the job titles you sell to. You&rsquo;ll get the
-        events, meetups, newsletters, influencers, publications, syndication platforms and
-        social channels most likely to reach them.</p>
+      <h1 class="mo__title">Find the best places to reach your buyers</h1>
+      <p class="mo__dek">Spot some of the best events and hidden gems that are a great match
+        for your product, target customer, and industry.</p>
     </header>
 
     <section class="mo__submit" aria-label="Search inputs">

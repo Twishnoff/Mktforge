@@ -24,9 +24,9 @@
 
     <header class="pb__head">
       <p class="pb__eyebrow">Persona Builder</p>
-      <h1 class="pb__title">Draft a buyer persona</h1>
-      <p class="pb__dek">First-draft buyer persona from a job title. Not a substitute for
-        talking to real customers &mdash; a head start on the research before you do.</p>
+      <h1 class="pb__title">Create a buyer persona</h1>
+      <p class="pb__dek">Better know your customer&rsquo;s challenges and needs so you can craft
+        messaging that resonates and build more engaging GTM strategies.</p>
     </header>
 
     <section class="pb__submit" aria-label="Target persona inputs">

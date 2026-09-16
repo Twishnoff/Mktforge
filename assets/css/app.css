@@ -126,7 +126,10 @@ body[data-auth="pending"] .app { visibility: hidden; }
 /* Logo files live in assets/img: the full lockup (squares + wordmark) and
    the squares on their own for the minimized nav. Both are SVG traced from
    mktforge-logo.png, so they stay sharp at any size. */
-.logo { display: flex; align-items: center; line-height: 0; }
+.logo { display: flex; align-items: center; line-height: 0; border-radius: var(--radius); }
+
+a.logo { cursor: pointer; transition: opacity var(--ease); }
+a.logo:hover { opacity: .8; }
 
 .logo img { display: block; height: 24px; width: auto; }
 

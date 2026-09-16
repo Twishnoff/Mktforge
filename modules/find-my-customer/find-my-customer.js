@@ -29,10 +29,9 @@
 
     <header class="fmc__head">
       <p class="fmc__eyebrow">Find My Customer</p>
-      <h1 class="fmc__title">Profile a company&rsquo;s customers</h1>
-      <p class="fmc__dek">Enter a company URL to build a baseline profile of who buys from
-        them &mdash; customers, the job titles involved, and what those people need &mdash;
-        from publicly available information.</p>
+      <h1 class="fmc__title">Discover your ideal job titles</h1>
+      <p class="fmc__dek">Use the information on your website to quickly find and define the
+        job titles you should be selling into.</p>
     </header>
 
     <section class="fmc__submit" aria-label="Company inputs">

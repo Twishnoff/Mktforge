@@ -140,10 +140,10 @@ window.MktforgeBattleCardText = (function () {
 
     <header class="bcg__head">
       <p class="bcg__eyebrow">Battle Card Generator</p>
-      <h1 class="bcg__title">Build a competitive battle card</h1>
-      <p class="bcg__dek">Generate a battle card from your company, a competitor, and the job
-        title you&rsquo;re selling into. Built from public information online &mdash; connect
-        internal sources for sharper results.</p>
+      <h1 class="bcg__title">Draft competitor-specific battle cards</h1>
+      <p class="bcg__dek">Better prepare yourself for competitive deals by aligning your
+        messaging and product to stand out against specific competitors when selling into
+        specific job titles.</p>
     </header>
 
     <section class="bcg__submit" aria-label="Battle card inputs">

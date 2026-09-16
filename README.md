@@ -19,6 +19,7 @@ assets/js/app.js            shell logic + module registry + notices
 firestore.rules             Firestore security rules (paste into the console)
 modules/my-company/         My Company (profile + saved resources)
 modules/find-my-customer/   Find My Customer (ported from Customer-Intelligence)
+modules/draft-messaging/    Draft Messaging (placeholder: "Module Coming Soon")
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
 modules/battle-card-generator/  Battle Card Generator (ported from Battlecard-Generator)
 modules/marketing-opportunities/  Marketing Opportunities (ported from Syndication & Event Finder)
@@ -98,6 +99,7 @@ ratio with a floor and a ceiling (`assets/css/app.css`, `:root`):
 ## My Company
 
 The first nav button (factory icon). Replaced the old "Module 1" placeholder.
+Clicking the Mktforge logo at the top of the nav also opens it.
 
 - **Profile**: Company Name, Company URL, Your Industry, Target Job Titles,
   Target Industries, Competitors. Empty rows are inputs; saved rows show the
