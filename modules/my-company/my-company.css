@@ -442,3 +442,115 @@ a.mc__value:hover, .mc__chip a:hover { text-decoration: underline; }
   .mc__row { grid-template-columns: 1fr; gap: 6px; }
   .mc__label { padding-top: 0; }
 }
+
+/* --- saved resources: generated + imported --- */
+
+.mc__subdek {
+  margin: -6px 0 18px;
+  max-width: 72ch;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+.mc__group + .mc__group { margin-top: 32px; }
+
+.mc__h3 {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.mc__group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.mc__group-head .mc__h3 { margin: 0; }
+
+.mc__btn--sm { padding: 7px 18px; font-size: 13.5px; }
+
+.mc__drop {
+  margin-bottom: 12px;
+  padding: 20px 16px;
+  border: 1.5px dashed var(--mc-line);
+  border-radius: var(--mc-radius);
+  background: var(--mc-surface);
+  text-align: center;
+  transition: background .15s ease, border-color .15s ease;
+}
+
+.mc__drop p { margin: 0; }
+.mc__drop-main { font-size: 14px; color: var(--ink); }
+.mc__drop-sub { margin-top: 4px !important; font-size: 12.5px; color: var(--muted); }
+
+.mc__group--import.is-dragging .mc__drop {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.mc__uploads {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.mc__uploads[hidden] { display: none; }
+
+.mc__upload {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  background: var(--paper-dim);
+  font-size: 13px;
+}
+
+.mc__upload-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.mc__upload-status { color: var(--ink-soft); text-align: right; }
+.mc__upload.is-done { background: var(--accent-tint); }
+.mc__upload.is-done .mc__upload-status { color: var(--accent); }
+.mc__upload.is-error { background: var(--mc-crit-soft); }
+.mc__upload.is-error .mc__upload-status { color: var(--mc-crit); }
+
+.mc__upload-x {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--mc-crit);
+  cursor: pointer;
+}
+
+.mc__upload-x:hover { background: rgba(168,55,31,.12); }
+
+.mc__flag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #F7EDD2;
+  color: #8A5A00;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}

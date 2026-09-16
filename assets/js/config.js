@@ -39,20 +39,32 @@ window.MKTFORGE_CONFIG = {
     API_URL: 'https://customer-overview-dashboard.tyler-wishnoff.workers.dev/api/dashboard',
     // Leave false until the Worker verifies Firebase ID tokens and lists
     // Authorization in Access-Control-Allow-Headers — see README.
-    SEND_AUTH_TOKEN: false
+    SEND_AUTH_TOKEN: false,
+    // Send Imported/Generated Materials with each request. Off until this
+    // Worker reads them (its code isn't in the repo yet) — see README.
+    USE_SAVED_MATERIALS: false
   },
 
   personaBuilder: {
     // No Turnstile here: the Worker skips it for requests with a valid
     // Mktforge sign-in token. The standalone site keeps its checkbox.
-    API_BASE_URL: 'https://persona-drafter-api.tyler-wishnoff.workers.dev'
+    API_BASE_URL: 'https://persona-drafter-api.tyler-wishnoff.workers.dev',
+    // Off until the Persona Drafter Worker passes `context` to its agent.
+    USE_SAVED_MATERIALS: false
   },
 
   battleCardGenerator: {
     API_URL: 'https://battle-card-generator.tyler-wishnoff.workers.dev',
     // The Worker's CORS only allows Content-Type today — leave false until
     // it verifies Firebase ID tokens and allows Authorization. See README.
-    SEND_AUTH_TOKEN: false
+    SEND_AUTH_TOKEN: false,
+    // Imported/Generated Materials go with each request (Worker updated).
+    USE_SAVED_MATERIALS: true
+  },
+
+  research: {
+    // Summarizes each saved material once for the agents (Build Positioning's Worker).
+    DIGEST_URL: 'https://draft-messaging.tyler-wishnoff.workers.dev/api/digest'
   },
 
   buildPositioning: {
@@ -66,7 +78,9 @@ window.MKTFORGE_CONFIG = {
     API_URL: 'https://syndication-event-finder.tyler-wishnoff.workers.dev',
     // The Worker's CORS only allows Content-Type today — leave false until
     // it verifies Firebase ID tokens and allows Authorization. See README.
-    SEND_AUTH_TOKEN: false
+    SEND_AUTH_TOKEN: false,
+    // Imported/Generated Materials go with each request (Worker updated).
+    USE_SAVED_MATERIALS: true
   }
 
 };

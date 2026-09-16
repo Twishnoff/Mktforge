@@ -11,7 +11,9 @@ assets/img/                 logo (SVG lockup + mark, traced from mktforge-logo.p
 assets/js/config.js         public config for modules (no secrets)
 assets/js/icons.js          inline SVG icon set
 assets/js/auth.js           Firebase Authentication adapter
-assets/js/data.js           per-account data (Firestore): profile, saved PDFs, autofill
+assets/js/data.js           per-account data (Firestore): profile, saved files, autofill
+assets/js/extract.js        reads text out of PDF / Word / PowerPoint / Excel / text files
+assets/js/research.js       packs Imported + Generated Materials for the agents
 assets/data/industries.js   Crunchbase industry list (suggestions)
 assets/js/login.js          login page logic
 assets/css/login.css        login page styles
@@ -133,12 +135,90 @@ Clicking the Mktforge logo at the top of the nav also opens it.
   in an empty box removes the last one. Competitors must be valid website
   addresses (`rival.com` is fine; no `https://` needed). Text typed but not
   yet entered is kept when Save is pressed.
-- **Your Saved Resources**: every PDF made in another module, newest first.
-  Click the name to open it. Rename turns the name into a text box and the
-  button into Save (Enter also saves, Escape cancels); a name another file
-  already uses (ignoring case) shows "File name already exists. Choose
-  another." and can't be saved. Delete asks for a second click, then removes
-  the file from the account.
+- **Your Saved Resources** has two lists, newest first:
+  - **Generated Materials** — every PDF made in another module.
+  - **Imported Materials** — files the person adds (see below).
+  Click a name to open it (PDFs and text open in a tab; Word, PowerPoint and
+  Excel files download). Rename turns the name into a text box and the
+  button into Save (Enter also saves, Escape cancels); the extension stays
+  as it was, and a name another file already uses (ignoring case) shows
+  "File name already exists. Choose another." Delete asks for a second
+  click, then removes the file (bytes, text and summary) from the account.
+
+### Imported Materials
+
+Drag files onto the Imported Materials area, or use **Import Files** /
+"browse your computer". Several at once is fine; they're handled one at a
+time, each with a status line (Waiting → Reading → Saving → Imported).
+Problems stay on screen until dismissed with ×.
+
+| Accepted | How the text is read (`assets/js/extract.js`) |
+|---|---|
+| PDF | pdf.js (first 150 pages) |
+| Word .docx | body, tables, headers/footers, footnotes |
+| PowerPoint .pptx | every slide in order, plus speaker notes |
+| Excel .xlsx | every sheet, tab-separated rows, sheet names kept |
+| CSV/TSV, TXT, Markdown, JSON, HTML/XML | as text |
+
+- Old `.doc` / `.ppt` / `.xls` files are refused with a note to re-save them
+  in the newer format. Other types (images, video…) are refused.
+- Up to 15 MB each. A file with no text layer (e.g. a scanned PDF) is still
+  saved but tagged **No readable text**; a very long one is tagged
+  **Partly read** (text is capped at 1.5M characters).
+- A name that's already taken gets " (2)", " (3)"… added.
+- The text is extracted once, at import, and stored with the file, so
+  agents never re-parse it. Office files are zips of XML, so only JSZip is
+  loaded (from cdnjs, on first use) — no Office library.
+
+### How agents use saved materials
+
+`assets/js/research.js` builds the `context` each agent request carries:
+
+1. **Imported Materials** — most trusted. Newer beats older.
+2. **Generated Materials** — earlier Mktforge reports. Newer beats older.
+3. Websites and web research.
+
+The trust rules live in each Worker (`research-context.js`, identical copies
+in the Build Positioning, Battle Card Generator and Marketing Opportunities
+Workers), so the model applies them whatever the module. Each item carries
+its import/creation time (to the second, UTC) and the lists are sent newest
+first.
+
+To keep prompts small, files that mention the run's job title or competitor
+are sent in full first; long or unrelated files go as a short summary made
+once by the Build Positioning Worker (`/api/digest`) and stored on the file
+record. Budgets are in `MktforgeResearch.BUDGETS` (`small` for the tools that
+already run many web searches, `large` for Build Positioning). If gathering
+materials fails, the request goes out without them rather than failing.
+
+| Module | Sends saved materials | Why |
+|---|---|---|
+| Build Positioning | yes | its Worker reads them |
+| Battle Card Generator | yes (`USE_SAVED_MATERIALS: true`) | Worker updated |
+| Marketing Opportunities | yes (`USE_SAVED_MATERIALS: true`) | Worker updated |
+| Persona Builder | no (`false`) | its Worker's main file isn't in the Persona-Drafter repo yet |
+| Find My Customer | no (`false`) | its Worker code isn't in the Customer-Intelligence repo |
+
+Flip a flag in `assets/js/config.js` once that module's Worker reads
+`body.context` (drop in `research-context.js` and wrap its prompt with
+`withResearch`, as the Battle Card Worker does).
+
+### Storage layout for files
+
+```
+users/{uid}/files/{fileId}          name, source (generated|imported), ext, mimeType, kind,
+                                    size, chunks, textChunks, textChars, textStatus,
+                                    truncated, digest, createdAt
+users/{uid}/files/{fileId}/chunks/n original bytes (≤700 KB each)
+users/{uid}/files/{fileId}/text/n   extracted text (≤300k characters each, up to 5)
+```
+
+Generated PDFs get their text extracted the first time an agent needs it,
+then stored the same way.
+
+**Firestore rules must be re-published** for this release (Firestore →
+Rules → paste `firestore.rules` → Publish): without the new `text` rule,
+imports fail with a permissions error.
 
 ### Account email
 
@@ -336,23 +416,15 @@ stays yellow while a positioning run or **any** Draft Answer is still in
 flight. When the last one finishes it turns green, or red if any of them
 failed, until you open the module.
 
-### Saved resources
+### Saved materials
 
-Before a draft or a run, every PDF in Your Saved Resources is read in the
-browser with pdf.js (loaded from cdnjs on first use; text is cached for the
-page's life).
-
-- **Priority**: PDFs whose text mentions the Primary Champion, or the
-  competitor's domain (or its name, 4+ letters). Up to 6 go to the Worker in
-  full (16k characters each).
-- **Other**: everything else goes as a short summary. Each summary is made
-  once by the Worker (`/api/digest`, a small model) and stored on the file
-  record (`files/{id}.digest`), so later runs don't pay for it again. A
-  summary that names the champion or competitor promotes the file to
-  priority. Up to 30 are sent.
-- The line under the run inputs says which reports were used, and warns when
-  there's no Persona Builder report for the chosen champion (the Worker then
-  researches their priorities and marks them "Researched").
+Drafts and runs use the shared saved-materials pipeline (see My Company →
+How agents use saved materials) with the `large` budget. The line under the
+run inputs says what was used, and warns when there's no Persona Builder
+report for the chosen champion (priorities then come from imported files or
+web research). Your typed answers in the table rank above everything else,
+then Imported Materials, then Generated Materials, then websites and web
+research.
 
 ### Generate Positioning
 

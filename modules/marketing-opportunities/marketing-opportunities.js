@@ -324,7 +324,14 @@
     };
 
     try {
+      const runningStatus = state.status;
+      const context = await window.MktforgeKit.savedMaterials(cfg, { jobTitles },
+        (t) => { state.status = t; if (mounted) el.status.textContent = t; });
+      state.status = runningStatus;
+      if (mounted) el.status.textContent = runningStatus;
+
       const { res, payload } = await requestOpportunities({
+        ...(context ? { context } : {}),
         email,
         companyUrl: f.companyUrl,
         jobTitles,

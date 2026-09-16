@@ -17,10 +17,10 @@
      4. Create Positioning PDF: downloads it and saves it to My Company, where
         the next module can pick it up.
 
-   Saved resources: before drafting or generating, every saved PDF is read
-   in the browser (pdf.js). Reports that mention the chosen champion or
-   competitor go to the Worker in full ("priority"); the rest go as short
-   summaries, made once per file by the Worker and stored on the file.
+   Saved materials: before drafting or generating, assets/js/research.js
+   gathers Imported Materials (trusted most, newest first) and Generated
+   Materials. Files that mention the chosen champion or competitor go in
+   full; the rest go as short summaries made once per file and stored.
 
    Row states
      locked   — needs a Primary Champion / Closest Competitor first
@@ -35,9 +35,6 @@
 
   const MODULE_ID = 'build-positioning';
   const MODULE_NAME = 'Build Positioning';
-  const PDFJS_VERSION = '3.11.174';
-  const PDFJS_SRC = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`;
-  const PDFJS_WORKER_SRC = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
   const JSPDF_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
   const PDF_SRC = 'modules/build-positioning/positioning-pdf.js';
 
@@ -622,187 +619,24 @@
     return payload;
   }
 
-  /* ---------- saved resources → context ---------- */
-
-  const textCache = new Map();     // fileId -> extracted text
-  const digestCache = new Map();   // fileId -> { digest, digestText }
-  let contextCache = null;         // { sig, value }
-  let pdfjsReady = null;
-
-  function loadPdfJs() {
-    if (pdfjsReady) return pdfjsReady;
-    pdfjsReady = Mktforge.loadScript(PDFJS_SRC).then(() => {
-      const lib = window.pdfjsLib;
-      if (!lib) throw new Error('PDF reader failed to load.');
-      // pdf.js wraps a cross-origin worker URL itself, and falls back to
-      // parsing on the main thread if the worker can't start.
-      lib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
-      return lib;
-    }).catch((err) => { pdfjsReady = null; throw err; });
-    return pdfjsReady;
-  }
-
-  async function fileText(file) {
-    if (textCache.has(file.id)) return textCache.get(file.id);
-    const lib = await loadPdfJs();
-    const { blob } = await Data().readFile(file.id);
-    const pdf = await lib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
-    const pages = [];
-    try {
-      for (let i = 1; i <= Math.min(pdf.numPages, 40); i += 1) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        pages.push(content.items.map((it) => it.str + (it.hasEOL ? '\n' : ' ')).join(''));
-      }
-    } finally {
-      pdf.destroy();
-    }
-    const text = pages.join('\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
-    textCache.set(file.id, text);
-    return text;
-  }
-
-  function textMentionsTitle(text, title) {
-    const t = norm(title);
-    return !!t && norm(text).includes(t);
-  }
-
-  function textMentionsCompetitor(text, host) {
-    if (!host) return false;
-    const lower = String(text).toLowerCase();
-    if (lower.includes(host)) return true;
-    const root = host.split('.')[0];
-    if (root.length < 4) return false;
-    return new RegExp(`\\b${root.replace(/[-]/g, '[- ]?')}\\b`, 'i').test(text);
-  }
-
-  function digestMatches(digest, s) {
-    const d = digest || {};
-    const titles = (d.job_titles || []).map(norm);
-    const comps = (d.competitors || []).map((c) => String(c).toLowerCase());
-    const champ = norm(s.champion);
-    const root = s.competitorHost ? s.competitorHost.split('.')[0] : '';
-    return {
-      champion: !!champ && titles.some((t) => t === champ || t.includes(champ) || champ.includes(t)),
-      competitor: !!s.competitorHost && comps.some((c) => c.includes(s.competitorHost)
-        || (root.length >= 4 && c.replace(/[^a-z0-9]/g, '').includes(root.replace(/[^a-z0-9]/g, ''))))
-    };
-  }
-
-  async function fileDigest(file, text) {
-    if (digestCache.has(file.id)) return digestCache.get(file.id);
-    let stored = null;
-    try { stored = await Data().getFileDigest(file.id); } catch (e) { /* make a new one */ }
-    if (stored && stored.digestText) { digestCache.set(file.id, stored); return stored; }
-    const payload = await apiJson('/api/digest', {
-      fileName: file.name, moduleName: file.moduleName, text: text.slice(0, 60000)
-    });
-    const value = { v: 1, digest: payload.digest || {}, digestText: payload.digestText || '' };
-    digestCache.set(file.id, value);
-    Data().setFileDigest(file.id, value).catch((err) => console.warn('[Build Positioning] could not store summary', err));
-    return value;
-  }
-
-  const PRIMARY_MAX = 6;
-  const PRIMARY_CHARS = 16000;
-  const OTHERS_MAX = 30;
+  /* ---------- saved materials → context ----------
+     Shared with every module (assets/js/research.js). Imported Materials
+     come first and are trusted most; the Worker applies the trust rules. */
 
   async function buildContext(s, onProgress = () => {}) {
-    const files = await Data().listFiles();
-    const sig = JSON.stringify([files.map((f) => `${f.id}:${f.name}`), norm(s.champion), s.competitorHost]);
-    if (contextCache && contextCache.sig === sig) return contextCache.value;
-
-    let done = 0;
-    const report = (what) => onProgress(`${what} (${done} of ${files.length})…`);
-    report('Reading your saved resources');
-    const texts = await pool(files, 2, async (f) => {
-      let t = '';
-      try { t = await fileText(f); }
-      catch (err) { console.warn('[Build Positioning] could not read', f.name, err); }
-      done += 1;
-      report('Reading your saved resources');
-      return t;
-    });
-
-    const tagged = files.map((f, i) => {
-      const text = texts[i];
-      const champion = textMentionsTitle(text, s.champion);
-      const competitor = textMentionsCompetitor(text, s.competitorHost);
-      return { f, text, champion, competitor };
-    }).filter((x) => x.text);
-
-    // Summaries for everything that isn't already a clear priority match;
-    // a summary can still promote a file (e.g. a competitor named, not linked).
-    const rest = tagged.filter((x) => !x.champion && !x.competitor);
-    done = 0;
-    if (rest.length) report('Summarizing saved resources');
-    await pool(rest, 3, async (x) => {
-      try {
-        x.digest = await fileDigest(x.f, x.text);
-        const m = digestMatches(x.digest.digest, s);
-        x.champion = m.champion;
-        x.competitor = m.competitor;
-      } catch (err) {
-        console.warn('[Build Positioning] could not summarize', x.f.name, err);
-        if (/access/i.test(err.message)) throw err;
-      }
-      done += 1;
-      report('Summarizing saved resources');
-    });
-
-    const reasonOf = (x) => [
-      x.champion && `Primary Champion (${s.champion})`,
-      x.competitor && `Closest Competitor (${s.competitorHost})`
-    ].filter(Boolean).join(' and ');
-
-    const matched = tagged.filter((x) => x.champion || x.competitor)
-      .sort((a, b) => (Number(b.champion && b.competitor) - Number(a.champion && a.competitor))
-        || (b.f.createdAt - a.f.createdAt));
-    const primary = matched.slice(0, PRIMARY_MAX);
-    const overflow = matched.slice(PRIMARY_MAX);
-
-    const others = [];
-    for (const x of tagged.filter((y) => !primary.includes(y))) {
-      if (others.length >= OTHERS_MAX) break;
-      let digestText = x.digest && x.digest.digestText;
-      if (!digestText && overflow.includes(x)) {
-        try { digestText = (await fileDigest(x.f, x.text)).digestText; } catch (e) { /* skip */ }
-      }
-      if (digestText) others.push({ name: x.f.name, moduleName: x.f.moduleName || '', digest: digestText });
-    }
-
-    const personaForChampion = primary.some((x) => x.champion && x.f.moduleId === 'persona-builder');
-    const value = {
-      primary: primary.map((x) => ({
-        name: x.f.name, moduleName: x.f.moduleName || '', reason: reasonOf(x),
-        text: x.text.slice(0, PRIMARY_CHARS)
-      })),
-      others,
-      meta: {
-        total: files.length,
-        unreadable: files.length - tagged.length,
-        primaryNames: primary.map((x) => x.f.name),
-        personaForChampion,
-        battleCardForCompetitor: primary.some((x) => x.competitor && x.f.moduleId === 'battle-card-generator')
-      }
-    };
-    contextCache = { sig, value };
-    return value;
+    return window.MktforgeResearch.build({
+      jobTitles: s.champion ? [s.champion] : [],
+      competitorHost: s.competitorHost,
+      budget: window.MktforgeResearch.BUDGETS.large
+    }, { onProgress });
   }
 
   function contextSummary(ctx, s) {
-    const m = ctx.meta;
-    if (!m.total) return 'No saved reports yet — using your website and web research only.';
-    const parts = [];
-    parts.push(m.primaryNames.length
-      ? `Priority reports: ${m.primaryNames.join(', ')}.`
-      : 'No saved reports mention this champion or competitor.');
-    if (ctx.others.length) parts.push(`${ctx.others.length} other report${ctx.others.length === 1 ? '' : 's'} used as summaries.`);
-    if (m.unreadable) parts.push(`${m.unreadable} couldn’t be read.`);
-    if (s.champion && !m.personaForChampion) {
-      parts.push(`No Persona Builder report for ${s.champion} yet, so their priorities will be researched (lower confidence).`);
+    let note = window.MktforgeResearch.summary(ctx.meta);
+    if (ctx.meta.total && s.champion && !ctx.meta.titleReport('persona-builder')) {
+      note += ` No Persona Builder report for ${s.champion} yet, so their priorities come from your imported files or web research.`;
     }
-    return parts.join(' ');
+    return note;
   }
 
   /* ---------- Draft Answer ---------- */
@@ -841,7 +675,7 @@
         industry: s.industry,
         today: new Date().toISOString().slice(0, 10),
         answers: answersFor(s),
-        context: { primary: context.primary, others: context.others }
+        context: context.context
       });
       const sources = (payload.sources || []).filter(Boolean);
       state.drafts[key] = `${payload.answer}${sources.length ? `\n\nSources: ${sources.join('; ')}` : ''}`;
@@ -974,7 +808,7 @@
         industry: s.industry,
         today: new Date().toISOString().slice(0, 10),
         answers: state.run.answers,
-        context: { primary: context.primary, others: context.others }
+        context: context.context
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
@@ -1042,7 +876,10 @@
 
   /* ---------- result renderers ---------- */
 
+  const PRIORITY_SOURCE = { imported: 'From your imported files', saved_resource: 'From a saved report', research: 'Researched' };
+
   const SOURCE_LABELS = {
+    imported: 'Your imported file',
     website: 'Website', competitor_site: 'Competitor site', user_answer: 'Your answer',
     saved_resource: 'Saved report', research: 'Research', assumption: 'Assumption'
   };
@@ -1069,7 +906,7 @@
           ${kv('What it is', xp.what_it_is)}${kv('Who it serves', xp.who_it_serves)}
         </div>
         <div class="bpos__sub">
-          <h3>Champion priorities ${chip(d.title_priorities_source === 'saved_resource' ? 'From saved report' : 'Researched', d.title_priorities_source === 'saved_resource' ? 'good' : 'warn')}</h3>
+          <h3>Champion priorities ${chip(PRIORITY_SOURCE[d.title_priorities_source] || 'Researched', d.title_priorities_source === 'research' ? 'warn' : 'good')}</h3>
           ${(d.title_priorities || []).length ? `<ol class="bpos__list">${d.title_priorities.map((p) => `<li>${esc(p)}</li>`).join('')}</ol>` : '<p class="bpos__empty">None found.</p>'}
         </div>
         <div class="bpos__sub">
@@ -1189,8 +1026,8 @@
     let text;
     if (state.contextNote) text = state.contextNote;
     else if (n == null) text = '';
-    else if (!n) text = 'You have no saved reports yet. Drafts will use your website and web research. Running Persona Builder and Battle Card Generator first gives better results.';
-    else text = `${n} saved report${n === 1 ? '' : 's'} will be read. Reports about your Primary Champion and Closest Competitor get priority; the rest are used as summaries.`;
+    else if (!n) text = 'No saved materials yet, so drafts will use your website and web research. For better results, import your own research in My Company, or run Persona Builder and Battle Card Generator first.';
+    else text = `${n} saved material${n === 1 ? '' : 's'} will be read. Your imported files are trusted first (newest first), then generated reports; reports about your Primary Champion and Closest Competitor are read in full.`;
     p.textContent = text;
     p.hidden = !text;
   }
@@ -1332,7 +1169,6 @@
       paintResources();
       loadFileCount();
       unsubFiles = Data().onFiles(() => {
-        contextCache = null;
         if (mounted) loadFileCount();
       });
       updateGenerate();

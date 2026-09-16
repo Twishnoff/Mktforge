@@ -321,7 +321,13 @@
     };
 
     try {
-      const { res, body } = await requestDashboard({ companyUrl: rawUrl, email });
+      const runningStatus = state.status;
+      const context = await window.MktforgeKit.savedMaterials(cfg, {},
+        (t) => { state.status = t; if (mounted) el.status.textContent = t; });
+      state.status = runningStatus;
+      if (mounted) el.status.textContent = runningStatus;
+
+      const { res, body } = await requestDashboard({ companyUrl: rawUrl, email, ...(context ? { context } : {}) });
 
       if (!res.ok || !body || body.status === 'error') {
         const message = body && body.message;

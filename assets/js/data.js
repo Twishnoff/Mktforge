@@ -11,8 +11,11 @@
      users/{uid}                        { profile: {...}, pdfCounters: { moduleId: n },
                                           buildPositioning: { answers: { key: text } } }
      users/{uid}/files/{fileId}         { name, moduleId, moduleName, size, chunks, createdAt,
-                                          digest? (JSON string, Build Positioning's summary) }
-     users/{uid}/files/{fileId}/chunks/{i}   { data: Blob }
+                                          source ('generated' | 'imported'), ext, mimeType,
+                                          textChunks, textChars, textStatus,
+                                          digest? (JSON string, short summary for agents) }
+     users/{uid}/files/{fileId}/chunks/{i}   { data: Blob }       original bytes
+     users/{uid}/files/{fileId}/text/{i}     { data: string }     extracted text
 
    Security rules that make this private live in firestore.rules.
 
@@ -28,7 +31,12 @@
      savePdfDoc(jsPdfDoc, { moduleId, moduleName, fallbackName })
                                      -> downloads as "<Module Name> N.pdf" and
                                         saves a copy to the account
-     listFiles()                     -> Promise<[{ id, name, moduleName, size, createdAt }]>
+     listFiles()                     -> Promise<[{ id, name, moduleId, moduleName, source, ext,
+                                                  mimeType, size, createdAt, textStatus }]>
+     importFile(file, { onStage })   -> Promise<{ id, name }>; reads the file's text, then
+                                        saves bytes + text as an Imported Material
+     getFileText(id)                 -> Promise<string>; stored text, or extracted and
+                                        stored on first use (generated PDFs)
      openFile(id)                    -> opens the PDF in a new tab
      deleteFile(id)                  -> Promise
      renameFile(id, name)            -> Promise; rejects with code 'duplicate'
@@ -48,6 +56,8 @@ window.MktforgeData = (() => {
   const CHUNK_BYTES = 700 * 1024;          // Firestore docs cap at 1 MiB
   const MAX_FILE_BYTES = 15 * 1024 * 1024; // sanity cap per PDF
   const TIMEOUT_MS = 12000;
+  const TEXT_CHUNK_CHARS = 300000;          // ≤ ~900 KB UTF-8 per document
+  const MAX_TEXT_CHUNKS = 5;
 
   const EMPTY_PROFILE = Object.freeze({
     companyName: '', companyUrl: '', industry: '',
@@ -242,15 +252,35 @@ window.MktforgeData = (() => {
     return `${moduleName} ${n}`;
   }
 
-  async function storeFile({ name, moduleId, moduleName, blob }) {
-    if (blob.size > MAX_FILE_BYTES) throw new Error('PDF is too large to save to your account.');
+  function textParts(text) {
+    const t = String(text || '');
+    const parts = [];
+    for (let i = 0; i < t.length && parts.length < MAX_TEXT_CHUNKS; i += TEXT_CHUNK_CHARS) {
+      parts.push(t.slice(i, i + TEXT_CHUNK_CHARS));
+    }
+    return parts;
+  }
+
+  /* extra: { source, ext, mimeType, textStatus } — text: string or null */
+  async function storeFile({ name, moduleId, moduleName, blob, extra = {}, text = null }) {
+    if (blob.size > MAX_FILE_BYTES) {
+      throw Object.assign(new Error(`This file is larger than ${MAX_FILE_BYTES / (1024 * 1024)} MB.`), { code: 'too-large' });
+    }
+    const parts = text == null ? null : textParts(text);
+    const textFields = parts == null ? {} : {
+      textChunks: parts.length,
+      textChars: parts.reduce((n, x) => n + x.length, 0),
+      textStatus: parts.length ? 'ok' : 'empty'
+    };
+    const fields = { name, moduleId, moduleName, size: blob.size, ...extra, ...textFields };
 
     if (isLocal()) {
       const data = localRead();
       data.files = data.files || [];
       const id = `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
-      data.files.push({ id, name, moduleId, moduleName, size: blob.size,
-                        createdAt: Date.now(), dataUrl: await blobToDataUrl(blob) });
+      data.files.push({ id, ...fields, createdAt: Date.now(),
+                        text: parts == null ? undefined : parts.join(''),
+                        dataUrl: await blobToDataUrl(blob) });
       localWrite(data);
       return id;
     }
@@ -270,17 +300,125 @@ window.MktforgeData = (() => {
           batch.set(meta.collection('chunks').doc(String(j)),
                     { data: firebase.firestore.Blob.fromUint8Array(part) });
         }
-        await withTimeout(batch.commit(), 30000, 'Uploading the PDF');
+        await withTimeout(batch.commit(), 30000, 'Uploading the file');
+      }
+      for (let j = 0; parts && j < parts.length; j += 1) {
+        await withTimeout(meta.collection('text').doc(String(j)).set({ data: parts[j] }),
+                          30000, 'Saving the file’s text');
       }
       await withTimeout(meta.set({
-        name, moduleId, moduleName, size: bytes.length, chunks: chunkCount,
+        ...fields, chunks: chunkCount,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      }), TIMEOUT_MS, 'Saving the PDF');
+      }), TIMEOUT_MS, 'Saving the file');
     } catch (err) {
-      deleteChunks(d, meta, chunkCount).catch(() => {});
+      deleteChunks(d, meta, chunkCount, (parts && parts.length) || 0).catch(() => {});
       throw err;
     }
     return meta.id;
+  }
+
+  /* ---------- imported materials ---------- */
+
+  const MIME_BY_KIND = {
+    pdf: 'application/pdf',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    csv: 'text/csv', text: 'text/plain', markdown: 'text/markdown',
+    json: 'application/json', html: 'text/html'
+  };
+
+  function splitName(fileName) {
+    const raw = String(fileName || 'Untitled').trim();
+    const m = /^(.*?)(\.[a-z0-9]{1,8})?$/i.exec(raw);
+    const base = (m[1] || 'Untitled').trim().slice(0, 180) || 'Untitled';
+    return { base, ext: (m[2] || '').toLowerCase() };
+  }
+
+  async function uniqueName(base) {
+    let taken;
+    try { taken = new Set((await listFiles()).map((f) => f.name.trim().toLowerCase())); }
+    catch (e) { taken = new Set(); }
+    if (!taken.has(base.toLowerCase())) return base;
+    for (let n = 2; n < 1000; n += 1) {
+      const candidate = `${base} (${n})`;
+      if (!taken.has(candidate.toLowerCase())) return candidate;
+    }
+    return `${base} (${Date.now()})`;
+  }
+
+  /* onStage('reading' | 'saving') lets the page show progress. */
+  async function importFile(file, { onStage = () => {} } = {}) {
+    const X = window.MktforgeExtract;
+    if (!X) throw new Error('The file reader isn’t loaded.');
+    const kind = X.supported(file.name, file.type);
+    if (!kind) throw Object.assign(new Error(X.unsupportedReason(file.name)), { code: 'unsupported' });
+    if (file.size > MAX_FILE_BYTES) {
+      throw Object.assign(new Error(`This file is larger than ${MAX_FILE_BYTES / (1024 * 1024)} MB.`), { code: 'too-large' });
+    }
+    if (!file.size) throw Object.assign(new Error('This file is empty.'), { code: 'empty' });
+
+    onStage('reading');
+    const { text, truncated } = await X.text(file, { name: file.name, type: file.type });
+
+    onStage('saving');
+    const { base, ext } = splitName(file.name);
+    const name = await uniqueName(base);
+    const id = await storeFile({
+      name, moduleId: 'imported', moduleName: 'Imported', blob: file, text,
+      extra: { source: 'imported', ext, mimeType: file.type || MIME_BY_KIND[kind] || 'application/octet-stream',
+               kind, truncated: !!truncated }
+    });
+    fileListeners.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
+    return { id, name, ext, empty: !text, truncated: !!truncated };
+  }
+
+  /* Stored text for any saved file. Generated PDFs have none until an agent
+     first needs it; it's extracted then and kept. */
+  async function getFileText(id) {
+    if (isLocal()) {
+      const f = (localRead().files || []).find((x) => x.id === id);
+      if (!f) throw new Error('That file no longer exists.');
+      if (typeof f.text === 'string') return f.text;
+    } else {
+      const d = await getDb();
+      const meta = filesRef(d).doc(id);
+      const snap = await withTimeout(meta.get(), TIMEOUT_MS, 'Reading a saved file');
+      if (!snap.exists) throw new Error('That file no longer exists.');
+      const m = snap.data();
+      if (m.textStatus === 'empty') return '';
+      if (m.textChunks > 0) {
+        const parts = await withTimeout(Promise.all(
+          Array.from({ length: m.textChunks }, (_, i) => meta.collection('text').doc(String(i)).get())
+        ), 30000, 'Reading a saved file');
+        return parts.map((p) => (p.exists ? p.data().data : '')).join('');
+      }
+    }
+
+    const { name, blob, ext } = await readFile(id);
+    const { text } = await window.MktforgeExtract.text(blob, { name: `${name}${ext || '.pdf'}`, type: blob.type });
+    setFileText(id, text).catch((err) => console.warn('[Mktforge] could not store extracted text', err));
+    return text;
+  }
+
+  async function setFileText(id, text) {
+    const parts = textParts(text);
+    const fields = { textChunks: parts.length, textChars: parts.reduce((n, x) => n + x.length, 0),
+                     textStatus: parts.length ? 'ok' : 'empty' };
+    if (isLocal()) {
+      const data = localRead();
+      const f = (data.files || []).find((x) => x.id === id);
+      if (!f) return;
+      Object.assign(f, fields, { text: parts.join('') });
+      localWrite(data);
+      return;
+    }
+    const d = await getDb();
+    const meta = filesRef(d).doc(id);
+    for (let j = 0; j < parts.length; j += 1) {
+      await withTimeout(meta.collection('text').doc(String(j)).set({ data: parts[j] }), 30000, 'Saving text');
+    }
+    await withTimeout(meta.set(fields, { merge: true }), TIMEOUT_MS, 'Saving text');
   }
 
   async function savePdfDoc(doc, { moduleId, moduleName, fallbackName }) {
@@ -299,7 +437,8 @@ window.MktforgeData = (() => {
     }
 
     try {
-      const id = await storeFile({ name, moduleId, moduleName, blob: doc.output('blob') });
+      const id = await storeFile({ name, moduleId, moduleName, blob: doc.output('blob'),
+                                   extra: { source: 'generated', ext: '.pdf', mimeType: 'application/pdf', kind: 'pdf' } });
       fileListeners.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
       notify(`Saved to My Company as “${name}”.`);
       return { id, name };
@@ -320,7 +459,7 @@ window.MktforgeData = (() => {
   async function listFiles() {
     if (isLocal()) {
       return (localRead().files || [])
-        .map(({ dataUrl, digest, ...rest }) => rest)
+        .map(({ dataUrl, digest, text, ...rest }) => ({ source: 'generated', ext: '', ...rest }))
         .sort((a, b) => b.createdAt - a.createdAt);
     }
     const d = await getDb();
@@ -329,6 +468,9 @@ window.MktforgeData = (() => {
     return snap.docs.map((doc) => {
       const f = doc.data({ serverTimestamps: 'estimate' });
       return { id: doc.id, name: f.name, moduleId: f.moduleId, moduleName: f.moduleName,
+               source: f.source === 'imported' ? 'imported' : 'generated',
+               ext: f.ext || '', mimeType: f.mimeType || 'application/pdf', kind: f.kind || 'pdf',
+               textStatus: f.textStatus || '', truncated: !!f.truncated,
                size: f.size || 0, createdAt: toMillis(f.createdAt) };
     });
   }
@@ -338,13 +480,13 @@ window.MktforgeData = (() => {
       const f = (localRead().files || []).find((x) => x.id === id);
       if (!f) throw new Error('That file no longer exists.');
       const blob = await (await fetch(f.dataUrl)).blob();
-      return { name: f.name, blob };
+      return { name: f.name, ext: f.ext || '', mimeType: f.mimeType || 'application/pdf', blob };
     }
     const d = await getDb();
     const meta = filesRef(d).doc(id);
-    const snap = await withTimeout(meta.get(), TIMEOUT_MS, 'Opening the PDF');
+    const snap = await withTimeout(meta.get(), TIMEOUT_MS, 'Opening the file');
     if (!snap.exists) throw new Error('That file no longer exists.');
-    const { name, chunks } = snap.data();
+    const { name, chunks, ext = '', mimeType = 'application/pdf' } = snap.data();
     const parts = await withTimeout(Promise.all(
       Array.from({ length: chunks }, (_, i) => meta.collection('chunks').doc(String(i)).get())
     ), 30000, 'Downloading the PDF');
@@ -352,28 +494,34 @@ window.MktforgeData = (() => {
       if (!p.exists) throw new Error('Part of this file is missing.');
       return p.data().data.toUint8Array();
     });
-    return { name, blob: new Blob(bytes, { type: 'application/pdf' }) };
+    return { name, ext, mimeType, blob: new Blob(bytes, { type: mimeType }) };
   }
 
-  /* Opens the tab synchronously (inside the click) so popup blockers allow
-     it, then points it at the PDF once the bytes arrive. */
-  async function openFile(id) {
-    const win = window.open('', '_blank');
+  /* PDFs and text open in a new tab; Office files download. The tab is
+     opened synchronously (inside the click) so popup blockers allow it,
+     then pointed at the file once the bytes arrive. */
+  const VIEWABLE = /^(application\/pdf|text\/plain|text\/csv|text\/markdown|application\/json)$/;
+
+  async function openFile(id, { viewable = true } = {}) {
+    const win = viewable ? window.open('', '_blank') : null;
     if (win) {
       try {
-        win.document.title = 'Loading PDF…';
+        win.document.title = 'Loading…';
         win.document.body.style.cssText = 'font:14px system-ui,sans-serif;padding:32px;color:#555';
-        win.document.body.textContent = 'Loading PDF…';
+        win.document.body.textContent = 'Loading…';
       } catch (e) { /* cross-origin in some browsers; harmless */ }
     }
     try {
-      const { name, blob } = await readFile(id);
-      const url = URL.createObjectURL(blob);
-      if (win && !win.closed) {
+      const { name, ext, mimeType, blob } = await readFile(id);
+      const fileName = `${name}${ext || '.pdf'}`;
+      const typed = /^text\//.test(mimeType) ? new Blob([blob], { type: `${mimeType};charset=utf-8` }) : blob;
+      const url = URL.createObjectURL(typed);
+      if (win && !win.closed && VIEWABLE.test(mimeType)) {
         win.location.href = url;
       } else {
+        if (win && !win.closed) win.close();
         const a = document.createElement('a');
-        a.href = url; a.download = `${name}.pdf`;
+        a.href = url; a.download = fileName;
         document.body.appendChild(a); a.click(); a.remove();
       }
       setTimeout(() => URL.revokeObjectURL(url), 5 * 60 * 1000);
@@ -383,12 +531,19 @@ window.MktforgeData = (() => {
     }
   }
 
-  async function deleteChunks(d, meta, count) {
+  const isViewable = (mimeType) => VIEWABLE.test(mimeType || 'application/pdf');
+
+  async function deleteChunks(d, meta, count, textCount = 0) {
     for (let i = 0; i < count; i += 20) {
       const batch = d.batch();
       for (let j = i; j < Math.min(i + 20, count); j += 1) {
         batch.delete(meta.collection('chunks').doc(String(j)));
       }
+      await batch.commit();
+    }
+    if (textCount) {
+      const batch = d.batch();
+      for (let j = 0; j < textCount; j += 1) batch.delete(meta.collection('text').doc(String(j)));
       await batch.commit();
     }
   }
@@ -401,11 +556,12 @@ window.MktforgeData = (() => {
     } else {
       const d = await getDb();
       const meta = filesRef(d).doc(id);
-      const snap = await withTimeout(meta.get(), TIMEOUT_MS, 'Deleting the PDF');
+      const snap = await withTimeout(meta.get(), TIMEOUT_MS, 'Deleting the file');
       if (snap.exists) {
         // Metadata first so the row disappears even if a chunk delete fails.
-        await withTimeout(meta.delete(), TIMEOUT_MS, 'Deleting the PDF');
-        await withTimeout(deleteChunks(d, meta, snap.data().chunks || 1), 30000, 'Deleting the PDF');
+        await withTimeout(meta.delete(), TIMEOUT_MS, 'Deleting the file');
+        await withTimeout(deleteChunks(d, meta, snap.data().chunks || 1, snap.data().textChunks || 0),
+                          30000, 'Deleting the file');
       }
     }
     fileListeners.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
@@ -426,7 +582,7 @@ window.MktforgeData = (() => {
       localWrite(data);
     } else {
       const d = await getDb();
-      await withTimeout(filesRef(d).doc(id).update({ name }), TIMEOUT_MS, 'Renaming the PDF');
+      await withTimeout(filesRef(d).doc(id).update({ name }), TIMEOUT_MS, 'Renaming the file');
     }
     fileListeners.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
     return name;
@@ -544,7 +700,8 @@ window.MktforgeData = (() => {
   return {
     getProfile, saveProfile, onProfile,
     savePdfDoc, listFiles, openFile, deleteFile, renameFile, nameTaken, onFiles,
-    readFile, getFileDigest, setFileDigest,
+    readFile, getFileDigest, setFileDigest, importFile, getFileText, isViewable,
+    MAX_FILE_BYTES,
     getPositioningAnswers, savePositioningAnswers,
     prefill,
     get isLocal() { return isLocal(); },

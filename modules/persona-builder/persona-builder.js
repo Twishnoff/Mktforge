@@ -350,6 +350,11 @@
     };
 
     try {
+      const context = await window.MktforgeKit.savedMaterials(cfg, { jobTitles: [payload.jobTitle] },
+        (t) => { state.status = t; if (mounted) el.status.textContent = t; });
+      if (context) payload.context = context;
+      state.status = 'Conducting Research…';
+      if (mounted) el.status.textContent = state.status;
       await streamGenerate(payload, {
         onStatus: (message) => {
           state.status = message || 'Conducting Research…';

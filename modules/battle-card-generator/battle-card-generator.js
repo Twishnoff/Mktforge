@@ -425,7 +425,15 @@ window.MktforgeBattleCardText = (function () {
     };
 
     try {
+      const runningStatus = state.status;
+      const context = await window.MktforgeKit.savedMaterials(cfg,
+        { jobTitles: [f.jobTitle], competitorUrl: f.competitorUrl },
+        (t) => { state.status = t; if (mounted) el.status.textContent = t; });
+      state.status = runningStatus;
+      if (mounted) el.status.textContent = runningStatus;
+
       const { res, payload } = await requestBattleCard({
+        ...(context ? { context } : {}),
         email: window.MktforgeKit.accountEmail(),
         companyUrl: f.companyUrl,
         competitorUrl: f.competitorUrl,

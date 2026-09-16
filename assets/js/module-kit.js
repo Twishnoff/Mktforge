@@ -9,6 +9,8 @@
      NO_ACCESS                      the message shown in both cases
      seedCompanyUrl(input, memo)    My Company's URL as the default, once per sign-in
      attachPicker(input, pick)      drop-down of My Company values under a text field
+     savedMaterials(cfg, opts, say) the account's Imported + Generated Materials for a
+                                    Worker request, or null (see assets/js/research.js)
 
    Everything here only reads My Company data (through MktforgeData) and
    only touches the elements a module passes in.
@@ -183,5 +185,27 @@ window.MktforgeKit = (() => {
     });
   }
 
-  return { NO_ACCESS, accountEmail, accessProblem, accessError, seedCompanyUrl, attachPicker };
+  /* ---------- saved materials ----------
+     Only sent when the module's config says its Worker understands them
+     (USE_SAVED_MATERIALS). Never blocks a run: if anything goes wrong the
+     request goes out without them. */
+
+  async function savedMaterials(cfg, { jobTitles = [], competitorUrl = '' } = {}, say = () => {}) {
+    if (!cfg || !cfg.USE_SAVED_MATERIALS || !window.MktforgeResearch) return null;
+    let host = '';
+    try {
+      const v = String(competitorUrl || '').trim();
+      if (v) host = new URL(/^https?:\/\//i.test(v) ? v : `https://${v}`).hostname.replace(/^www\./, '');
+    } catch (e) { host = ''; }
+    try {
+      const { context, meta } = await window.MktforgeResearch.build(
+        { jobTitles, competitorHost: host }, { onProgress: say });
+      return meta.imported || meta.generated ? context : null;
+    } catch (err) {
+      console.warn('[Mktforge] continuing without saved materials', err);
+      return null;
+    }
+  }
+
+  return { NO_ACCESS, accountEmail, accessProblem, accessError, seedCompanyUrl, attachPicker, savedMaterials };
 })();

@@ -20,9 +20,19 @@ service cloud.firestore {
           && request.resource.data.name.size() <= 200
           && request.resource.data.chunks is int
           && request.resource.data.chunks <= 25
+          && (!('textChunks' in request.resource.data)
+              || (request.resource.data.textChunks is int && request.resource.data.textChunks <= 5))
           && (!('digest' in request.resource.data)
               || (request.resource.data.digest is string
                   && request.resource.data.digest.size() <= 20000));
+
+        // Text pulled out of the file for Mktforge's agents.
+        match /text/{partId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid)
+            && request.resource.data.data is string
+            && request.resource.data.data.size() <= 950 * 1024;
+        }
 
         match /chunks/{chunkId} {
           allow read, delete: if isOwner(uid);
