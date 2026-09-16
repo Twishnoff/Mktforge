@@ -74,6 +74,7 @@
   let boxes = null;
   let cfg = {};
   let mounted = false;
+  let unsubProfile = null;
 
   /* Everything worth keeping when the user navigates to another module and
      comes back. Lives for the life of the page, not across a reload. */
@@ -151,7 +152,70 @@
     if (!titles || titles.length === 0) { setEmpty(b, 'No Data'); return; }
     b.className = 'fmc__box-body';
     b.innerHTML = '<ul class="fmc__titles">' +
-      titles.map((t) => `<li>${escapeHtml(t)}</li>`).join('') + '</ul>';
+      titles.map((t, i) => `
+        <li>
+          <span class="fmc__title-name">${escapeHtml(t)}</span>
+          <button type="button" class="fmc__track" data-track="${i}" hidden></button>
+        </li>`).join('') + '</ul>';
+    refreshTrackButtons();
+  }
+
+  /* ---------- Tracked titles (My Company → Target Job Titles) ----------
+     App-only controls: the PDF is built from state.data, never from this DOM,
+     so these buttons never appear in it. */
+
+  const TRACK_ADD = 'Add To Tracked Titles';
+  const TRACK_REMOVE = 'Remove From Tracked Titles';
+  const sameTitle = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+  let trackBusy = false;
+
+  function paintTrackButtons(tracked) {
+    if (!mounted || !boxes || !state.data) return;
+    const titles = state.data.jobTitles || [];
+    boxes.jobTitles.querySelectorAll('[data-track]').forEach((btn) => {
+      const title = titles[Number(btn.dataset.track)];
+      const on = tracked.some((t) => sameTitle(t, title));
+      btn.textContent = on ? TRACK_REMOVE : TRACK_ADD;
+      btn.classList.toggle('is-tracked', on);
+      btn.setAttribute('aria-label', `${on ? TRACK_REMOVE : TRACK_ADD}: ${title}`);
+      btn.disabled = trackBusy;
+      btn.hidden = false;
+    });
+  }
+
+  function refreshTrackButtons() {
+    if (!window.MktforgeData) return;
+    window.MktforgeData.getProfile()
+      .then((p) => paintTrackButtons(p.targetTitles || []))
+      .catch((err) => console.warn('[Find My Customer] profile unavailable for tracked titles', err));
+  }
+
+  async function handleTrackClick(e) {
+    const btn = e.target.closest('[data-track]');
+    if (!btn || trackBusy || !state.data) return;
+    const title = (state.data.jobTitles || [])[Number(btn.dataset.track)];
+    if (!title) return;
+
+    trackBusy = true;
+    boxes.jobTitles.querySelectorAll('[data-track]').forEach((b) => { b.disabled = true; });
+    try {
+      const profile = await window.MktforgeData.getProfile();
+      const list = profile.targetTitles || [];
+      const tracked = list.some((t) => sameTitle(t, title));
+      profile.targetTitles = tracked
+        ? list.filter((t) => !sameTitle(t, title))
+        : [...list, String(title).trim()];
+      const saved = await window.MktforgeData.saveProfile(profile);
+      trackBusy = false;
+      paintTrackButtons(saved.targetTitles);
+    } catch (err) {
+      console.error('[Find My Customer] could not update tracked titles', err);
+      trackBusy = false;
+      refreshTrackButtons();
+      document.dispatchEvent(new CustomEvent('mktforge:notify', {
+        detail: { message: 'Couldn’t update your Target Job Titles. Please try again.', tone: 'error' }
+      }));
+    }
   }
 
   function renderPainPoints(groups) {
@@ -370,6 +434,10 @@
 
       el.form.addEventListener('submit', handleSubmit);
       el.pdf.addEventListener('click', handlePdf);
+      boxes.jobTitles.addEventListener('click', handleTrackClick);
+      if (window.MktforgeData) {
+        unsubProfile = window.MktforgeData.onProfile((p) => paintTrackButtons(p.targetTitles || []));
+      }
 
       restore();
       autofill();
@@ -378,6 +446,7 @@
     unmount() {
       captureForm();
       mounted = false;
+      if (unsubProfile) { unsubProfile(); unsubProfile = null; }
       // A run in flight is deliberately NOT aborted; see Persona Builder.
       el = null;
       boxes = null;

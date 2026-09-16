@@ -234,6 +234,15 @@ What changed in the port:
   module and back, the same way Persona Builder's do
 - no email field; the signed-in account's address is sent (see My Company → Account email)
 
+### Tracked titles
+
+Each row in the Job Titles box has a button on the right. "Add To Tracked
+Titles" adds that title to My Company's Target Job Titles and flips to
+"Remove From Tracked Titles"; clicking that removes it again. Titles already
+in Target Job Titles (ignoring case) start as "Remove". The buttons only
+exist in the app — the PDF is built from the results data, so they never
+appear in it. My Company picks up the change the next time it's opened.
+
 ### Config
 
 `assets/js/config.js` → `findMyCustomer.API_URL` is the Worker endpoint

@@ -106,6 +106,7 @@
   let root = null;
   let mounted = false;
   let unsubFiles = null;
+  let unsubProfile = null;
   let comboCleanup = [];
 
   /* ---------- markup ---------- */
@@ -723,7 +724,18 @@
       q('[data-el="files"]').addEventListener('input', handleFilesInput);
       q('[data-el="files"]').addEventListener('keydown', handleFilesKeydown);
 
-      if (state.loaded) renderRows(); else load();
+      if (state.loaded) {
+        // Another module may have changed the profile (e.g. Find My Customer
+        // tracking a title); the data layer's copy is the current one.
+        Data().getProfile().then((p) => {
+          state.profile = p;
+          if (mounted) renderRows();
+        }).catch(() => { if (mounted) renderRows(); });
+        renderRows();
+      } else {
+        load();
+      }
+      unsubProfile = Data().onProfile((p) => { state.profile = p; });
       renderFiles();
       loadFiles();                                   // always refresh on open
       unsubFiles = Data().onFiles(() => { if (mounted) loadFiles(); });
@@ -736,6 +748,7 @@
       pendingDelete.forEach((t) => clearTimeout(t));
       pendingDelete.clear();
       if (unsubFiles) { unsubFiles(); unsubFiles = null; }
+      if (unsubProfile) { unsubProfile(); unsubProfile = null; }
       root = null;
     }
   });
