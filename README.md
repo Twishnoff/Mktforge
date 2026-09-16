@@ -66,6 +66,27 @@ A module only ever touches the container it is handed. It never reads or
 writes the shell's DOM or globals. Keeping that line clean is what makes a
 later move to React (or anything else) a rewrite of the shell only.
 
+### Background-run lights
+
+A module that does slow work reports it to the shell:
+
+```js
+Mktforge.reportActivity('your-module', 'running');  // run started
+Mktforge.reportActivity('your-module', 'idle');     // run finished successfully
+Mktforge.reportActivity('your-module', 'error');    // run finished with an error
+```
+
+If you leave a module while it's running, a slowly blinking yellow dot appears
+next to it in the nav. It hides while you're on that module and comes back
+whenever you leave again before the run ends. If the run finishes while
+you're elsewhere, the dot turns solid green (or solid red if the run ended
+in an error) until you open the module. A run
+that starts and finishes while you stay on the module shows no dot. Find My
+Customer, Persona Builder, Battle Card Generator and Marketing Opportunities
+all report their runs. When the nav is minimized, the dot sits on the icon
+and the hover label says "Running…", "Finished — results ready" or "Stopped
+with an error".
+
 ## Deploying
 
 Repo → Settings → Pages → Branch: `main`, folder: `/ (root)`.

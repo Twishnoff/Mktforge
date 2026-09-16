@@ -16,6 +16,14 @@
        unmount(container) { ... }                 // optional cleanup
      });
 
+   Background-run lights (optional):
+     Mktforge.reportActivity('module-id', 'running')   when a run starts
+     Mktforge.reportActivity('module-id', 'idle')      when it finishes successfully
+     Mktforge.reportActivity('module-id', 'error')     when it finishes with an error
+   The shell shows a slow-blinking yellow dot next to a module that is running
+   while you're somewhere else, and a solid green (or red, for an error) one
+   once it has finished while you were away. All clear when you open that module.
+
    Rules that keep a future port to a framework cheap:
      - a module only ever touches the container element it is handed
      - a module never reads or writes the shell's DOM or globals
@@ -26,6 +34,7 @@ window.Mktforge = (() => {
 
   const modules = [];
   const scrollMemory = new Map();
+  const activity = new Map();   // id -> { running, unseen, failed }
   let activeId = null;
   let booted = false;
 
@@ -93,7 +102,9 @@ window.Mktforge = (() => {
       btn.dataset.label = mod.label;          // used as the collapsed tooltip
       btn.innerHTML =
         `<span class="nav__icon">${window.MktforgeIcons[mod.icon] || window.MktforgeIcons.grid}</span>` +
-        `<span class="nav__label">${mod.label}</span>`;
+        `<span class="nav__label">${mod.label}</span>` +
+        `<span class="nav__status" aria-hidden="true"></span>` +
+        `<span class="nav__status-text"></span>`;
       btn.addEventListener('click', () => { location.hash = `#/${mod.id}`; });
 
       li.appendChild(btn);
@@ -107,6 +118,52 @@ window.Mktforge = (() => {
     document.querySelectorAll('.nav__button').forEach(btn => {
       if (btn.dataset.moduleId === activeId) btn.setAttribute('aria-current', 'page');
       else btn.removeAttribute('aria-current');
+    });
+    renderLights();
+  }
+
+  /* ---------- Background-run lights ----------
+     Only ever shown next to a module you are NOT looking at:
+       running                  -> blinking yellow
+       finished OK, unseen      -> solid green (until you open it)
+       finished with an error   -> solid red (until you open it)
+     A run that starts and ends while you stay on the module shows nothing. */
+
+  function reportActivity(id, status) {
+    const a = activity.get(id) || { running: false, unseen: false, failed: false };
+    if (status === 'running') {
+      a.running = true;
+      a.unseen = false;
+      a.failed = false;
+    } else if (a.running) {
+      a.running = false;
+      a.failed = status === 'error';
+      a.unseen = id !== activeId;     // finished while you were elsewhere
+    }
+    activity.set(id, a);
+    renderLights();
+  }
+
+  function renderLights() {
+    document.querySelectorAll('.nav__button').forEach(btn => {
+      const id = btn.dataset.moduleId;
+      const mod = modules.find(m => m.id === id);
+      const a = activity.get(id);
+      let light = '';
+      if (a && id !== activeId) {
+        light = a.running ? 'running' : !a.unseen ? '' : a.failed ? 'error' : 'done';
+      }
+      const status = btn.querySelector('.nav__status');
+      const text = btn.querySelector('.nav__status-text');
+      if (!status) return;
+      status.dataset.state = light;
+      const words = {
+        running: 'Running…',
+        done:    'Finished — results ready',
+        error:   'Stopped with an error'
+      }[light] || '';
+      text.textContent = words ? ` (${words})` : '';
+      btn.dataset.label = mod ? (words ? `${mod.label} · ${words}` : mod.label) : btn.dataset.label;
     });
   }
 
@@ -252,6 +309,8 @@ window.Mktforge = (() => {
     }
 
     display.scrollTop = scrollMemory.get(next.id) || 0;
+    const seen = activity.get(next.id);
+    if (seen) seen.unseen = false;      // opening the module counts as checking it
     markActive();
   }
 
@@ -305,6 +364,7 @@ window.Mktforge = (() => {
   return {
     register,
     loadScript,
+    reportActivity,
     get modules() { return modules.slice(); },
     get activeId() { return activeId; },
     go(id) { location.hash = `#/${id}`; }

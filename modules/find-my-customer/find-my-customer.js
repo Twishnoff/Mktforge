@@ -237,6 +237,7 @@
 
     captureForm();
     state.running = true;
+    Mktforge.reportActivity('find-my-customer', 'running');
     state.data = null;
     state.lastUrl = null;
     state.status = 'Collecting data… this can take a minute.';
@@ -286,6 +287,7 @@
       fail('Could not reach the customer research service. Please try again.');
     } finally {
       state.running = false;
+      Mktforge.reportActivity('find-my-customer', state.error ? 'error' : 'idle');
       if (mounted) el.submit.disabled = false;
     }
   }

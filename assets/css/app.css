@@ -495,3 +495,73 @@ body[data-nav="collapsed"] .nav__minimize-icon {
 
 .mf-picker__option:hover,
 .mf-picker__option.is-active { background: var(--accent-tint); }
+
+/* ==========================================================================
+   Background-run lights (Mktforge.reportActivity)
+   ========================================================================== */
+
+.nav__status {
+  flex: none;
+  display: none;
+  width: 9px;
+  height: 9px;
+  margin-left: auto;
+  border-radius: 50%;
+}
+
+.nav__status[data-state="running"] {
+  display: block;
+  background: #E3A21A;
+  box-shadow: 0 0 0 2px rgba(227, 162, 26, .22);
+  animation: nav-status-pulse 1.8s ease-in-out infinite;
+}
+
+.nav__status[data-state="error"] {
+  display: block;
+  background: #C8412A;
+  box-shadow: 0 0 0 2px rgba(200, 65, 42, .2);
+}
+
+.nav__status[data-state="done"] {
+  display: block;
+  background: #2E9B57;
+  box-shadow: 0 0 0 2px rgba(46, 155, 87, .2);
+}
+
+@keyframes nav-status-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .2; }
+}
+
+/* screen-reader only */
+.nav__status-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Icon-only nav: the dot sits on the icon's top-right corner */
+body[data-nav="collapsed"] .nav__status {
+  position: absolute;
+  top: 6px;
+  right: calc(50% - 16px);
+  margin: 0;
+  border: 2px solid var(--desk);
+  width: 11px;
+  height: 11px;
+}
+
+@media (max-width: 860px) {
+  body[data-nav="expanded"] .nav__status {
+    position: absolute;
+    top: 6px;
+    right: calc(50% - 16px);
+    margin: 0;
+    border: 2px solid var(--desk);
+    width: 11px;
+    height: 11px;
+  }
+}

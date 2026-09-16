@@ -336,6 +336,7 @@
     state.persona = null;
     state.error = '';
     state.running = true;
+    Mktforge.reportActivity('persona-builder', 'running');
     updateGenerateEnabled();
     state.status = 'Conducting Research…';
     setAllBoxesLoading();
@@ -391,6 +392,7 @@
       }
     } finally {
       state.running = false;
+      Mktforge.reportActivity('persona-builder', state.error ? 'error' : 'idle');
       abortController = null;
       updateGenerateEnabled();
     }

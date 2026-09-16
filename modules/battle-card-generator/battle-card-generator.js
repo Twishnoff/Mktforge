@@ -406,6 +406,7 @@ window.MktforgeBattleCardText = (function () {
 
     captureForm();
     state.running = true;
+    Mktforge.reportActivity('battle-card-generator', 'running');
     state.run = null;
     state.status = 'Researching both companies… this usually takes 30–90 seconds.';
     setPdfEnabled(false);
@@ -464,6 +465,7 @@ window.MktforgeBattleCardText = (function () {
       fail('Could not reach the backend. Please try again.');
     } finally {
       state.running = false;
+      Mktforge.reportActivity('battle-card-generator', state.error ? 'error' : 'idle');
       updateGenerateEnabled();
     }
   }

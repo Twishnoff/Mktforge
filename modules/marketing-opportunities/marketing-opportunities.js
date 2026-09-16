@@ -304,6 +304,7 @@
 
     captureForm();
     state.running = true;
+    Mktforge.reportActivity('marketing-opportunities', 'running');
     state.run = null;
     state.lastKey = null;
     state.status = 'Searching for channels… this can take a minute or two.';
@@ -364,6 +365,7 @@
       fail('Could not reach the backend. Please try again.');
     } finally {
       state.running = false;
+      Mktforge.reportActivity('marketing-opportunities', state.error ? 'error' : 'idle');
       updateSubmitEnabled();
     }
   }
