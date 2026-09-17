@@ -9,7 +9,8 @@
 
    LAYOUT (everything keyed on uid, never on email)
      users/{uid}                        { profile: {...}, pdfCounters: { moduleId: n },
-                                          buildPositioning: { answers: { key: text } } }
+                                          buildPositioning: { answers: { key: text } },
+                                          account: { photo: dataUrl, photoUpdatedAt } }
      users/{uid}/files/{fileId}         { name, moduleId, moduleName, size, chunks, createdAt,
                                           source ('generated' | 'imported'), ext, mimeType,
                                           textChunks, textChars, textStatus,
@@ -28,6 +29,11 @@
      getProfile()                    -> Promise<profile>
      saveProfile(profile)            -> Promise<profile>
      onProfile(fn)                   -> unsubscribe; fn(profile) on every save
+     getAvatar()                     -> Promise<dataUrl|''>  the account's profile picture
+     saveAvatar(dataUrl)             -> Promise<dataUrl>; '' or null removes it
+     onAvatar(fn)                    -> unsubscribe; fn(dataUrl) whenever it changes
+     util.imageToAvatarDataUrl(file) -> Promise<dataUrl>; square-crops and shrinks
+                                        any image file to a storable avatar
      savePdfDoc(jsPdfDoc, { moduleId, moduleName, fallbackName })
                                      -> downloads as "<Module Name> N.pdf" and
                                         saves a copy to the account
@@ -59,6 +65,15 @@ window.MktforgeData = (() => {
   const TEXT_CHUNK_CHARS = 300000;          // ≤ ~900 KB UTF-8 per document
   const MAX_TEXT_CHUNKS = 5;
 
+  /* Avatars ride along in the users/{uid} document rather than getting a
+     chunked file of their own, so they have to stay comfortably inside the
+     1 MiB document cap. A 256px square is more than the 30px management-bar
+     circle can show, and lands around 20-40 KB as JPEG. */
+  const AVATAR_PX = 256;
+  const AVATAR_QUALITY = 0.85;
+  const MAX_AVATAR_BYTES = 400 * 1024;      // the stored data URL
+  const MAX_AVATAR_UPLOAD_BYTES = 12 * 1024 * 1024;   // the file someone picks
+
   const EMPTY_PROFILE = Object.freeze({
     companyName: '', companyUrl: '', industry: '',
     targetTitles: [], targetIndustries: [], competitors: []
@@ -66,9 +81,11 @@ window.MktforgeData = (() => {
 
   const profileListeners = new Set();
   const fileListeners = new Set();
+  const avatarListeners = new Set();
   let db = null;
   let dbPromise = null;
   let profileCache = null;
+  let avatarCache = null;         // null = not read yet; '' = none set
 
   const auth = () => window.MktforgeAuth;
   const isLocal = () => !auth() || !auth().isConfigured();
@@ -208,6 +225,112 @@ window.MktforgeData = (() => {
   }
 
   function onProfile(fn) { profileListeners.add(fn); return () => profileListeners.delete(fn); }
+
+  /* ---------- account profile picture ----------
+     The image the management bar shows beside the account name. Stored as a
+     data URL on the user document, not as a chunked file: it is small by the
+     time imageToAvatarDataUrl() is done with it, and keeping it on the one
+     document the shell already reads means the circle can be painted without
+     a second round trip.
+
+     Firebase Auth's own photoURL is deliberately NOT used. It takes a URL,
+     not image bytes, and long values are rejected — with no Storage bucket on
+     the Spark plan there is nowhere to point it at. */
+
+  /** Square-crops the centre of an image file and shrinks it to AVATAR_PX. */
+  function imageToAvatarDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) { reject(new Error('No image selected.')); return; }
+      if (!/^image\//.test(file.type || '')) {
+        reject(new Error('That file isn’t an image. Pick a PNG, JPEG, WebP or GIF.'));
+        return;
+      }
+      if (file.size > MAX_AVATAR_UPLOAD_BYTES) {
+        reject(new Error(`That image is too large — keep it under ${
+          Math.round(MAX_AVATAR_UPLOAD_BYTES / (1024 * 1024))} MB.`));
+        return;
+      }
+
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        try {
+          const side = Math.min(img.naturalWidth, img.naturalHeight);
+          if (!side) throw new Error('That image couldn’t be read.');
+          const sx = (img.naturalWidth - side) / 2;
+          const sy = (img.naturalHeight - side) / 2;
+
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = AVATAR_PX;
+          const ctx = canvas.getContext('2d');
+          ctx.imageSmoothingQuality = 'high';
+          // A transparent PNG would otherwise flatten to black on JPEG.
+          ctx.fillStyle = '#FFFDF7';
+          ctx.fillRect(0, 0, AVATAR_PX, AVATAR_PX);
+          ctx.drawImage(img, sx, sy, side, side, 0, 0, AVATAR_PX, AVATAR_PX);
+
+          let dataUrl = canvas.toDataURL('image/jpeg', AVATAR_QUALITY);
+          // Belt and braces: a pathological image could still come back big.
+          if (dataUrl.length > MAX_AVATAR_BYTES) dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          if (dataUrl.length > MAX_AVATAR_BYTES) {
+            reject(new Error('That image couldn’t be shrunk enough to save. Try a different one.'));
+            return;
+          }
+          resolve(dataUrl);
+        } catch (err) { reject(err); }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('That image couldn’t be read. Try a different file.'));
+      };
+
+      img.src = url;
+    });
+  }
+
+  async function getAvatar({ fresh = false } = {}) {
+    if (avatarCache !== null && !fresh) return avatarCache;
+    if (isLocal()) {
+      avatarCache = String(localRead().avatar || '');
+    } else {
+      const d = await getDb();
+      const snap = await withTimeout(userRef(d).get(), TIMEOUT_MS, 'Loading your profile picture');
+      const account = (snap.exists && snap.data().account) || null;
+      avatarCache = String((account && account.photo) || '');
+    }
+    return avatarCache;
+  }
+
+  /** Pass '' or null to remove the picture. */
+  async function saveAvatar(dataUrl) {
+    const photo = String(dataUrl || '');
+    if (photo && !/^data:image\//.test(photo)) throw new Error('That isn’t an image.');
+    if (photo.length > MAX_AVATAR_BYTES) throw new Error('That image is too large to save.');
+
+    if (isLocal()) {
+      const data = localRead();
+      if (photo) data.avatar = photo; else delete data.avatar;
+      localWrite(data);
+    } else {
+      const d = await getDb();
+      const account = photo
+        ? { photo, photoUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() }
+        : { photo: firebase.firestore.FieldValue.delete(),
+            photoUpdatedAt: firebase.firestore.FieldValue.delete() };
+      await withTimeout(userRef(d).set({ account }, { merge: true }),
+                        TIMEOUT_MS, 'Saving your profile picture');
+    }
+
+    avatarCache = photo;
+    avatarListeners.forEach((fn) => { try { fn(photo); } catch (e) { console.error(e); } });
+    document.dispatchEvent(new CustomEvent('mktforge:avatar-changed', { detail: photo }));
+    return photo;
+  }
+
+  function onAvatar(fn) { avatarListeners.add(fn); return () => avatarListeners.delete(fn); }
 
   /* ---------- files ---------- */
 
@@ -699,12 +822,13 @@ window.MktforgeData = (() => {
 
   return {
     getProfile, saveProfile, onProfile,
+    getAvatar, saveAvatar, onAvatar,
     savePdfDoc, listFiles, openFile, deleteFile, renameFile, nameTaken, onFiles,
     readFile, getFileDigest, setFileDigest, importFile, getFileText, isViewable,
     MAX_FILE_BYTES,
     getPositioningAnswers, savePositioningAnswers,
     prefill,
     get isLocal() { return isLocal(); },
-    util: { normalizeUrl, isValidUrl }
+    util: { normalizeUrl, isValidUrl, imageToAvatarDataUrl }
   };
 })();

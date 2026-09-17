@@ -12,9 +12,14 @@
        label:  'My Company',                        // nav button text
        icon:   'factory',                           // key in MktforgeIcons
        styles: 'modules/my-company/my-company.css', // optional, loaded on demand
+       hidden: false,                             // true = routable, but no nav button
        mount(container)   { ... },                // build your UI inside it
        unmount(container) { ... }                 // optional cleanup
      });
+
+   A hidden module still has a #/id of its own and still mounts into the
+   display field; it just isn't one of the things the nav offers. Manage
+   Profile, reached from the management bar's account menu, is one.
 
    Background-run lights (optional):
      Mktforge.reportActivity('module-id', 'running')   when a run starts
@@ -95,7 +100,7 @@ window.Mktforge = (() => {
     const list = document.getElementById('nav-list');
     list.innerHTML = '';
 
-    modules.forEach(mod => {
+    modules.filter(mod => !mod.hidden).forEach(mod => {
       const li = document.createElement('li');
       li.className = 'nav__item';
 
@@ -279,6 +284,11 @@ window.Mktforge = (() => {
 
   /* ---------- Management bar: profile ---------- */
 
+  /* The picture someone uploaded on Manage Profile, once it has been read
+     from the account. Held here so the circle can be repainted — on a save,
+     or when the name changes — without going back to Firestore each time. */
+  let avatarPhoto = '';
+
   function renderProfile() {
     // getUser() is null in the instant between signing out and the redirect,
     // so nothing here may assume there is an account.
@@ -287,9 +297,26 @@ window.Mktforge = (() => {
       window.MktforgeAuth.getDisplayName() || '';
 
     const avatar = document.getElementById('profile-avatar');
-    avatar.innerHTML = (user && user.avatar)
-      ? `<img src="${user.avatar}" alt="">`
+    const src = avatarPhoto || (user && user.avatar) || '';
+    avatar.innerHTML = src
+      ? `<img src="${src}" alt="">`
       : window.MktforgeIcons.user;
+  }
+
+  /* Reads the stored picture once at boot, then keeps the circle in step with
+     whatever Manage Profile saves. A failure here is not worth interrupting
+     anyone over — the circle simply keeps the placeholder icon. */
+  function initAvatar() {
+    const Data = window.MktforgeData;
+    if (!Data || typeof Data.getAvatar !== 'function') return;
+
+    const paint = (photo) => { avatarPhoto = photo || ''; renderProfile(); };
+
+    Data.getAvatar()
+      .then(paint)
+      .catch((err) => console.warn('[Mktforge] profile picture unavailable', err));
+
+    Data.onAvatar(paint);
   }
 
   function initProfileMenu() {
@@ -310,6 +337,11 @@ window.Mktforge = (() => {
 
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && !menu.hidden) { close(); button.focus(); }
+    });
+
+    document.getElementById('manage-profile').addEventListener('click', () => {
+      close();
+      location.hash = '#/account-profile';
     });
 
     document.getElementById('sign-out').addEventListener('click', async () => {
@@ -407,7 +439,9 @@ window.Mktforge = (() => {
 
   function route() {
     const id = (location.hash || '').replace(/^#\/?/, '');
-    const target = modules.find(m => m.id === id) || modules[0];
+    // An unknown hash falls back to the first module someone can actually
+    // navigate to, never to a hidden one like Manage Profile.
+    const target = modules.find(m => m.id === id) || modules.find(m => !m.hidden) || modules[0];
     if (!target) return;
     if (!id || id !== target.id) history.replaceState(null, '', `#/${target.id}`);
     show(target.id);
@@ -428,6 +462,7 @@ window.Mktforge = (() => {
     initNotices();
     renderProfile();
     initProfileMenu();
+    initAvatar();
     renderNav();
     window.addEventListener('hashchange', route);
     route();
