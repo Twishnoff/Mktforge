@@ -53,11 +53,12 @@ window.MKTFORGE_CONFIG = {
     USE_SAVED_MATERIALS: false
   },
 
-  battleCardGenerator: {
+    battleCardGenerator: {
     API_URL: 'https://battle-card-generator.tyler-wishnoff.workers.dev',
-    // The Worker's CORS only allows Content-Type today — leave false until
-    // it verifies Firebase ID tokens and allows Authorization. See README.
-    SEND_AUTH_TOKEN: false,
+    // Worker verifies Firebase ID tokens against the shared KV allowlist and
+    // allows Authorization in CORS (2026-09-17). Anonymous requests still
+    // fall back to the Google Doc allow-list for the standalone site.
+    SEND_AUTH_TOKEN: true,
     // Imported/Generated Materials go with each request (Worker updated).
     USE_SAVED_MATERIALS: true
   },
