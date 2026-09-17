@@ -13,20 +13,35 @@
 }
 
 .login {
+  position: relative;
   width: 100%;
   max-width: 400px;
 }
 
+/* --- Logo ---
+   The mascot logo hangs above the card instead of sitting in the flow.
+   The .login__logo slot still reserves exactly the 58px the old wordmark
+   took (36px tall + 22px gap), so the card stays in the same place it has
+   always been no matter how tall the logo gets. The logo grows upward out
+   of that slot and caps its own height against the room above the card, so
+   it never crowds the card or runs off the top of a short window. */
+
 .login__logo {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 22px;
+  position: relative;
+  height: 0;
+  margin: 0 0 58px;
 }
 
 .login__logo img {
+  position: absolute;
+  left: 50%;
+  bottom: -16px;                     /* leaves 42px of clear space above the card */
+  transform: translateX(-50%);
   display: block;
-  width: 198px;
-  height: auto;
+  width: auto;
+  height: 232px;
+  max-height: calc(50vh - 252px);    /* the headroom above the card, less a margin */
+  max-width: 100%;
 }
 
 .card {
