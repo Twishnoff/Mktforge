@@ -13,9 +13,19 @@
           company questions     once for the account
           competitor questions  once per Closest Competitor
           champion questions    once per Primary Champion
-     3. Generate Positioning: streams stages 0–5 into six boxes.
+     3. Generate Positioning: streams stages 0–5 into the result boxes. Once a
+        run starts, a second Create Positioning PDF button appears beside it.
      4. Create Positioning PDF: downloads it and saves it to My Company, where
         the next module can pick it up.
+
+   Screen vs. PDF
+     The PDF is the full record and is unchanged; the screen is organised for
+     reading. BOXES is the stage list the Worker streams and the order the PDF
+     prints. DISPLAY_BOXES is the on-screen layout only: one full-width column
+     of boxes that each minimize to their title line, the positioning statement
+     lifted out of Market Category into a leading "Draft" box, and stages 2 and
+     3 merged into "Differentiators and Value" with each stage-3 row folded
+     under the differentiator it belongs to. None of it touches the data.
 
    Saved materials: before drafting or generating, assets/js/research.js
    gathers Imported Materials (trusted most, newest first) and Generated
@@ -87,7 +97,19 @@
 
   const REQUIRED_IDS = QUESTIONS.filter((q) => q.required).map((q) => q.id);
 
-  /* ---------- result boxes ---------- */
+  /* ---------- result boxes ----------
+     BOXES is the stage list the Worker streams and the shape the PDF prints:
+     six stages, these titles, this order. The PDF is deliberately unchanged, so
+     nothing in BOXES may be edited for the sake of the on-screen layout.
+
+     DISPLAY_BOXES is the on-screen layout only. It reorganises the same data:
+       - the positioning statement that used to close Market Category leads as
+         "Draft", so the answer is readable without scrolling
+       - Stage 0 arrives minimized (`collapsed`)
+       - Stages 2 and 3 are merged into one "Differentiators and Value" box
+       - `needs` lists the stage keys a box can show something from (any one is
+         enough, so a run that stops halfway still shows what it reached)
+       - `pick` is the stage data the box's renderer gets as its first argument */
 
   const BOXES = [
     { key: 'audit',           stage: 'Stage 0', title: 'Input Audit' },
@@ -97,6 +119,23 @@
     { key: 'champion',        stage: 'Stage 4', title: 'Champion & Situation' },
     { key: 'category',        stage: 'Stage 5', title: 'Market Category' }
   ];
+
+  const DISPLAY_BOXES = [
+    { key: 'draft',           stage: 'Draft',       title: 'Initial Positioning Statement',
+      needs: ['category'],                    pick: (st) => st.category },
+    { key: 'audit',           stage: 'Stage 0',     title: 'Input Audit',
+      needs: ['audit'], collapsed: true,      pick: (st) => st.audit },
+    { key: 'alternatives',    stage: 'Stage 1',     title: 'Competitive Alternatives',
+      needs: ['alternatives'],                pick: (st) => st.alternatives },
+    { key: 'differentiators', stage: 'Stage 2 & 3', title: 'Differentiators and Value',
+      needs: ['differentiators', 'value'],    pick: (st) => st.differentiators || {} },
+    { key: 'champion',        stage: 'Stage 4',     title: 'Champion & Situation',
+      needs: ['champion'],                    pick: (st) => st.champion },
+    { key: 'category',        stage: 'Stage 5',     title: 'Market Category',
+      needs: ['category'],                    pick: (st) => st.category }
+  ];
+
+  const DEFAULT_COLLAPSED = () => new Set(DISPLAY_BOXES.filter((b) => b.collapsed).map((b) => b.key));
 
   /* ---------- helpers ---------- */
 
@@ -249,6 +288,8 @@
     flash: new Set(),       // keys that just saved (animation)
     run: null,
     running: false,
+    collapsed: DEFAULT_COLLAPSED(),   // display box keys currently minimized
+    innerOpen: new Set(),             // ids of nested boxes the user opened
     status: '',
     error: '',
     contextNote: '',
@@ -316,17 +357,29 @@
     </section>
 
     <section class="bpos__generate" aria-label="Generate positioning">
-      <button type="button" class="bpos__btn bpos__btn--lg" data-el="generate" disabled>Generate Positioning</button>
+      <div class="bpos__gen-row">
+        <button type="button" class="bpos__btn bpos__btn--lg" data-el="generate" disabled>Generate Positioning</button>
+        <button type="button" class="bpos__btn bpos__btn--lg" data-el="pdf-top" disabled hidden title="Generate positioning first">Create Positioning PDF</button>
+      </div>
       <p class="bpos__hint" data-el="hint" aria-live="polite"></p>
       <p class="bpos__status" data-el="status" aria-live="polite"></p>
       <p class="bpos__error" data-el="error" role="alert" hidden></p>
     </section>
 
-    <section class="bpos__grid" aria-label="Positioning results">
-      ${BOXES.map((b) => `
-        <article class="bpos__box">
-          <h2><span class="bpos__stage">${b.stage}</span>${b.title}</h2>
-          <div class="bpos__box-body is-placeholder" data-box="${b.key}">No Data Collected</div>
+    <section class="bpos__grid" data-el="results" aria-label="Positioning results">
+      ${DISPLAY_BOXES.map((b) => `
+        <article class="bpos__box${b.collapsed ? ' is-collapsed' : ''}" data-box-wrap="${b.key}">
+          <h2>
+            <span class="bpos__stage">${b.stage}</span>
+            <span class="bpos__box-title">${b.title}</span>
+            <button type="button" class="bpos__collapse" data-collapse="${b.key}"
+              aria-expanded="${b.collapsed ? 'false' : 'true'}" aria-controls="bpos-box-${b.key}"
+              title="${b.collapsed ? 'Maximize' : 'Minimize'}"
+              aria-label="${b.collapsed ? 'Maximize' : 'Minimize'} ${b.title}">
+              <span class="bpos__collapse-min" aria-hidden="true">&#8722;</span><span class="bpos__collapse-max" aria-hidden="true">+</span>
+            </button>
+          </h2>
+          <div class="bpos__box-body is-placeholder" id="bpos-box-${b.key}" data-box="${b.key}">No Data Collected</div>
         </article>`).join('')}
     </section>
 
@@ -748,29 +801,80 @@
     });
   }
 
+  /* ---------- minimize / maximize ---------- */
+
+  function paintCollapse(key) {
+    const wrap = q(`[data-box-wrap="${key}"]`);
+    if (!wrap) return;
+    const open = !state.collapsed.has(key);
+    const box = DISPLAY_BOXES.find((b) => b.key === key);
+    wrap.classList.toggle('is-collapsed', !open);
+    const btn = wrap.querySelector('[data-collapse]');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.title = open ? 'Minimize' : 'Maximize';
+    btn.setAttribute('aria-label', `${open ? 'Minimize' : 'Maximize'} ${box ? box.title : 'box'}`);
+  }
+
+  function toggleBox(key) {
+    if (state.collapsed.has(key)) state.collapsed.delete(key);
+    else state.collapsed.add(key);
+    paintCollapse(key);
+  }
+
+  // Nested boxes live inside a result box's HTML, so they are re-rendered on
+  // every paint; `state.innerOpen` is what survives that.
+  function toggleInner(id, wrap) {
+    const open = !state.innerOpen.has(id);
+    if (open) state.innerOpen.add(id);
+    else state.innerOpen.delete(id);
+    wrap.classList.toggle('is-open', open);
+    const btn = wrap.querySelector('[data-inner]');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.title = open ? 'Minimize' : 'Maximize';
+  }
+
+  function handleResultsClick(e) {
+    const boxBtn = e.target.closest('button[data-collapse]');
+    if (boxBtn) { toggleBox(boxBtn.dataset.collapse); return; }
+    const innerBtn = e.target.closest('button[data-inner]');
+    if (innerBtn) toggleInner(innerBtn.dataset.inner, innerBtn.closest('[data-inner-wrap]'));
+  }
+
   function paintRun() {
     if (!mounted) return;
     const run = state.run;
-    BOXES.forEach(({ key }) => {
-      const b = q(`[data-box="${key}"]`);
-      const data = run && run.stages[key];
-      if (data) {
+    DISPLAY_BOXES.forEach((box) => {
+      const b = q(`[data-box="${box.key}"]`);
+      if (!b) return;
+      const ready = !!run && box.needs.some((k) => run.stages[k]);
+      if (ready) {
         b.className = 'bpos__box-body';
-        b.innerHTML = RENDER[key](data, run);
+        b.innerHTML = RENDER[box.key](box.pick(run.stages), run);
       } else if (state.running) {
-        setBoxesLoading([key]);
+        setBoxesLoading([box.key]);
       } else {
-        setBoxesPlaceholder([key], run ? 'Not reached — run again to complete this stage.' : 'No Data Collected');
+        setBoxesPlaceholder([box.key], run ? 'Not reached — run again to complete this stage.' : 'No Data Collected');
       }
+      paintCollapse(box.key);
     });
     el('status').textContent = state.status;
     const err = el('error');
     err.textContent = state.error;
     err.hidden = !state.error;
-    const pdf = el('pdf');
-    const complete = !!(run && run.complete);
-    pdf.disabled = !complete;
-    pdf.title = complete ? '' : 'Generate positioning first';
+    paintPdfButtons();
+  }
+
+  // Both PDF buttons do the same thing; the top one only exists once there are
+  // results on the page, so it can be reached without scrolling to the bottom.
+  function paintPdfButtons() {
+    if (!mounted) return;
+    const complete = !!(state.run && state.run.complete);
+    const top = el('pdf-top');
+    top.hidden = !state.run;
+    [el('pdf'), top].forEach((btn) => {
+      btn.disabled = !complete;
+      btn.title = complete ? '' : 'Generate positioning first';
+    });
   }
 
   async function handleGenerate() {
@@ -782,6 +886,8 @@
     state.running = true;
     state.error = '';
     state.status = 'Getting ready…';
+    state.collapsed = DEFAULT_COLLAPSED();
+    state.innerOpen = new Set();
     state.run = {
       input: { ...s, companyName: '', competitorName: '' },
       answers: answersFor(s),
@@ -819,7 +925,7 @@
       await readStream(res, {
         status: (d) => setStatus(d.message || ''),
         stage: (d) => {
-          if (!d || !RENDER[d.key]) return;
+          if (!d || !BOXES.some((b) => b.key === d.key)) return;
           state.run.stages[d.key] = d.data;
           if (d.key === 'audit') {
             state.run.input.companyName = d.data.company_name || '';
@@ -892,7 +998,108 @@
 
   const chip = (text, tone = '') => `<span class="bpos__chip ${tone ? `is-${tone}` : ''}">${esc(text)}</span>`;
 
+  /* A nested minimize/maximize box inside a result box. Minimized by default —
+     `state.innerOpen` holds the ones the user has opened this run. */
+  function innerBox(id, title, body) {
+    const open = state.innerOpen.has(id);
+    return `
+      <div class="bpos__inner${open ? ' is-open' : ''}" data-inner-wrap="${id}">
+        <button type="button" class="bpos__inner-head" data-inner="${id}"
+          aria-expanded="${open ? 'true' : 'false'}" aria-controls="bpos-inner-${id}"
+          title="${open ? 'Minimize' : 'Maximize'}">
+          <span class="bpos__inner-title">${esc(title)}</span>
+          <span class="bpos__inner-icon" aria-hidden="true"></span>
+        </button>
+        <div class="bpos__inner-body" id="bpos-inner-${id}">${body}</div>
+      </div>`;
+  }
+
+  /* ---------- pairing value rows with differentiators ----------
+     Stage 3 rows name a feature; stage 2 rows name an attribute. Neither
+     carries an id, so they are paired on wording: an outright containment wins,
+     otherwise the share of meaningful words they have in common. Rows that
+     match nothing well enough end up in "Additional Values & Benefits". */
+
+  const MATCH_STOP = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'for', 'with', 'without', 'into',
+    'to', 'of', 'in', 'on', 'at', 'by', 'from', 'as', 'that', 'this', 'these', 'those', 'it', 'its',
+    'is', 'are', 'was', 'be', 'been', 'being', 'you', 'your', 'our', 'their', 'them', 'they', 'we',
+    'can', 'not', 'all', 'any', 'more', 'less', 'than', 'per', 'via', 'each', 'own', 'one', 'also',
+    'has', 'have', 'had', 'get', 'gets', 'lets', 'let', 'so', 'they', 'what', 'which', 'when']);
+
+  const stem = (w) => w.replace(/ies$/, 'y').replace(/(ses|xes|zes|ches|shes)$/, (m) => m.slice(0, -2))
+    .replace(/([^s])s$/, '$1');
+
+  function matchTokens(text) {
+    return new Set(norm(text).split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 2 && !MATCH_STOP.has(w))
+      .map(stem));
+  }
+
+  function tokenScore(a, b) {
+    if (!a.size || !b.size) return 0;
+    let hits = 0;
+    a.forEach((w) => {
+      if (b.has(w)) { hits += 1; return; }
+      for (const x of b) {
+        if ((w.length >= 5 && x.startsWith(w)) || (x.length >= 5 && w.startsWith(x))) { hits += 0.6; return; }
+      }
+    });
+    return hits / Math.min(a.size, b.size);
+  }
+
+  function phraseScore(aText, bText) {
+    const a = norm(aText);
+    const b = norm(bText);
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    if (a.length >= 6 && b.includes(a)) return 0.95;
+    if (b.length >= 6 && a.includes(b)) return 0.95;
+    return tokenScore(matchTokens(a), matchTokens(b));
+  }
+
+  const MATCH_FLOOR = 0.34;
+
+  function pairValueRows(differentiators, rows) {
+    const byDiff = differentiators.map(() => []);
+    const extra = [];
+    rows.forEach((row) => {
+      let bestIdx = -1;
+      let best = 0;
+      differentiators.forEach((d, i) => {
+        const head = phraseScore(row.feature, d.attribute);
+        const wide = phraseScore(
+          [row.feature, row.capability, row.benefit].filter(Boolean).join(' '),
+          [d.attribute, d.evidence].filter(Boolean).join(' ')
+        );
+        const score = Math.max(head, wide * 0.85);
+        if (score > best) { best = score; bestIdx = i; }
+      });
+      if (bestIdx >= 0 && best >= MATCH_FLOOR) byDiff[bestIdx].push(row);
+      else extra.push(row);
+    });
+    return { byDiff, extra };
+  }
+
+  const ladderRow = (v) => `
+    <div class="bpos__ladder">
+      <p><span class="bpos__rung">Feature</span>${esc(v.feature)}</p>
+      <p><span class="bpos__rung">Lets them</span>${esc(v.capability)}</p>
+      <p><span class="bpos__rung">So they get</span>${esc(v.benefit)}</p>
+      <p><span class="bpos__rung">Matters because</span>${esc(v.priority)}</p>
+    </div>`;
+
   const RENDER = {
+    /* Stage 5 still produces this; on screen it leads the results instead of
+       closing the Market Category box. The PDF keeps it where it was. */
+    draft(d) {
+      const summary = d.positioning_summary
+        ? `<p class="bpos__summary">${esc(d.positioning_summary)}</p>` : '';
+      const validate = (d.next_questions || []).length
+        ? `<p class="bpos__label">What to Validate With Real Buyers</p>${list(d.next_questions)}` : '';
+      if (!summary && !validate) return '<p class="bpos__empty">No positioning statement returned.</p>';
+      return summary + validate;
+    },
+
     audit(d) {
       const cp = d.company_profile || {};
       const xp = d.competitor_profile || {};
@@ -929,34 +1136,44 @@
         </div>`).join('');
     },
 
-    differentiators(d) {
+    /* Stages 2 and 3 in one box: the value themes read first, then each
+       differentiator with its own value rows folded away underneath. The PDF
+       still prints the two stages separately. */
+    differentiators(d, run) {
+      const value = (run && run.stages && run.stages.value) || {};
+      const items = d.differentiators || [];
+      const rows = value.value_map || [];
+
+      const themes = (value.value_themes || []).length ? `
+        <p class="bpos__label">Value themes</p>
+        <div class="bpos__themes">${value.value_themes.map((t) =>
+          `<div class="bpos__theme"><strong>${esc(t.theme)}</strong><span>${esc(t.summary)}</span></div>`).join('')}</div>` : '';
+
       const warn = d.differentiation_warning
         ? `<p class="bpos__warn"><strong>Weak differentiation.</strong> ${esc(d.differentiation_warning)}</p>` : '';
-      const items = d.differentiators || [];
-      const body = items.length ? items.map((x) => `
+
+      const { byDiff, extra } = pairValueRows(items, rows);
+
+      const stageMissing = !(run && run.stages && run.stages.differentiators)
+        ? '<p class="bpos__empty">Stage 2 didn’t finish — run again for the differentiators.</p>' : '';
+
+      const body = items.length ? items.map((x, i) => `
         <div class="bpos__item">
           <p class="bpos__item-head"><strong>${esc(x.attribute)}</strong> ${chip(SOURCE_LABELS[x.source] || x.source, x.source === 'assumption' ? 'warn' : '')}</p>
           ${(x.versus || []).length ? `<p class="bpos__muted">vs. ${esc(x.versus.join(', '))}</p>` : ''}
           ${x.evidence ? `<p>${esc(x.evidence)}</p>` : ''}
-        </div>`).join('') : '<p class="bpos__empty">No clear differentiators found.</p>';
+          ${byDiff[i].length ? innerBox(`vb-${i}`, 'Value & Benefits', byDiff[i].map(ladderRow).join('')) : ''}
+        </div>`).join('')
+        : (stageMissing || '<p class="bpos__empty">No clear differentiators found.</p>');
+
       const roadmap = (d.roadmap_not_counted || []).length
         ? `<p class="bpos__label">Not counted (not live yet)</p>${list(d.roadmap_not_counted, 'is-muted')}` : '';
-      return warn + body + roadmap;
-    },
 
-    value(d) {
-      const rows = d.value_map || [];
-      const ladder = rows.length ? rows.map((v) => `
-        <div class="bpos__ladder">
-          <p><span class="bpos__rung">Feature</span>${esc(v.feature)}</p>
-          <p><span class="bpos__rung">Lets them</span>${esc(v.capability)}</p>
-          <p><span class="bpos__rung">So they get</span>${esc(v.benefit)}</p>
-          <p><span class="bpos__rung">Matters because</span>${esc(v.priority)}</p>
-        </div>`).join('') : '<p class="bpos__empty">No value map returned.</p>';
-      const themes = (d.value_themes || []).length ? `
-        <p class="bpos__label">Value themes</p>
-        ${d.value_themes.map((t) => `<div class="bpos__theme"><strong>${esc(t.theme)}</strong><span>${esc(t.summary)}</span></div>`).join('')}` : '';
-      return themes + ladder;
+      const leftover = extra.length
+        ? innerBox('vb-extra', 'Additional Values & Benefits', extra.map(ladderRow).join('')) : '';
+
+      const themesSection = themes ? `<div class="bpos__merge-top">${themes}</div>` : '';
+      return themesSection + warn + body + roadmap + leftover;
     },
 
     champion(d) {
@@ -969,7 +1186,7 @@
         <p class="bpos__label">Pains (most painful first)</p>
         ${(c.pains || []).length ? `<ol class="bpos__list">${c.pains.map((p) => `<li>${esc(p)}</li>`).join('')}</ol>` : '<p class="bpos__empty">None found.</p>'}
         <p class="bpos__label">Tasks it helps with</p>${list(c.tasks)}
-        <p class="bpos__label">Tasks it doesn’t touch</p>${list(c.tasks_excluded, 'is-struck')}`;
+        <p class="bpos__label">Tasks it doesn’t touch</p>${list(c.tasks_excluded)}`;
     },
 
     category(d) {
@@ -987,9 +1204,9 @@
       return `
         ${d.first_glance_comparison ? `<p class="bpos__muted">${esc(d.first_glance_comparison)}</p>` : ''}
         <div class="bpos__options">${options || '<p class="bpos__empty">No options returned.</p>'}</div>
-        ${rec.name ? `<p class="bpos__label">Recommendation</p><p><strong>${esc(rec.name)}</strong> — ${esc(rec.rationale)}</p>` : ''}
-        ${d.positioning_summary ? `<p class="bpos__label">Positioning so far</p><p class="bpos__summary">${esc(d.positioning_summary)}</p>` : ''}
-        ${(d.next_questions || []).length ? `<p class="bpos__label">Check with real buyers</p>${list(d.next_questions)}` : ''}`;
+        ${rec.name ? `<p class="bpos__label">Recommendation</p><p><strong>${esc(rec.name)}</strong> — ${esc(rec.rationale)}</p>` : ''}`;
+      // positioning_summary and next_questions are rendered by the Draft box
+      // above; they stay in the data untouched for the PDF.
     }
   };
 
@@ -998,21 +1215,21 @@
   async function handlePdf() {
     const run = state.run;
     if (!run || !run.complete) return;
-    const btn = el('pdf');
-    btn.disabled = true;
-    btn.textContent = 'Preparing PDF…';
+    const btns = [el('pdf'), el('pdf-top')];
+    btns.forEach((b) => { b.disabled = true; b.textContent = 'Preparing PDF…'; });
     try {
       await Mktforge.loadScript(JSPDF_SRC);
       await Mktforge.loadScript(PDF_SRC);
       const questions = QUESTIONS.map((x) => ({ id: x.id, text: questionText(x, run.input) }));
+      // BOXES, not DISPLAY_BOXES: the PDF keeps the original six-stage layout.
       await window.MktforgePositioningPdf.build(run, { questions, boxes: BOXES, sourceLabels: SOURCE_LABELS });
     } catch (err) {
       console.error('[Build Positioning] PDF failed', err);
       if (mounted) { state.error = 'Could not generate the PDF. Please try again.'; paintRun(); }
     } finally {
       if (mounted) {
-        btn.textContent = 'Create Positioning PDF';
-        btn.disabled = !(state.run && state.run.complete);
+        btns.forEach((b) => { b.textContent = 'Create Positioning PDF'; });
+        paintPdfButtons();
       }
     }
   }
@@ -1162,6 +1379,8 @@
       el('save-all').addEventListener('click', handleSaveAll);
       el('generate').addEventListener('click', handleGenerate);
       el('pdf').addEventListener('click', handlePdf);
+      el('pdf-top').addEventListener('click', handlePdf);
+      el('results').addEventListener('click', handleResultsClick);
 
       if (state.answers) renderQa(); else loadAnswers();
       paintRun();

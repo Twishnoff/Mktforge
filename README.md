@@ -468,14 +468,47 @@ research.
 
 ### Generate Positioning
 
-Streams from the Worker (`/api/positioning`, Server-Sent Events) into six
-boxes as each stage finishes. Four model calls: stage 0 (with web search),
+Streams from the Worker (`/api/positioning`, Server-Sent Events), filling each
+box as its stage finishes. Four model calls: stage 0 (with web search),
 stages 1–2 (with web search), stages 3–4, stage 5. Takes about 1–3 minutes.
 Results and an in-flight run survive switching modules; the nav light shows
-progress. **Create Positioning PDF** downloads `Build Positioning N.pdf` and
-saves it to My Company. The PDF starts with the positioning summary and ends
-with the answers the run used, all as real text, so the next module (stages
-6–9) can read it.
+progress. Once a run starts, a second **Create Positioning PDF** button
+appears next to **Generate Positioning** so the PDF can be made without
+scrolling to the bottom; the pair stays centred and both buttons do the same
+thing.
+
+### How results are laid out on screen
+
+The screen and the PDF are deliberately different. The PDF is the full
+record; the screen is organised for reading. `BOXES` in the module is the
+stage list the Worker streams and the order the PDF prints — six stages, the
+original titles. `DISPLAY_BOXES` is the on-screen layout only, and nothing in
+it changes the data or the PDF:
+
+| On screen | Comes from |
+|---|---|
+| **Draft — Initial Positioning Statement** | stage 5's `positioning_summary` and `next_questions`, which the PDF still prints under Market Category. "Check with real buyers" reads **What to Validate With Real Buyers** here. |
+| **Stage 0 — Input Audit** | stage 0. Arrives minimized. |
+| **Stage 1 — Competitive Alternatives** | stage 1. |
+| **Stage 2 & 3 — Differentiators and Value** | stages 2 and 3 merged: the value themes read two-up at the top, then each differentiator, with its own feature/lets them/so they get rows folded into a minimized **Value & Benefits** box underneath. Rows that match no differentiator collect in **Additional Values & Benefits** at the bottom of the box. |
+| **Stage 4 — Champion & Situation** | stage 4. "Tasks it doesn't touch" is plain text, not struck through. |
+| **Stage 5 — Market Category** | stage 5, stopping after the recommendation. |
+
+One full-width column, the same width as the "Fill in the blanks" card. Every
+box minimizes to its title line from the button in its top-right corner.
+Minimize state resets on each run: Input Audit minimized, the rest open, the
+nested value boxes closed.
+
+Stage 3 rows carry no id, so they are paired with stage 2 differentiators on
+wording (`pairValueRows`): an outright containment wins, otherwise the share
+of meaningful words the feature and the attribute have in common, and
+anything below `MATCH_FLOOR` goes to Additional Values & Benefits.
+
+**Create Positioning PDF** downloads `Build Positioning N.pdf` and saves it to
+My Company. The PDF starts with the positioning summary and ends with the
+answers the run used, all as real text, so the next module (stages 6–9) can
+read it. Its layout is the original six-stage one and is not affected by any
+of the above.
 
 ### Config and Worker
 

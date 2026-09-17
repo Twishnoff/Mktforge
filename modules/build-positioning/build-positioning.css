@@ -303,14 +303,26 @@
   text-align: center;
 }
 
+/* Generate Positioning sits alone and centred until there are results; the
+   second Create Positioning PDF button then joins it and the pair stays
+   centred together. */
+.bpos__gen-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
 .bpos__hint, .bpos__status { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
 .bpos__hint:empty, .bpos__status:empty { display: none; }
 
 /* --- result boxes --- */
 
+/* One full-width column: the same width as the "Fill in the blanks" card. */
 .bpos__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+  grid-template-columns: 1fr;
   gap: 18px;
 }
 
@@ -335,6 +347,40 @@
   font-size: 18px;
   font-weight: 600;
 }
+
+.bpos__box-title { min-width: 0; }
+
+/* --- minimize / maximize --- */
+
+.bpos__collapse {
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--bpos-line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bpos__collapse:hover { border-color: var(--accent); color: var(--accent); }
+.bpos__collapse:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.bpos__box:not(.is-collapsed) > h2 > .bpos__collapse .bpos__collapse-max { display: none; }
+.bpos__box.is-collapsed > h2 > .bpos__collapse .bpos__collapse-min { display: none; }
+
+/* Minimized: the title line only. */
+.bpos__box.is-collapsed > h2 { border-bottom: none; }
+.bpos__box.is-collapsed > .bpos__box-body { display: none; }
 
 .bpos__stage {
   font-family: var(--font-mono);
@@ -423,7 +469,6 @@
 
 .bpos__list { margin: 0 0 4px; padding-left: 20px; }
 .bpos__list li { margin: 2px 0; }
-.bpos__list.is-struck li { text-decoration: line-through; text-decoration-color: var(--muted); color: var(--ink-soft); }
 .bpos__list.is-muted li { color: var(--ink-soft); }
 
 .bpos__item + .bpos__item { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--paper-dim); }
@@ -474,6 +519,71 @@
 
 .bpos__theme { display: grid; gap: 1px; margin-bottom: 6px; }
 
+/* Value themes read two-up at the top of the merged Stage 2 & 3 box. */
+.bpos__themes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 22px;
+}
+
+.bpos__themes .bpos__theme { margin-bottom: 0; }
+
+.bpos__merge-top {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--paper-dim);
+}
+
+/* --- nested minimize/maximize box (Value & Benefits) --- */
+
+.bpos__inner {
+  margin-top: 10px;
+  border: 1px solid var(--bpos-line);
+  border-radius: 6px;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.bpos__inner-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 12px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.bpos__inner-head:hover { color: var(--accent); }
+.bpos__inner-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.bpos__inner-title { min-width: 0; }
+
+.bpos__inner-icon {
+  flex: none;
+  margin-left: auto;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.bpos__inner-icon::before { content: '+'; }
+.bpos__inner.is-open .bpos__inner-icon::before { content: '\2212'; }
+
+.bpos__inner-body {
+  display: none;
+  padding: 0 12px 10px;
+}
+
+.bpos__inner.is-open .bpos__inner-body { display: block; }
+.bpos__inner.is-open .bpos__inner-head { border-bottom: 1px solid var(--paper-dim); }
+.bpos__inner .bpos__ladder { background: var(--bpos-surface); }
+
 .bpos__options { display: grid; gap: 10px; margin-top: 8px; }
 
 .bpos__option {
@@ -502,7 +612,7 @@
 
 @media (max-width: 900px) {
   .bpos { padding: 28px 18px 56px; }
-  .bpos__grid { grid-template-columns: 1fr; }
+  .bpos__themes { grid-template-columns: 1fr; }
   .bpos__qa, .bpos__qa tbody, .bpos__qa tr, .bpos__qa th, .bpos__qa td { display: block; width: 100%; }
   .bpos__qa thead, .bpos__qa colgroup { display: none; }
   .bpos__row > th, .bpos__row > td { border-bottom: none; padding: 6px 0; }
