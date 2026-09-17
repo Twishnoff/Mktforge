@@ -79,16 +79,29 @@ Mktforge.reportActivity('your-module', 'idle');     // run finished successfully
 Mktforge.reportActivity('your-module', 'error');    // run finished with an error
 ```
 
-If you leave a module while it's running, a slowly blinking yellow dot appears
-next to it in the nav. It hides while you're on that module and comes back
-whenever you leave again before the run ends. If the run finishes while
-you're elsewhere, the dot turns solid green (or solid red if the run ended
-in an error) until you open the module. A run
-that starts and finishes while you stay on the module shows no dot. Find My
-Customer, Persona Builder, Battle Card Generator and Marketing Opportunities
-all report their runs. When the nav is minimized, the dot sits on the icon
-and the hover label says "Running…", "Finished — results ready" or "Stopped
-with an error".
+A running module gets a slowly blinking yellow dot next to it in the nav,
+whether or not you're looking at that module. When the run finishes the dot
+goes solid green, or solid red if it ended in an error, meaning "there's a
+result here you haven't looked at". That clears when you open the module —
+or, if you're already on it, on your next click, key press or scroll, since
+by then you've seen it (`ackActive` in `app.js`, whose listeners only exist
+while there's a light to clear). A finished light on a module you're *not*
+on still waits for you to open it; clicking around elsewhere won't clear it.
+Find My Customer, Persona Builder, Battle Card Generator, Marketing
+Opportunities and Build Positioning all report their runs. When the nav is
+minimized, the dot sits on the icon and the hover label says "Running…",
+"Finished — results ready" or "Stopped with an error".
+
+The browser tab carries the same light for the whole app, summed over every
+module: yellow while anything is running, then green once everything has
+finished (red if any of it failed), and back to the plain icon once every
+finished result has been seen. Anything still running wins over a finished
+result, so the tab only goes green when nothing is left in flight. It's drawn
+by swapping the `<link rel="icon">` for a data-URI SVG in which the mark's
+green square becomes the status dot — a corner badge is unreadable at the
+16px a tab actually gets. No fetch and no canvas, so it works off disk too;
+if you edit `assets/img/favicon.svg`, update `litFavicon` in `app.js` to
+match.
 
 ## Deploying
 
@@ -466,10 +479,11 @@ saving collapses the row again. `fitAnswer` does the measuring, and
 
 ### Nav light
 
-The dot next to Build Positioning (shown while you're on another module)
-stays yellow while a positioning run or **any** Draft Answer is still in
-flight. When the last one finishes it turns green, or red if any of them
-failed, until you open the module.
+The dot next to Build Positioning stays yellow while a positioning run or
+**any** Draft Answer is still in flight — including while you're on the
+module. When the last one finishes it turns green, or red if any of them
+failed, and clears when you open the module or, if you're already there, on
+your next click, key press or scroll. See the shell's light rules above.
 
 ### Saved materials
 

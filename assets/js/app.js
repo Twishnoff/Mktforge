@@ -20,9 +20,13 @@
      Mktforge.reportActivity('module-id', 'running')   when a run starts
      Mktforge.reportActivity('module-id', 'idle')      when it finishes successfully
      Mktforge.reportActivity('module-id', 'error')     when it finishes with an error
-   The shell shows a slow-blinking yellow dot next to a module that is running
-   while you're somewhere else, and a solid green (or red, for an error) one
-   once it has finished while you were away. All clear when you open that module.
+   The shell shows a slow-blinking yellow dot next to a module that is running,
+   and a solid green (or red, for an error) one once it has finished — on the
+   module you're looking at as well as the ones you aren't. A finished light
+   clears when you open that module, or, if you're already on it, on your next
+   click, key press or scroll. The browser tab carries the same light on its
+   icon, summed over every module: yellow while anything is running, then green
+   (red if something failed) until you've seen the results.
 
    Rules that keep a future port to a framework cheap:
      - a module only ever touches the container element it is handed
@@ -123,11 +127,13 @@ window.Mktforge = (() => {
   }
 
   /* ---------- Background-run lights ----------
-     Only ever shown next to a module you are NOT looking at:
+     Shown next to every module, including the one you're looking at:
        running                  -> blinking yellow
-       finished OK, unseen      -> solid green (until you open it)
-       finished with an error   -> solid red (until you open it)
-     A run that starts and ends while you stay on the module shows nothing. */
+       finished OK, unseen      -> solid green
+       finished with an error   -> solid red
+     A finished light means "there's a result here you haven't looked at". It
+     clears when you open that module — or, when you're already on it, on your
+     next click, key press or scroll, since by then you've seen it. */
 
   function reportActivity(id, status) {
     const a = activity.get(id) || { running: false, unseen: false, failed: false };
@@ -138,10 +144,39 @@ window.Mktforge = (() => {
     } else if (a.running) {
       a.running = false;
       a.failed = status === 'error';
-      a.unseen = id !== activeId;     // finished while you were elsewhere
+      a.unseen = true;                // wherever you are; see ackActive() below
     }
     activity.set(id, a);
     renderLights();
+  }
+
+  /* The finished light on the module you're on clears itself on your next
+     click, key press or scroll — the same "seen it" signal that opening a
+     module gives for a run that finished while you were elsewhere. The
+     listeners only exist while there is such a light to clear. */
+
+  const ACK_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
+  let ackOn = false;
+
+  function ackActive() {
+    const a = activity.get(activeId);
+    if (!a || !a.unseen) return;
+    a.unseen = false;
+    renderLights();                   // detaches these listeners again
+  }
+
+  function watchAck(on) {
+    if (on === ackOn) return;
+    ackOn = on;
+    ACK_EVENTS.forEach(type => {
+      if (on) window.addEventListener(type, ackActive, { passive: true, capture: true });
+      else window.removeEventListener(type, ackActive, { capture: true });
+    });
+    // `scroll` doesn't bubble, so the display field needs its own listener.
+    const display = document.getElementById('display');
+    if (!display) return;
+    if (on) display.addEventListener('scroll', ackActive, { passive: true });
+    else display.removeEventListener('scroll', ackActive);
   }
 
   function renderLights() {
@@ -150,7 +185,7 @@ window.Mktforge = (() => {
       const mod = modules.find(m => m.id === id);
       const a = activity.get(id);
       let light = '';
-      if (a && id !== activeId) {
+      if (a) {
         light = a.running ? 'running' : !a.unseen ? '' : a.failed ? 'error' : 'done';
       }
       const status = btn.querySelector('.nav__status');
@@ -165,6 +200,58 @@ window.Mktforge = (() => {
       text.textContent = words ? ` (${words})` : '';
       btn.dataset.label = mod ? (words ? `${mod.label} · ${words}` : mod.label) : btn.dataset.label;
     });
+    const here = activity.get(activeId);
+    watchAck(!!(here && here.unseen));
+    renderTabLight();
+  }
+
+  /* ---------- Tab icon light ----------
+     One light for the whole app, on the browser tab: yellow while any module
+     is running, then green once everything has finished (red if a run failed),
+     until every finished result has been seen.
+
+     The mark's own green square becomes the status dot rather than carrying a
+     little badge in the corner — a corner badge is barely readable at the 16px
+     a tab actually gets, and a green badge on the green square especially so.
+     Drawn as a data-URI SVG, so it needs no fetch and no canvas and works off
+     disk too. Keep the squares in step with assets/img/favicon.svg. */
+
+  const FAVICON_HREF = 'assets/img/favicon.svg';
+  const TAB_COLORS = { running: '#E3A21A', done: '#2E9B57', error: '#C8412A' };
+  let tabLight = null;
+
+  function litFavicon(color) {
+    const square = (x, y) => `<rect x="${x}" y="${y}" width="116" height="116" rx="12" fill="#20242B"/>`;
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 -30 312 312">'
+      + '<rect x="-30" y="-30" width="312" height="312" rx="48" fill="#F6F1E6"/>'
+      + square(0, 0) + square(136, 0) + square(0, 136)
+      + `<circle cx="194" cy="194" r="58" fill="${color}"/></svg>`;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  }
+
+  function tabState() {
+    let running = false;
+    let unseen = false;
+    let failed = false;
+    activity.forEach(a => {
+      if (a.running) running = true;
+      if (a.unseen) { unseen = true; if (a.failed) failed = true; }
+    });
+    if (running) return 'running';        // anything still going wins
+    return unseen ? (failed ? 'error' : 'done') : '';
+  }
+
+  function renderTabLight() {
+    const light = tabState();
+    if (light === tabLight) return;
+    tabLight = light;
+    // Replacing the element is the reliable way to get a tab icon to repaint.
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    link.type = 'image/svg+xml';
+    link.href = light ? litFavicon(TAB_COLORS[light]) : FAVICON_HREF;
+    document.querySelectorAll('link[rel="icon"]').forEach(n => n.remove());
+    document.head.appendChild(link);
   }
 
   /* ---------- Nav minimize / restore ---------- */

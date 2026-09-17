@@ -543,7 +543,9 @@ body[data-nav="collapsed"] .nav__minimize-icon {
   white-space: nowrap;
 }
 
-/* Icon-only nav: the dot sits on the icon's top-right corner */
+/* Icon-only nav: the dot sits on the icon's top-right corner. Its ring picks
+   up whatever the button sits on, including the active module's tint — the
+   light now shows on the module you're looking at too. */
 body[data-nav="collapsed"] .nav__status {
   position: absolute;
   top: 6px;
@@ -552,6 +554,10 @@ body[data-nav="collapsed"] .nav__status {
   border: 2px solid var(--desk);
   width: 11px;
   height: 11px;
+}
+
+body[data-nav="collapsed"] .nav__button[aria-current="page"] .nav__status {
+  border-color: var(--accent-tint);
 }
 
 @media (max-width: 860px) {
@@ -563,5 +569,9 @@ body[data-nav="collapsed"] .nav__status {
     border: 2px solid var(--desk);
     width: 11px;
     height: 11px;
+  }
+
+  body[data-nav="expanded"] .nav__button[aria-current="page"] .nav__status {
+    border-color: var(--accent-tint);
   }
 }
