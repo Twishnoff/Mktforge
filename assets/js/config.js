@@ -40,9 +40,9 @@ window.MKTFORGE_CONFIG = {
     // Leave false until the Worker verifies Firebase ID tokens and lists
     // Authorization in Access-Control-Allow-Headers — see README.
     SEND_AUTH_TOKEN: false,
-    // Send Imported/Generated Materials with each request. Off until this
-    // Worker reads them (its code isn't in the repo yet) — see README.
-    USE_SAVED_MATERIALS: false
+    // Imported/Generated Materials go with each request — the Worker reads
+    // them in competitors.js (Competitors To Watch, step 1). See README.
+    USE_SAVED_MATERIALS: true
   },
 
   personaBuilder: {
