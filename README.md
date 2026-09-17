@@ -449,6 +449,15 @@ Switching the Primary Champion or Closest Competitor shows that selection's
 answers. Question wording lives twice — `QUESTIONS` in the module and
 `src/questions.js` in the Worker — keep the ids in step.
 
+A saved answer collapses back to the height an unanswered box starts at, so
+the table doesn't stretch as the answers get longer and editing a later
+question doesn't mean scrolling past the earlier ones. When an answer is
+longer than that, the box fades its last line and shows a **+** in its
+top-right corner to read the whole thing (**−** puts it back); a short answer
+that already fits gets no control. **Edit** always opens the full answer, and
+saving collapses the row again. `fitAnswer` does the measuring, and
+`state.expanded` holds the rows opened to read in full.
+
 ### Nav light
 
 The dot next to Build Positioning (shown while you're on another module)
@@ -489,7 +498,7 @@ it changes the data or the PDF:
 |---|---|
 | **Draft — Initial Positioning Statement** | stage 5's `positioning_summary` and `next_questions`, which the PDF still prints under Market Category. "Check with real buyers" reads **What to Validate With Real Buyers** here. |
 | **Stage 0 — Input Audit** | stage 0. Arrives minimized. |
-| **Stage 1 — Competitive Alternatives** | stage 1. |
+| **Stage 1 — Competitive Alternatives** | stage 1, with the status-quo alternatives listed ahead of the competitors (each group in the order the stage returned). Sorted on a copy, so the PDF keeps the stage's own order. |
 | **Stage 2 & 3 — Differentiators and Value** | stages 2 and 3 merged: the value themes read two-up at the top, then each differentiator, with its own feature/lets them/so they get rows folded into a minimized **Value & Benefits** box underneath. Rows that match no differentiator collect in **Additional Values & Benefits** at the bottom of the box. |
 | **Stage 4 — Champion & Situation** | stage 4. "Tasks it doesn't touch" is plain text, not struck through. |
 | **Stage 5 — Market Category** | stage 5, stopping after the recommendation. |

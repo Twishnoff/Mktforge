@@ -279,6 +279,7 @@
     answersError: '',
     drafts: {},             // unsaved text per key
     editing: new Set(),     // keys opened with Edit
+    expanded: new Set(),    // saved answers the user expanded to read in full
     drafting: new Set(),    // keys waiting on Draft Answer
     progress: {},           // key -> progress text while drafting
     rowErrors: {},          // key -> message
@@ -448,10 +449,15 @@
           ${qn.required ? '<span class="bpos__req">Required</span>' : ''}
         </th>
         <td class="bpos__a">
-          <textarea id="${id}" data-answer="${qn.id}" rows="3"
-            ${readOnly ? 'readonly' : ''} ${disabled ? 'disabled' : ''}
-            placeholder="${esc(mode === 'locked' ? lockText(qn) : drafting ? (state.progress[key] || 'Drafting an answer…') : 'Type your answer')}"
-            aria-invalid="${err ? 'true' : 'false'}">${esc(drafting ? '' : value)}</textarea>
+          <div class="bpos__a-box"${readOnly ? ` data-clamp="1" data-key="${esc(key)}"` : ''}>
+            <textarea id="${id}" data-answer="${qn.id}" rows="3"
+              ${readOnly ? 'readonly' : ''} ${disabled ? 'disabled' : ''}
+              placeholder="${esc(mode === 'locked' ? lockText(qn) : drafting ? (state.progress[key] || 'Drafting an answer…') : 'Type your answer')}"
+              aria-invalid="${err ? 'true' : 'false'}">${esc(drafting ? '' : value)}</textarea>
+            ${readOnly ? `<button type="button" class="bpos__expand" data-expand="${qn.id}"
+              aria-controls="${id}" aria-expanded="false" title="Show the full answer" aria-label="Show the full answer"
+              ><span class="bpos__expand-more" aria-hidden="true">+</span><span class="bpos__expand-less" aria-hidden="true">&#8722;</span></button>` : ''}
+          </div>
           <p class="bpos__row-error" ${err ? '' : 'hidden'}>${esc(err || '')}</p>
         </td>
         <td class="bpos__act"><div class="bpos__act-stack">${actions}</div></td>
@@ -481,7 +487,7 @@
             ${QUESTIONS.filter((x) => x.group === g.id).map((x) => rowHtml(x, s)).join('')}
           </tbody>`).join('')}
       </table>`;
-    box.querySelectorAll('textarea').forEach(autoGrow);
+    box.querySelectorAll('textarea').forEach(fitAnswer);
     state.flash.clear();
     updateSaveAll();
     updateGenerate();
@@ -502,7 +508,7 @@
     const next = tmp.firstElementChild;
     row.replaceWith(next);
     const ta = next.querySelector('textarea');
-    if (ta) autoGrow(ta);
+    if (ta) fitAnswer(ta);
     state.flash.clear();
     updateSaveAll();
     updateGenerate();
@@ -518,9 +524,52 @@
     });
   }
 
+  const ROW_MIN_H = 72;   // matches the textarea min-height in the stylesheet
+
   function autoGrow(ta) {
     ta.style.height = 'auto';
-    ta.style.height = `${Math.max(ta.scrollHeight + 2, 72)}px`;
+    ta.style.height = `${Math.max(ta.scrollHeight + 2, ROW_MIN_H)}px`;
+  }
+
+  /* A saved answer drops back to the height the empty box started at, so the
+     table stops growing as answers get longer and editing a later row doesn't
+     mean scrolling past the earlier ones. The expand control only appears when
+     there is more text than fits; `state.expanded` holds the rows opened to
+     read in full, and saving a row closes it again. */
+  function fitAnswer(ta) {
+    const box = ta.closest('.bpos__a-box');
+    if (!box || !box.dataset.clamp) { autoGrow(ta); return; }
+    const key = box.dataset.key;
+    // Clearing the inline height drops the box to the height it starts at
+    // (its rows="3" size), which is what clientHeight then reports; scrollHeight
+    // reports what the answer actually needs. Both get autoGrow's +2 so a
+    // collapsed box is the same height as one nobody has answered yet.
+    ta.style.height = '';
+    const base = ta.clientHeight + 2;
+    const full = ta.scrollHeight + 2;
+    const more = full > base + 2;
+    const open = more && state.expanded.has(key);
+    ta.style.height = `${open ? full : base}px`;
+    box.classList.toggle('has-more', more);
+    box.classList.toggle('is-expanded', open);
+    const btn = box.querySelector('[data-expand]');
+    if (btn) {
+      const label = open ? 'Collapse answer' : 'Show the full answer';
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+    }
+  }
+
+  function handleExpand(qn) {
+    const ta = q(`textarea[data-answer="${qn.id}"]`);
+    if (!ta) return;
+    const box = ta.closest('.bpos__a-box');
+    const key = box && box.dataset.key;
+    if (!key) return;
+    if (state.expanded.has(key)) state.expanded.delete(key);
+    else state.expanded.add(key);
+    fitAnswer(ta);
   }
 
   function openRowsWithText(s = sel()) {
@@ -557,6 +606,7 @@
       delete state.drafts[key];
       delete state.rowErrors[key];
       state.editing.delete(key);
+      state.expanded.delete(key);
       if (changes[key]) state.flash.add(key);
     });
   }
@@ -1126,7 +1176,10 @@
     },
 
     alternatives(d) {
-      const items = d.alternatives || [];
+      // Status quo first, competitors after, each group keeping the order the
+      // stage returned. A copy, so the PDF still prints the original order.
+      const items = [...(d.alternatives || [])]
+        .sort((a, b) => (a.type === 'status_quo' ? 0 : 1) - (b.type === 'status_quo' ? 0 : 1));
       if (!items.length) return '<p class="bpos__empty">No alternatives found.</p>';
       return items.map((a) => `
         <div class="bpos__item">
@@ -1314,18 +1367,19 @@
       if (p) p.hidden = true;
       ta.setAttribute('aria-invalid', 'false');
     }
-    autoGrow(ta);
+    fitAnswer(ta);
     updateGenerate();
   }
 
   function handleQaClick(e) {
-    const btn = e.target.closest('button[data-draft], button[data-edit], button[data-save]');
+    const btn = e.target.closest('button[data-draft], button[data-edit], button[data-save], button[data-expand]');
     if (!btn) return;
-    const id = btn.dataset.draft || btn.dataset.edit || btn.dataset.save;
+    const id = btn.dataset.draft || btn.dataset.edit || btn.dataset.save || btn.dataset.expand;
     const qn = QUESTIONS.find((x) => x.id === id);
     if (!qn) return;
     if (btn.dataset.draft) handleDraft(qn);
     else if (btn.dataset.edit) handleEdit(qn);
+    else if (btn.dataset.expand) handleExpand(qn);
     else handleSaveRow(qn);
   }
 
