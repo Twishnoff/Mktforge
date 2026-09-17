@@ -422,13 +422,19 @@ A three-column table: question, text box, buttons.
 | Row state | Box | Buttons |
 |---|---|---|
 | locked (no champion / competitor chosen yet) | disabled | Draft Answer (disabled) |
-| open (nothing saved) | editable | Draft Answer |
+| open (nothing saved) | editable | Draft Answer, with Save below it once the box has text |
 | saved | read-only | Edit |
 | editing (after Edit) | editable | Draft Answer above Save |
 
 - **Draft Answer** writes a first pass from the company site, web search and
   saved reports into the box, overwriting what's there, and ends it with a
   "Sources:" line. Anything unconfirmed starts with "Assumption:".
+- Any editable box with text in it has its own **Save** under **Draft
+  Answer** — typed, pasted or just drafted, saved before or not. It appears
+  and disappears as you type (`updateRowSave`, which flips the button rather
+  than re-rendering the row, so focus and the caret survive); whitespace
+  alone doesn't count as text. An editing row keeps its Save even when
+  emptied, because that is how a single answer is cleared.
 - A row's **Save** saves only that row. The **Save** at the bottom right saves
   every open or editing row that has text. Saving an emptied editing row
   deletes that answer and the row goes back to Draft Answer.

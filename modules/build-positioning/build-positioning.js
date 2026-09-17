@@ -34,7 +34,8 @@
 
    Row states
      locked   — needs a Primary Champion / Closest Competitor first
-     open     — no saved answer: editable box + [Draft Answer]
+     open     — no saved answer: editable box + [Draft Answer], with [Save]
+                below it as soon as the box has text
      saved    — read-only box + [Edit]
      editing  — editable box + [Draft Answer] stacked above [Save]
    The bottom Save saves every open or editing row that has text (and clears
@@ -427,12 +428,18 @@
     const disabled = mode === 'locked' || busy;
 
     const draftBtn = `<button type="button" class="bpos__row-btn" data-draft="${qn.id}" ${mode === 'locked' || busy ? 'disabled' : ''}>${drafting ? 'Drafting…' : 'Draft Answer'}</button>`;
+    const savingRow = key && state.rowSaving.has(key);
+    const saveBtn = (hidden) => `<button type="button" class="bpos__row-btn bpos__row-btn--solid" data-save="${qn.id}"${hidden ? ' hidden' : ''} ${busy ? 'disabled' : ''}>${savingRow ? 'Saving…' : 'Save'}</button>`;
     let actions;
     if (mode === 'saved') {
       actions = `<button type="button" class="bpos__row-btn bpos__row-btn--quiet" data-edit="${qn.id}" aria-label="Edit answer: ${esc(questionText(qn, s))}">Edit</button>`;
     } else if (mode === 'editing') {
-      const savingRow = state.rowSaving.has(key);
-      actions = `${draftBtn}<button type="button" class="bpos__row-btn bpos__row-btn--solid" data-save="${qn.id}" ${busy ? 'disabled' : ''}>${savingRow ? 'Saving…' : 'Save'}</button>`;
+      // Kept even when emptied: Save on a blank box is how one answer is cleared.
+      actions = `${draftBtn}${saveBtn(false)}`;
+    } else if (mode === 'open') {
+      // A row with nothing saved yet still needs its own Save as soon as there
+      // is something in the box — typed, pasted or just drafted.
+      actions = `${draftBtn}${saveBtn(!String(value).trim())}`;
     } else {
       actions = draftBtn;
     }
@@ -570,6 +577,18 @@
     if (state.expanded.has(key)) state.expanded.delete(key);
     else state.expanded.add(key);
     fitAnswer(ta);
+  }
+
+  /* Called on every keystroke, so it flips the button rather than re-rendering
+     the row (a re-render would drop focus and the caret). Editing rows keep
+     Save visible at all times. */
+  function updateRowSave(qn, key) {
+    if (!mounted) return;
+    const row = q(`tr[data-q="${qn.id}"]`);
+    if (!row) return;
+    const btn = row.querySelector('button[data-save]');
+    if (!btn || rowState(qn, sel()).mode !== 'open') return;
+    btn.hidden = !String(state.drafts[key] ?? '').trim();
   }
 
   function openRowsWithText(s = sel()) {
@@ -1368,6 +1387,7 @@
       ta.setAttribute('aria-invalid', 'false');
     }
     fitAnswer(ta);
+    updateRowSave(qn, key);
     updateGenerate();
   }
 
