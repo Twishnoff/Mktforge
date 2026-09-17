@@ -6,7 +6,11 @@
 
    The module loads jsPDF and autoTable on demand, then calls
    MktforgeCustomerPdf.build({ companyUrl, customerList, jobTitles,
-   painPoints, topNeeds }).
+   painPoints, topNeeds, competitorsToWatch }).
+
+   Competitors To Watch carries the agent's one-line case for each company
+   in a third column — the box has no room for it, the page does. Tracking
+   buttons are app-only and never reach the PDF.
    ========================================================================== */
 
 window.MktforgeCustomerPdf = (function () {
@@ -49,7 +53,7 @@ window.MktforgeCustomerPdf = (function () {
     return y;
   }
 
-  function addTableSection(doc, { title, head, rows, emptyText, startY }) {
+  function addTableSection(doc, { title, head, rows, emptyText, startY, columnStyles }) {
     heading(doc, title, startY);
 
     if (rows.length === 0) {
@@ -65,7 +69,8 @@ window.MktforgeCustomerPdf = (function () {
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 5, overflow: 'linebreak', valign: 'middle', lineColor: LINE, textColor: INK },
       headStyles: { fillColor: ACCENT, textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: TINT }
+      alternateRowStyles: { fillColor: TINT },
+      ...(columnStyles ? { columnStyles } : {})
     });
 
     return doc.lastAutoTable.finalY + 24;
@@ -173,7 +178,17 @@ window.MktforgeCustomerPdf = (function () {
     y = addBulletSection(doc, { title: 'Pain Points / Initiatives', groups: run.painPoints, startY: y });
 
     y = ensureRoom(doc, y, 120);
-    addBulletSection(doc, { title: 'Top Needs', groups: run.topNeeds, startY: y });
+    y = addBulletSection(doc, { title: 'Top Needs', groups: run.topNeeds, startY: y });
+
+    y = ensureRoom(doc, y, 140);
+    addTableSection(doc, {
+      title: 'Competitors To Watch',
+      head: ['Competitor', 'URL', 'Why they compete'],
+      rows: (run.competitorsToWatch || []).map((c) => [c.name || '', c.url || '', c.why || '']),
+      emptyText: 'No Competitors Found',
+      startY: y,
+      columnStyles: { 0: { cellWidth: 110 }, 1: { cellWidth: 120 } }
+    });
 
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i += 1) {

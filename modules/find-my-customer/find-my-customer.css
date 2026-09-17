@@ -148,6 +148,11 @@
 
 .fmc__box--wide { grid-column: 1 / -1; }
 
+/* Twice the height of a standard box (two boxes plus the gap between them),
+   still a minimum — a long competitor table grows past it rather than
+   scrolling inside. */
+.fmc__box--tall { min-height: calc(160px * 2 + 14px); }
+
 .fmc__box h2 {
   margin: 0;
   font-family: var(--font-body);
@@ -206,6 +211,36 @@
   padding: 7px 8px 7px 0;
   border-top: 1px solid var(--fmc-line);
   vertical-align: top;
+}
+
+/* --- Competitors To Watch --- */
+
+.fmc__comp { table-layout: auto; }
+
+.fmc__comp td { vertical-align: middle; }
+
+.fmc__comp td:first-child { font-weight: 600; overflow-wrap: anywhere; }
+
+.fmc__comp-url {
+  color: var(--fmc-accent);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.fmc__comp-url:hover { text-decoration: underline; }
+
+/* The tracking column takes only what the button needs. */
+.fmc__comp-act { width: 1%; padding-right: 0 !important; text-align: right; white-space: nowrap; }
+
+.fmc__sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* --- Job titles --- */

@@ -197,7 +197,7 @@ materials fails, the request goes out without them rather than failing.
 | Battle Card Generator | yes (`USE_SAVED_MATERIALS: true`) | Worker updated |
 | Marketing Opportunities | yes (`USE_SAVED_MATERIALS: true`) | Worker updated |
 | Persona Builder | no (`false`) | its Worker's main file isn't in the Persona-Drafter repo yet |
-| Find My Customer | no (`false`) | its Worker code isn't in the Customer-Intelligence repo |
+| Find My Customer | no (`false`) | flip to `true` once the Competitors To Watch Worker update (`competitors.js`) is deployed — it reads `body.context` |
 
 Flip a flag in `assets/js/config.js` once that module's Worker reads
 `body.context` (drop in `research-context.js` and wrap its prompt with
@@ -300,8 +300,9 @@ localStorage so the UI can still be tried.
 A port of the standalone Customer Overview Dashboard
 ([Customer-Intelligence](https://github.com/Twishnoff/Customer-Intelligence))
 into a Mktforge module, built the same way as Persona Builder. Same Cloudflare
-Worker (`/api/dashboard`), same JSON request and response, same five result
-boxes, same "already collected" guard, and the same jsPDF + autoTable report.
+Worker (`/api/dashboard`), same "already collected" guard, and the same jsPDF
++ autoTable report. The standalone site's five boxes are joined by a sixth,
+**Competitors To Watch**, which is Mktforge-only.
 Its nav button sits directly above Persona Builder, with a crosshairs icon.
 
 What changed in the port:
@@ -324,10 +325,49 @@ in Target Job Titles (ignoring case) start as "Remove". The buttons only
 exist in the app — the PDF is built from the results data, so they never
 appear in it. My Company picks up the change the next time it's opened.
 
+### Competitors To Watch
+
+A wide box under the two Top Needs boxes, twice the height of a standard box
+and spanning the full grid the way Customer List does. It holds a two-column
+table — Competitor Name, Competitor URL — with a tracking button at the end
+of each row and the agent's one-line case for the company as the row's
+tooltip.
+
+The buttons work like the tracked titles above them, against My Company →
+Competitors instead of Target Job Titles. "Add To Tracked Competitors" adds
+that company's URL and flips to "Remove From Tracked Competitors"; clicking
+that removes it. A company already in Competitors starts as "Remove",
+matched on host, so `rival.com`, `www.rival.com` and
+`https://rival.com/product` are all the same company. Tags are stored bare
+(`rival.com`), which is the form My Company's field asks for.
+
+How the agent builds the list (it runs in the Worker —
+`competitors.js`, delivered with this change):
+
+1. the account's Imported and Generated Materials, for competitors named
+   alongside the job titles this run found
+2. the web, searched on the pain points / initiatives found for those titles,
+   for vendors marketing solutions against them
+3. every URL already in My Company → Competitors, reviewed for relevance to
+   those same pain points and titles
+4. a similarity pass against the user's own site — products, features,
+   marketing messaging, buyer titles — that keeps only companies close enough
+   to be real alternatives, not every vendor touching the problem
+
+The request carries `competitorUrls` (My Company → Competitors) for step 3.
+The response field is `competitorsToWatch: [{ name, url, why }]`; a Worker
+that doesn't send it leaves the box on *No Competitors Found* and nothing
+else changes, so the site can ship before the Worker does.
+
 ### Config
 
 `assets/js/config.js` → `findMyCustomer.API_URL` is the Worker endpoint
 (public by design; the model API keys stay in the Worker).
+
+`findMyCustomer.USE_SAVED_MATERIALS` is still `false`. **Set it to `true`
+once the Worker update is deployed** — until then no `context` is sent and
+the competitor agent has no saved materials to read (step 1 above), leaving
+it with the web and the tracked competitors.
 
 `findMyCustomer.SEND_AUTH_TOKEN` is `false`. Persona Builder sends
 `Authorization: Bearer <firebase id token>`, but the Customer Intelligence

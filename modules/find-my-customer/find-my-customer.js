@@ -15,7 +15,15 @@
      { customerList: { found, customers: [{ name, size, industry }] },
        jobTitles: [string],
        painPoints: [{ jobTitle, points: [string] }],
-       topNeeds:   [{ jobTitle, points: [string] }] }
+       topNeeds:   [{ jobTitle, points: [string] }],
+       competitorsToWatch: [{ name, url, why? }] }        // optional
+
+   competitorsToWatch is the only addition to the contract. A Worker that
+   doesn't send it leaves the box on "No Competitors Found" and everything
+   else behaves exactly as before, so the site can ship ahead of the Worker.
+   The request now also carries `competitorUrls` — My Company's tracked
+   competitors — which the agent reviews for relevance alongside its own
+   research (see the Worker's competitors.js).
    ========================================================================== */
 
 (function () {
@@ -59,6 +67,8 @@
         <div class="fmc__box-body is-placeholder" data-box="topNeeds1">No Data</div></article>
       <article class="fmc__box"><h2>Top Needs</h2>
         <div class="fmc__box-body is-placeholder" data-box="topNeeds2">No Data</div></article>
+      <article class="fmc__box fmc__box--wide fmc__box--tall"><h2>Competitors To Watch</h2>
+        <div class="fmc__box-body is-placeholder" data-box="competitorsToWatch">No Data</div></article>
     </section>
 
     <div class="fmc__pdf-row">
@@ -99,6 +109,53 @@
 
   function normalizeUrl(value) {
     return String(value || '').trim().toLowerCase().replace(/\/+$/, '');
+  }
+
+  /* Competitor URLs arrive in every shape the web uses ("rival.com",
+     "https://www.rival.com/product/"). The host is what identifies them, so
+     it's what both the tracked-competitor match and the stored tag use —
+     the same bare form My Company's Competitors field asks for. */
+  function hostOf(url) {
+    const v = String(url || '').trim();
+    if (!v) return '';
+    try {
+      return new URL(/^https?:\/\//i.test(v) ? v : `https://${v}`)
+        .hostname.toLowerCase().replace(/^www\./, '');
+    } catch (e) {
+      return v.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[/?#]/)[0];
+    }
+  }
+
+  function hrefFor(url) {
+    const v = String(url || '').trim();
+    return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+  }
+
+  const sameCompetitor = (a, b) => {
+    const x = hostOf(a);
+    return !!x && x === hostOf(b);
+  };
+
+  /* The Worker may send competitorsToWatch as a bare array or wrapped the
+     way customerList is ({ found, competitors }). Either is accepted, rows
+     are deduped by host, and the researched company never lists itself. */
+  function readCompetitors(raw, companyUrl) {
+    const arr = Array.isArray(raw) ? raw
+      : (raw && Array.isArray(raw.competitors) ? raw.competitors : []);
+    const self = hostOf(companyUrl);
+    const seen = new Set();
+    return arr.map((c) => ({
+      name: String((c && (c.name || c.competitor)) || '').trim(),
+      url:  String((c && (c.url || c.website || c.competitorUrl)) || '').trim(),
+      why:  String((c && (c.why || c.reason)) || '').trim()
+    })).filter((c) => {
+      const host = hostOf(c.url);
+      if (!host || !(c.name || host)) return false;
+      if (self && host === self) return false;
+      if (seen.has(host)) return false;
+      seen.add(host);
+      return true;
+    });
   }
 
   function showError(msg) { el.error.textContent = msg; el.error.hidden = false; }
@@ -183,10 +240,15 @@
     });
   }
 
+  /* One read, both sets of buttons — the profile holds Target Job Titles and
+     Competitors, and either box may have just been re-rendered. */
   function refreshTrackButtons() {
     if (!window.MktforgeData) return;
     window.MktforgeData.getProfile()
-      .then((p) => paintTrackButtons(p.targetTitles || []))
+      .then((p) => {
+        paintTrackButtons(p.targetTitles || []);
+        paintCompetitorButtons(p.competitors || []);
+      })
       .catch((err) => console.warn('[Find My Customer] profile unavailable for tracked titles', err));
   }
 
@@ -237,6 +299,85 @@
       <ol class="fmc__rank">${(group.points || []).map((p) => `<li>${escapeHtml(p)}</li>`).join('')}</ol>`;
   }
 
+  /* ---------- Competitors To Watch ----------
+     Two columns the way the box is specced — name and URL — with the
+     tracking button riding along at the end of the row. `why` (the agent's
+     one-line case for why this company competes) is the row's tooltip and
+     goes in the PDF; it doesn't take a column. */
+
+  function renderCompetitors(list) {
+    const b = boxes.competitorsToWatch;
+    if (!list || list.length === 0) { setEmpty(b, 'No Competitors Found'); return; }
+    b.className = 'fmc__box-body';
+    b.innerHTML =
+      '<table class="fmc__comp"><thead><tr><th>Competitor Name</th><th>Competitor URL</th>' +
+      '<th class="fmc__comp-act"><span class="fmc__sr">Tracking</span></th></tr></thead><tbody>' +
+      list.map((c, i) => `
+        <tr${c.why ? ` title="${escapeHtml(c.why)}"` : ''}>
+          <td>${escapeHtml(c.name || hostOf(c.url))}</td>
+          <td><a class="fmc__comp-url" href="${escapeHtml(hrefFor(c.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(hostOf(c.url) || c.url)}</a></td>
+          <td class="fmc__comp-act"><button type="button" class="fmc__track" data-comp="${i}" hidden></button></td>
+        </tr>`).join('') +
+      '</tbody></table>';
+    refreshTrackButtons();
+  }
+
+  /* ---------- Tracked competitors (My Company → Competitors) ----------
+     Same contract as tracked titles: already-tracked rows start on
+     "Remove", the buttons live only in the app, and My Company picks the
+     change up the next time it's opened. */
+
+  const COMP_ADD = 'Add To Tracked Competitors';
+  const COMP_REMOVE = 'Remove From Tracked Competitors';
+  let compBusy = false;
+
+  function competitorRows() {
+    return (state.data && state.data.competitorsToWatch) || [];
+  }
+
+  function paintCompetitorButtons(tracked) {
+    if (!mounted || !boxes || !state.data) return;
+    const rows = competitorRows();
+    boxes.competitorsToWatch.querySelectorAll('[data-comp]').forEach((btn) => {
+      const row = rows[Number(btn.dataset.comp)];
+      if (!row) return;
+      const on = tracked.some((t) => sameCompetitor(t, row.url));
+      btn.textContent = on ? COMP_REMOVE : COMP_ADD;
+      btn.classList.toggle('is-tracked', on);
+      btn.setAttribute('aria-label', `${on ? COMP_REMOVE : COMP_ADD}: ${row.name || hostOf(row.url)}`);
+      btn.disabled = compBusy;
+      btn.hidden = false;
+    });
+  }
+
+  async function handleCompetitorClick(e) {
+    const btn = e.target.closest('[data-comp]');
+    if (!btn || compBusy || !state.data) return;
+    const row = competitorRows()[Number(btn.dataset.comp)];
+    if (!row || !row.url) return;
+
+    compBusy = true;
+    boxes.competitorsToWatch.querySelectorAll('[data-comp]').forEach((b) => { b.disabled = true; });
+    try {
+      const profile = await window.MktforgeData.getProfile();
+      const list = profile.competitors || [];
+      const tracked = list.some((t) => sameCompetitor(t, row.url));
+      profile.competitors = tracked
+        ? list.filter((t) => !sameCompetitor(t, row.url))
+        : [...list, hostOf(row.url) || String(row.url).trim()];
+      const saved = await window.MktforgeData.saveProfile(profile);
+      compBusy = false;
+      paintCompetitorButtons(saved.competitors);
+    } catch (err) {
+      console.error('[Find My Customer] could not update tracked competitors', err);
+      compBusy = false;
+      refreshTrackButtons();
+      document.dispatchEvent(new CustomEvent('mktforge:notify', {
+        detail: { message: 'Couldn’t update your Competitors. Please try again.', tone: 'error' }
+      }));
+    }
+  }
+
   function renderDashboard(data) {
     renderCustomerList(data.customerList);
     renderJobTitles(data.jobTitles);
@@ -244,6 +385,7 @@
     const needs = data.topNeeds || [];
     renderTopNeeds(boxes.topNeeds1, needs[0]);
     renderTopNeeds(boxes.topNeeds2, needs[1]);
+    renderCompetitors(data.competitorsToWatch);
   }
 
   /* ---------- request ---------- */
@@ -322,12 +464,30 @@
 
     try {
       const runningStatus = state.status;
-      const context = await window.MktforgeKit.savedMaterials(cfg, {},
+
+      // My Company's Target Job Titles steer which saved materials are sent
+      // in full, and its Competitors go with the request so the agent can
+      // check them for relevance too. Neither is required to run.
+      let profile = null;
+      try {
+        profile = window.MktforgeData ? await window.MktforgeData.getProfile() : null;
+      } catch (err) {
+        console.warn('[Find My Customer] profile unavailable for the request', err);
+      }
+      const competitorUrls = (profile && profile.competitors) || [];
+
+      const context = await window.MktforgeKit.savedMaterials(cfg,
+        { jobTitles: (profile && profile.targetTitles) || [] },
         (t) => { state.status = t; if (mounted) el.status.textContent = t; });
       state.status = runningStatus;
       if (mounted) el.status.textContent = runningStatus;
 
-      const { res, body } = await requestDashboard({ companyUrl: rawUrl, email, ...(context ? { context } : {}) });
+      const { res, body } = await requestDashboard({
+        companyUrl: rawUrl,
+        email,
+        ...(competitorUrls.length ? { competitorUrls } : {}),
+        ...(context ? { context } : {})
+      });
 
       if (!res.ok || !body || body.status === 'error') {
         const message = body && body.message;
@@ -341,7 +501,8 @@
         customerList: body.customerList || null,
         jobTitles:    body.jobTitles || [],
         painPoints:   body.painPoints || [],
-        topNeeds:     body.topNeeds || []
+        topNeeds:     body.topNeeds || [],
+        competitorsToWatch: readCompetitors(body.competitorsToWatch, rawUrl)
       };
       state.runUrl  = rawUrl;
       state.lastUrl = normalized;
@@ -441,8 +602,12 @@
       el.form.addEventListener('submit', handleSubmit);
       el.pdf.addEventListener('click', handlePdf);
       boxes.jobTitles.addEventListener('click', handleTrackClick);
+      boxes.competitorsToWatch.addEventListener('click', handleCompetitorClick);
       if (window.MktforgeData) {
-        unsubProfile = window.MktforgeData.onProfile((p) => paintTrackButtons(p.targetTitles || []));
+        unsubProfile = window.MktforgeData.onProfile((p) => {
+          paintTrackButtons(p.targetTitles || []);
+          paintCompetitorButtons(p.competitors || []);
+        });
       }
 
       restore();
