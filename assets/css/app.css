@@ -70,6 +70,15 @@ html, body {
   margin: 0;
 }
 
+/* The shell is a fixed frame: the nav and the management bar stay put, and the
+   display field is the only thing that scrolls. Nothing ever enforced that on
+   the document itself, so a module whose content overflows its grid area can
+   hand the PAGE a scrollbar — which scrolls the whole app up and exposes the
+   body behind it. Clipping here keeps the frame nailed to the viewport.
+   Scoped by data-nav, which only the app shell's body carries: login.html
+   shares this stylesheet and still needs to scroll on a short window. */
+body[data-nav] { overflow: hidden; }
+
 body {
   font-family: var(--font-body);
   font-size: 14px;
@@ -402,6 +411,12 @@ body[data-nav="collapsed"] .nav__minimize-icon {
 .display {
   grid-column: 2;
   grid-row: 2;
+  /* Containing block for anything a module positions absolutely. Without this
+     such an element resolves against the initial containing block instead, so
+     it lands at a document coordinate rather than inside this scroller and
+     stretches the PAGE's scroll height — the app then scrolls as a whole and
+     exposes the body behind it. Find My Customer's .fmc__sr hit exactly that. */
+  position: relative;
   min-width: 0;
   overflow-y: scroll;   /* always reserve the track so content never shifts */
   overflow-x: hidden;
