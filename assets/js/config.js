@@ -35,13 +35,12 @@ window.MKTFORGE_CONFIG = {
     loginPage: 'login.html'
   },
 
-  findMyCustomer: {
+    findMyCustomer: {
     API_URL: 'https://customer-overview-dashboard.tyler-wishnoff.workers.dev/api/dashboard',
-    // Leave false until the Worker verifies Firebase ID tokens and lists
-    // Authorization in Access-Control-Allow-Headers — see README.
-    SEND_AUTH_TOKEN: false,
-    // Imported/Generated Materials go with each request — the Worker reads
-    // them in competitors.js (Competitors To Watch, step 1). See README.
+    // Worker verifies Firebase ID tokens against the shared KV allowlist and
+    // allows Authorization in CORS (2026-09-17). Anonymous requests still
+    // fall back to the Google Doc approved-emails list.
+    SEND_AUTH_TOKEN: true,
     USE_SAVED_MATERIALS: true
   },
 
