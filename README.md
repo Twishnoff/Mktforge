@@ -22,7 +22,7 @@ firestore.rules             Firestore security rules (paste into the console)
 modules/my-company/         My Company (profile + saved resources)
 modules/find-my-customer/   Find My Customer (ported from Customer-Intelligence)
 modules/build-positioning/  Build Positioning (positioning, framework stages 0–5)
-modules/draft-messaging/    Draft Messaging (placeholder: "Module Coming Soon")
+modules/draft-messaging/    Draft Messaging (messaging + homepage copy, stages 6–9)
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
 modules/battle-card-generator/  Battle Card Generator (ported from Battlecard-Generator)
 modules/marketing-opportunities/  Marketing Opportunities (ported from Syndication & Event Finder)
@@ -407,10 +407,10 @@ copies of the same frontend. If you change one, port the change to the other.
 
 Stages 0–5 of the Draft Messaging Framework: input audit, competitive
 alternatives, differentiators, value ladder, champion & situation, and market
-category. Nav button below Marketing Opportunities (crane icon); the
-**Draft Messaging** placeholder ("Module Coming Soon", page icon) sits below
-it and will hold stages 6–9. Backend: its own Cloudflare Worker,
-`Draft-Messaging-Worker` (separate folder/repo, deployed as `draft-messaging`).
+category. Nav button below Marketing Opportunities (crane icon); **Draft
+Messaging** (page icon) sits below it and holds stages 6–9. Backend: its own
+Cloudflare Worker, `Draft-Messaging-Worker` (separate folder/repo, deployed as
+`draft-messaging`), shared by both modules.
 
 ```
 modules/build-positioning/
@@ -551,6 +551,104 @@ Deploy steps are in the Worker's README.
 `firestore.rules` now caps the stored summary at 20 KB. Re-publish the rules
 (Firestore → Rules) to apply the cap; everything works without it.
 
+
+
+## Draft Messaging
+
+Stages 6–9 of the Draft Messaging Framework, picking up where Build Positioning
+left off: strategic narrative, messaging hierarchy, homepage copy draft, and the
+quality check that gates them. Nav button below Build Positioning (page icon).
+Same Cloudflare Worker as Build Positioning, on a new route (`/api/messaging`).
+
+```
+modules/draft-messaging/
+  draft-messaging.js     page, drop-downs, file picker, run, renderers
+  messaging-pdf.js       text-first portrait PDF, loaded on the first PDF click
+  draft-messaging.css    (classes prefixed .dmsg)
+```
+
+### Run inputs
+
+Two columns, no form fields — everything comes out of the account.
+
+| Column | What it is |
+|---|---|
+| **Select your positioning document** (left) | Every PDF the Build Positioning module has saved, newest first, each with its created date under the name. With none saved: *"No positioning documents found. Generate one in the Build Positioning module to continue."* and a **Build Positioning Document** button that opens that module. |
+| **Provide additional research (optional)** (right) | The same drag-and-drop import as My Company — same file types, same 15 MB cap, same status lines — and anything dropped here is imported to My Company's Imported Materials as well as added to this run. Below it, **Select files** lists the account's imported files; choosing one moves it into the table and out of the drop-down, and the red **×** on its row puts it back. |
+
+**Draft Messaging** stays disabled until a positioning document is chosen; the
+extra files are always optional.
+
+### What the agent is given
+
+The positioning document is the spine of the run — it already carries the
+champion, alternatives, differentiators, value themes and category the user
+reviewed and saved, so stages 6–9 work from those decisions rather than
+re-deciding them. Its text is read back out of Saved Resources with
+`getFileText`, which extracts a generated PDF the first time anything needs it.
+
+The chosen files go with it as the user's own research, in the same `context`
+shape every other module sends, so the Worker's trust rules apply unchanged:
+the user's files beat anything Mktforge generated, which beats web research,
+and a file too long to send whole goes as the summary `research.js` stored for
+it (see My Company → How agents use saved materials). Unlike the other modules,
+this one sends **only what was picked** rather than everything in the account —
+the point of the two columns is that the person curates the inputs.
+
+Per-file cap 20k characters, 80k across all of them, 90k for the positioning
+document; the Worker caps the payload again on arrival.
+
+### The four stages
+
+Only two of them are ever shown:
+
+| Stage | Where it goes |
+|---|---|
+| 6 · Strategic narrative | Nowhere. Working material for 7 and 8 — kept on the run for the record, not shown and not printed. |
+| 7 · Messaging hierarchy | The top box. Value proposition, the positioning statement (labelled **internal only** — it is never shipped as copy), three pillars with their pains, capabilities and proof, the short forms (one-liner, 30-second pitch, boilerplate), and a collapsible competitive talk track. |
+| 8 · Homepage copy draft | The bottom box, in Pierri's order: hero (with a second headline variant to test), problem, solution intro, value props, proof, closing CTA, and any verbatim customer wording the files supplied. |
+| 9 · Quality check | Nowhere. The gate, not a result — see below. |
+
+Proof that doesn't exist yet is never invented: it comes back marked
+**Placeholder — proof to collect**, on screen and in the PDF.
+
+### The quality gate
+
+Nothing reaches the page until it has been through stage 9. The Worker scores
+the draft against Wynter's four layers plus the barbecue and traceability
+checks, and a run only passes when every check clears its bar (clarity,
+relevance, value, differentiation and traceability at 4/5, barbecue at 3/5)
+**and** nothing was flagged as invented. A failing draft goes back with the
+scorecard attached for a targeted revision, up to three attempts; if none
+passes, the best-scoring attempt is shown and the status line says the check
+still had notes. The status line names the stage and the attempt as it goes, so
+a run that is on its second pass says so.
+
+A run takes roughly 2–5 minutes, and longer when it revises. Results and an
+in-flight run survive switching modules (not a page reload), and the nav light
+follows the run the same way Build Positioning's does.
+
+### Create Messaging PDF
+
+Downloads `Draft Messaging N.pdf` and saves it to My Company. It prints what the
+page shows — the hierarchy and the homepage draft — plus a header naming the
+positioning document and files the run was built from. All real text, so the
+next module can read it back.
+
+### Config and Worker
+
+`assets/js/config.js` → `draftMessaging.API_BASE_URL` (the same Worker as Build
+Positioning). Every request sends `Authorization: Bearer <Firebase ID token>`.
+
+In the Worker, stages 6–9 live in `src/messaging.js` rather than in the
+positioning bundle; `src/index.js` imports it, hands it what it needs from the
+bundle in one `MESSAGING_KIT` object, and routes `/api/messaging` to it. The
+route has its own usage-counter label (`messaging`), so a day of messaging runs
+doesn't eat the positioning allowance.
+
+**Deploy order:** the Worker first (`wrangler deploy` from
+`C:\Users\Tyler\draft-messaging`), then this site. Until the Worker has the
+change, Draft Messaging requests 404.
 
 ## Persona Builder
 

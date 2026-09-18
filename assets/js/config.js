@@ -74,6 +74,12 @@ window.MKTFORGE_CONFIG = {
     API_BASE_URL: 'https://draft-messaging.tyler-wishnoff.workers.dev'
   },
 
+  draftMessaging: {
+    // Stages 6–9, on the same Worker as Build Positioning (/api/messaging).
+    // Every request carries the Firebase ID token, which the Worker verifies.
+    API_BASE_URL: 'https://draft-messaging.tyler-wishnoff.workers.dev'
+  },
+
   marketingOpportunities: {
     API_URL: 'https://syndication-event-finder.tyler-wishnoff.workers.dev',
     // Worker verifies Firebase ID tokens against the shared KV allowlist and
