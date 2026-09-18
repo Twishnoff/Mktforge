@@ -110,6 +110,7 @@
     const email = $('create-email').value.trim();
     const p1 = $('create-password').value;
     const p2 = $('create-password2').value;
+    const code = $('create-invite').value.trim();
 
     if (!email) { setMsg('create-msg', 'Enter an email address.'); return; }
     if (p1.length < MIN_PASSWORD) {
@@ -123,9 +124,30 @@
     }
     $('create-password2').removeAttribute('aria-invalid');
 
+    if (!code) { setMsg('create-msg', 'Enter your invite code.'); return; }
+
     busy($('create-btn'), true, 'Creating…');
     try {
       const user = await MktforgeAuth.signUp(email, p1);
+
+      // The account exists and is signed in from here. Redeem the invite code
+      // before letting them through, and remove the account if it is refused:
+      // Firebase will not create a second account on an address that already
+      // has one, so a bad code would otherwise strand their real email on a
+      // permanently useless login that only the administrator can delete.
+      try {
+        await MktforgeInvite.redeem(code);
+      } catch (redeemErr) {
+        try {
+          await user.delete();
+        } catch (cleanupErr) {
+          console.warn('[Mktforge] could not remove the unapproved account', cleanupErr);
+          try { await MktforgeAuth.signOut(); } catch (e) { /* nothing further to do */ }
+        }
+        setMsg('create-msg', redeemErr.message || 'That invite code is not valid.');
+        return;
+      }
+
       $('verify-email').textContent = user.email;
       setMsg('verify-msg', '');
       show('verify');
