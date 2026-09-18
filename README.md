@@ -52,6 +52,12 @@ then open http://localhost:8000
 That's it — the nav button, the route (`#/your-module`), and the CSS loading
 are all handled by the shell.
 
+The nav lists modules in the order their `<script>` tags appear in
+`index.html`, which is the order a person works through them: My Company, Find
+My Customer, Persona Builder, Build Positioning, Draft Messaging, Marketing
+Opportunities, Battle Card Generator. Moving a module in the nav means moving
+its one line.
+
 ### The contract
 
 ```js
@@ -407,7 +413,7 @@ copies of the same frontend. If you change one, port the change to the other.
 
 Stages 0–5 of the Draft Messaging Framework: input audit, competitive
 alternatives, differentiators, value ladder, champion & situation, and market
-category. Nav button below Marketing Opportunities (crane icon); **Draft
+category. Nav button below Persona Builder (crane icon); **Draft
 Messaging** (page icon) sits below it and holds stages 6–9. Backend: its own
 Cloudflare Worker, `Draft-Messaging-Worker` (separate folder/repo, deployed as
 `draft-messaging`), shared by both modules.
@@ -754,7 +760,8 @@ A port of the standalone
 into a Mktforge module, built the same way as Persona Builder and Find My
 Customer. Same Cloudflare Worker, same JSON request and response, same nine
 boxes, same copy-length rules, and the same landscape jsPDF battle card. Its
-nav button sits directly below Persona Builder, with a crossed-swords icon.
+nav button sits last in the nav, below Marketing Opportunities, with a
+crossed-swords icon.
 
 ```
 modules/battle-card-generator/
@@ -811,7 +818,7 @@ into a Mktforge module, built the same way as the other ported tools. Same
 Cloudflare Worker, same JSON request and response, same uncapped "All Results"
 table plus seven category boxes (15 rows each), same "already collected"
 guard, and the same jsPDF + autoTable report with clickable links. Its nav
-button sits directly below Battle Card Generator, with a megaphone icon.
+button sits directly below Draft Messaging, with a megaphone icon.
 
 What changed in the port:
 
