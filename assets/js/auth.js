@@ -177,6 +177,17 @@ window.MktforgeAuth = (() => {
       await init();
       if (!auth.currentUser) return null;
       await auth.currentUser.reload();
+
+      // reload() refreshes the account record, so publicUser().verified below
+      // is now correct - but it does NOT mint a new ID token, and the token
+      // the browser is holding keeps email_verified: false for up to an hour.
+      // Firestore rules and every Mktforge Worker read that claim from the
+      // token, not from this object. Without forcing a new one, a person who
+      // has just verified their email clears the verification screen and then
+      // lands in an app where their profile will not load, their saved
+      // resources are invisible, and every module refuses them.
+      await auth.currentUser.getIdToken(true);
+
       currentUser = auth.currentUser;
       return publicUser();
     },
