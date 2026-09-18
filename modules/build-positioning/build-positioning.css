@@ -119,7 +119,22 @@
 /* --- question table --- */
 
 .bpos__qa-head { margin-bottom: 14px; }
-.bpos__qa-dek { margin: 0; max-width: 78ch; font-size: 13.5px; color: var(--ink-soft); }
+.bpos__qa-dek { margin: 10px 0 0; max-width: 78ch; font-size: 13.5px; color: var(--ink-soft); }
+
+.bpos__qa-headline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bpos__qa-headline .bpos__h2 { min-width: 0; margin: 0; }
+.bpos__qa-headline .bpos__collapse { margin-left: auto; }
+
+/* Minimized: the title line only, at the height of a collapsed result box. */
+.bpos__card--qa.is-collapsed { padding: 14px 18px; }
+.bpos__card--qa.is-collapsed .bpos__qa-head { margin-bottom: 0; }
+.bpos__card--qa.is-collapsed .bpos__qa-dek,
+.bpos__card--qa.is-collapsed .bpos__qa-body { display: none; }
 
 .bpos__qa {
   width: 100%;
@@ -426,6 +441,8 @@
 
 .bpos__box:not(.is-collapsed) > h2 > .bpos__collapse .bpos__collapse-max { display: none; }
 .bpos__box.is-collapsed > h2 > .bpos__collapse .bpos__collapse-min { display: none; }
+.bpos__card--qa:not(.is-collapsed) .bpos__collapse .bpos__collapse-max { display: none; }
+.bpos__card--qa.is-collapsed .bpos__collapse .bpos__collapse-min { display: none; }
 
 /* Minimized: the title line only. */
 .bpos__box.is-collapsed > h2 { border-bottom: none; }

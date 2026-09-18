@@ -13,6 +13,8 @@
           company questions     once for the account
           competitor questions  once per Closest Competitor
           champion questions    once per Primary Champion
+        The whole card minimizes like a result box, and folds itself away
+        when a run starts so the stage boxes sit above the fold.
      3. Generate Positioning: streams stages 0–5 into the result boxes. Once a
         run starts, a second Create Positioning PDF button appears beside it.
      4. Create Positioning PDF: downloads it and saves it to My Company, where
@@ -291,6 +293,7 @@
     run: null,
     running: false,
     collapsed: DEFAULT_COLLAPSED(),   // display box keys currently minimized
+    qaCollapsed: false,               // "Fill in the blanks" card minimized
     innerOpen: new Set(),             // ids of nested boxes the user opened
     status: '',
     error: '',
@@ -312,11 +315,12 @@
   <div class="bpos">
     <header class="bpos__head">
       <p class="bpos__eyebrow">Build Positioning</p>
-      <h1 class="bpos__title">Draft your positioning</h1>
-      <p class="bpos__dek">Decide what you are, who it’s for, and why you’re different before
-        writing a single headline. Pick who you’re selling to and who you’re up against,
-        fill in what only you know, and Mktforge works through the first five stages of the
-        positioning framework using your website and every report you’ve saved.</p>
+      <h1 class="bpos__title">Get started with positioning</h1>
+      <p class="bpos__dek">Quickly build a foundation for explaining how you position your company
+        in the market. This positioning drafter takes your uploaded files, anything you’ve created
+        and saved with Mktforge, and external data to research your product, target buyer, key
+        competitor, and additional input from you to answer key questions you’ll need to figure
+        out for drafting messaging and copy that resonates.</p>
     </header>
 
     <section class="bpos__card" aria-label="Run inputs">
@@ -346,15 +350,24 @@
 
     <section class="bpos__card bpos__card--qa" aria-labelledby="bpos-qa-title">
       <div class="bpos__qa-head">
-        <h2 class="bpos__h2" id="bpos-qa-title">Fill in the blanks</h2>
+        <div class="bpos__qa-headline">
+          <h2 class="bpos__h2" id="bpos-qa-title">Fill in the blanks</h2>
+          <button type="button" class="bpos__collapse" data-el="qa-collapse"
+            aria-expanded="true" aria-controls="bpos-qa-body"
+            title="Minimize" aria-label="Minimize Fill in the blanks">
+            <span class="bpos__collapse-min" aria-hidden="true">&#8722;</span><span class="bpos__collapse-max" aria-hidden="true">+</span>
+          </button>
+        </div>
         <p class="bpos__qa-dek">Research can’t see inside your business. Answer what you can —
           or press <strong>Draft Answer</strong> to have a first pass written from your website
           and saved reports, then check it. Lines marked “Assumption:” need your review.</p>
       </div>
-      <div data-el="qa"><p class="bpos__loading">Loading your answers…</p></div>
-      <div class="bpos__qa-actions">
-        <p class="bpos__error" data-el="save-error" role="alert" hidden></p>
-        <button type="button" class="bpos__btn" data-el="save-all">Save</button>
+      <div class="bpos__qa-body" id="bpos-qa-body">
+        <div data-el="qa"><p class="bpos__loading">Loading your answers…</p></div>
+        <div class="bpos__qa-actions">
+          <p class="bpos__error" data-el="save-error" role="alert" hidden></p>
+          <button type="button" class="bpos__btn" data-el="save-all">Save</button>
+        </div>
       </div>
     </section>
 
@@ -890,6 +903,25 @@
     paintCollapse(key);
   }
 
+  // The "Fill in the blanks" card minimizes the same way a result box does. It
+  // folds itself away when a run starts so the stage boxes come up the page.
+  function paintQaCollapse() {
+    if (!root) return;
+    const card = q('.bpos__card--qa');
+    const btn = el('qa-collapse');
+    if (!card || !btn) return;
+    const open = !state.qaCollapsed;
+    card.classList.toggle('is-collapsed', !open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.title = open ? 'Minimize' : 'Maximize';
+    btn.setAttribute('aria-label', `${open ? 'Minimize' : 'Maximize'} Fill in the blanks`);
+  }
+
+  function toggleQa() {
+    state.qaCollapsed = !state.qaCollapsed;
+    paintQaCollapse();
+  }
+
   // Nested boxes live inside a result box's HTML, so they are re-rendered on
   // every paint; `state.innerOpen` is what survives that.
   function toggleInner(id, wrap) {
@@ -955,6 +987,8 @@
     state.running = true;
     state.error = '';
     state.status = 'Getting ready…';
+    state.qaCollapsed = true;
+    paintQaCollapse();
     state.collapsed = DEFAULT_COLLAPSED();
     state.innerOpen = new Set();
     state.run = {
@@ -1451,12 +1485,14 @@
       el('qa').addEventListener('input', handleQaInput);
       el('qa').addEventListener('click', handleQaClick);
       el('save-all').addEventListener('click', handleSaveAll);
+      el('qa-collapse').addEventListener('click', toggleQa);
       el('generate').addEventListener('click', handleGenerate);
       el('pdf').addEventListener('click', handlePdf);
       el('pdf-top').addEventListener('click', handlePdf);
       el('results').addEventListener('click', handleResultsClick);
 
       if (state.answers) renderQa(); else loadAnswers();
+      paintQaCollapse();
       paintRun();
       paintFieldNotes();
       paintResources();
