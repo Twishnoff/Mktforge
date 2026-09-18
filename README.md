@@ -616,13 +616,41 @@ Proof that doesn't exist yet is never invented: it comes back marked
 
 Nothing reaches the page until it has been through stage 9. The Worker scores
 the draft against Wynter's four layers plus the barbecue and traceability
-checks, and a run only passes when every check clears its bar (clarity,
-relevance, value, differentiation and traceability at 4/5, barbecue at 3/5)
-**and** nothing was flagged as invented. A failing draft goes back with the
-scorecard attached for a targeted revision, up to three attempts; if none
-passes, the best-scoring attempt is shown and the status line says the check
-still had notes. The status line names the stage and the attempt as it goes, so
-a run that is on its second pass says so.
+checks, and the two boxes are scored and gated **separately** — they fail for
+different reasons and cost different amounts to fix.
+
+| Check | Messaging Hierarchy | Homepage Copy |
+|---|---|---|
+| Clarity, Relevance, Value | 4/5 | 4/5 |
+| Differentiation | 3/5 | **4/5** |
+| Barbecue, Traceability | 3/5 | 3/5 |
+
+Clarity, relevance and value — the three a rewrite can actually repair — carry
+the higher bar on both. Traceability and the barbecue test sit lower because
+with early-stage inputs there is rarely a published metric to cite, and holding
+traceability at 4/5 sent nearly every run to a third attempt over proof that
+doesn't exist yet. Differentiation is the one that differs: the homepage is what
+gets shipped, and a line a competitor could paste onto their own site is the
+failure that matters there. The hierarchy's differentiation comes from the
+positioning document, which the user already reviewed, so it isn't re-litigated
+here.
+
+**Invented proof is separate from all of that.** Any claim stage 9 flags as
+fabricated fails the run outright however well it scores, can't win the
+best-of-three comparison (a fabrication costs more than an attempt can make up),
+and is removed rather than reworded by the revision.
+
+**Revisions are targeted.** When only the homepage misses, only the homepage is
+rewritten, against the hierarchy that just passed — about half the cost of a
+retry, and the common case, since the homepage carries the higher bar. When the
+hierarchy misses, both are rewritten together: the copy is written *from* the
+hierarchy, so a new hierarchy invalidates the copy built on the old one. The
+status line names what fell short and which half is being redone — *"Quality
+check: homepage copy (differentiation 3/5) · revising the copy, attempt 2 of
+3…"*.
+
+Up to three attempts; if none passes, the best-scoring one is shown and the
+status line says the check still had notes.
 
 A run takes roughly 2–5 minutes, and longer when it revises. Results and an
 in-flight run survive switching modules (not a page reload), and the nav light
