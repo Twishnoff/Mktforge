@@ -1,12 +1,14 @@
 /* ==========================================================================
    Mktforge — shell styles
    Palette and type are carried over from the portfolio site so the two
-   properties read as the same hand.
+   properties read as the same hand. The frame (the nav and the management
+   bar) is dark; its colours are the --frame-* tokens below, and they are the
+   only ones to touch if the frame's colour changes again.
    ========================================================================== */
 
 :root {
   /* Surfaces */
-  --desk:        #E8DFC6;  /* nav + management bar (the cream "frame")      */
+  --desk:        #E8DFC6;  /* the sign-in page's ground (see login.css)     */
   --paper:       #F6F1E6;  /* display field                                  */
   --paper-dim:   #EDE6D3;  /* hover / scrollbar track                        */
   --paper-line:  #CFC6AC;  /* hairlines and borders                          */
@@ -19,6 +21,21 @@
   /* Accent */
   --accent:      #2F6F4E;
   --accent-tint: #E4EEE7;
+
+  /* Frame — the nav and the management bar.
+     These are the only tokens that move when the frame's colour changes; the
+     paper tokens above stay exactly as they were, so the display field and
+     every module inside it are untouched. To try one of the other colours,
+     change --frame and the eight values under it, and nothing else. */
+  --frame:             #20242B;  /* nav + management bar                     */
+  --frame-hover:       #2B303A;  /* nav button, profile button               */
+  --frame-line:        #343A45;  /* the nav footer's rule                    */
+  --frame-text:        #E9ECF1;  /* module labels, and their icons with them */
+  --frame-text-strong: #FFFFFF;  /* hover, and the account name              */
+  --frame-muted:       #8E96A3;  /* minimize chevron, profile caret          */
+  --frame-active:      #2C3A34;  /* the module you are on                    */
+  --frame-active-text: #A8E6C1;
+  --frame-marker:      #4FA97A;  /* the 3px bar beside the active module     */
 
   /* Type */
   --font-body:    'IBM Plex Sans', system-ui, sans-serif;
@@ -57,7 +74,7 @@ body {
   font-family: var(--font-body);
   font-size: 14px;
   color: var(--ink);
-  background: var(--desk);
+  background: var(--frame);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -67,6 +84,11 @@ button { font: inherit; color: inherit; }
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Inside the frame the accent green is too dark to make out against the frame
+   colour; the marker green is the same hue with enough light in it to read. */
+.nav :focus-visible,
+.mgmt :focus-visible { outline-color: var(--frame-marker); }
 
 /* ==========================================================================
    App frame
@@ -97,22 +119,13 @@ body[data-auth="pending"] .app { visibility: hidden; }
   flex-direction: column;
   min-width: 0;
   position: relative;
-  background: var(--desk);
+  background: var(--frame);
   overflow: hidden;
 }
 
-/* The nav's right edge line starts below the management bar, so the logo
-   block and the bar read as one continuous top strip. */
-.nav::after {
-  content: "";
-  position: absolute;
-  top: calc(var(--mgmt-h) - 1px);   /* meets the bar's bottom border */
-  right: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--paper-line);
-  pointer-events: none;
-}
+/* The nav used to carry a hairline down its right edge, and the management bar
+   one along its bottom. Against a dark frame the colour change IS the edge, and
+   a line drawn on top of it reads as a seam, so both are gone. */
 
 /* Logo block: exactly as tall as the management bar, so the wordmark sits on
    the same optical line as the profile on the other side of the screen. */
@@ -161,7 +174,7 @@ body[data-nav="collapsed"] .logo .logo__mark { display: block; }
   border: 0;
   border-radius: var(--radius);
   background: transparent;
-  color: var(--ink-soft);
+  color: var(--frame-text);
   font-size: 13.5px;
   font-weight: 500;
   text-align: left;
@@ -170,11 +183,11 @@ body[data-nav="collapsed"] .logo .logo__mark { display: block; }
   transition: background var(--ease), color var(--ease);
 }
 
-.nav__button:hover { background: var(--paper-dim); color: var(--ink); }
+.nav__button:hover { background: var(--frame-hover); color: var(--frame-text-strong); }
 
 .nav__button[aria-current="page"] {
-  background: var(--accent-tint);
-  color: var(--accent);
+  background: var(--frame-active);
+  color: var(--frame-active-text);
   font-weight: 600;
 }
 
@@ -187,7 +200,7 @@ body[data-nav="collapsed"] .logo .logo__mark { display: block; }
   bottom: 8px;
   width: 3px;
   border-radius: 0 2px 2px 0;
-  background: var(--accent);
+  background: var(--frame-marker);
 }
 
 .nav__icon {
@@ -223,8 +236,8 @@ body[data-nav="collapsed"] .nav__button::after {
   transform: translateY(-50%);
   padding: 5px 9px;
   border-radius: var(--radius);
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--paper);
+  color: var(--ink);
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
@@ -243,7 +256,7 @@ body[data-nav="collapsed"] .nav__button:focus-visible::after { opacity: 1; }
   display: flex;
   justify-content: flex-end;
   padding: 10px var(--nav-pad-x) 14px;
-  border-top: 1px solid color-mix(in srgb, var(--paper-line) 60%, transparent);
+  border-top: 1px solid var(--frame-line);
 }
 
 body[data-nav="collapsed"] .nav__footer { justify-content: center; padding-left: 0; padding-right: 0; }
@@ -257,15 +270,15 @@ body[data-nav="collapsed"] .nav__footer { justify-content: center; padding-left:
   border: 1px solid transparent;
   border-radius: var(--radius);
   background: transparent;
-  color: var(--muted);
+  color: var(--frame-muted);
   cursor: pointer;
   transition: background var(--ease), color var(--ease), border-color var(--ease);
 }
 
 .nav__minimize:hover {
-  background: var(--paper-dim);
-  border-color: var(--paper-line);
-  color: var(--ink);
+  background: var(--frame-hover);
+  border-color: var(--frame-line);
+  color: var(--frame-text-strong);
 }
 
 .nav__minimize-icon {
@@ -294,8 +307,7 @@ body[data-nav="collapsed"] .nav__minimize-icon {
   align-items: center;
   gap: 18px;
   padding: 0 16px 0 20px;
-  background: var(--desk);
-  border-bottom: 1px solid var(--paper-line);
+  background: var(--frame);
 }
 
 .mgmt__spacer { flex: 1 1 auto; }
@@ -314,7 +326,7 @@ body[data-nav="collapsed"] .nav__minimize-icon {
   transition: background var(--ease), border-color var(--ease);
 }
 
-.profile__button:hover { background: var(--paper-dim); border-color: var(--paper-line); }
+.profile__button:hover { background: var(--frame-hover); border-color: var(--frame-line); }
 
 .profile__avatar {
   flex: 0 0 30px;
@@ -324,9 +336,9 @@ body[data-nav="collapsed"] .nav__minimize-icon {
   overflow: hidden;
   display: grid;
   place-items: center;
-  background: var(--paper-dim);
-  border: 1px solid var(--paper-line);
-  color: var(--muted);
+  background: var(--frame-hover);
+  border: 1px solid var(--frame-line);
+  color: var(--frame-muted);
 }
 
 .profile__avatar svg { width: 30px; height: 30px; display: block; }
@@ -337,7 +349,7 @@ body[data-nav="collapsed"] .nav__minimize-icon {
 .profile__name {
   font-size: 13.5px;
   font-weight: 500;
-  color: var(--ink);
+  color: var(--frame-text-strong);
   white-space: nowrap;
 }
 
@@ -346,7 +358,7 @@ body[data-nav="collapsed"] .nav__minimize-icon {
   height: 0;
   border-left: 4.5px solid transparent;
   border-right: 4.5px solid transparent;
-  border-top: 5px solid var(--muted);
+  border-top: 5px solid var(--frame-muted);
   transition: transform var(--ease);
 }
 
@@ -511,26 +523,26 @@ body[data-nav="collapsed"] .nav__minimize-icon {
 
 .nav__status[data-state="running"] {
   display: block;
-  background: #E3A21A;
-  box-shadow: 0 0 0 2px rgba(227, 162, 26, .22);
+  background: #FFC24D;
+  box-shadow: 0 0 0 2px rgba(255, 194, 77, .3);
   animation: nav-status-pulse 1.8s ease-in-out infinite;
 }
 
 .nav__status[data-state="error"] {
   display: block;
-  background: #C8412A;
-  box-shadow: 0 0 0 2px rgba(200, 65, 42, .2);
+  background: #FF6F52;
+  box-shadow: 0 0 0 2px rgba(255, 111, 82, .3);
 }
 
 .nav__status[data-state="done"] {
   display: block;
-  background: #2E9B57;
-  box-shadow: 0 0 0 2px rgba(46, 155, 87, .2);
+  background: #4FD98A;
+  box-shadow: 0 0 0 2px rgba(79, 217, 138, .3);
 }
 
 @keyframes nav-status-pulse {
   0%, 100% { opacity: 1; }
-  50%      { opacity: .2; }
+  50%      { opacity: .55; }
 }
 
 /* screen-reader only */
@@ -551,13 +563,13 @@ body[data-nav="collapsed"] .nav__status {
   top: 6px;
   right: calc(50% - 16px);
   margin: 0;
-  border: 2px solid var(--desk);
+  border: 2px solid var(--frame);
   width: 11px;
   height: 11px;
 }
 
 body[data-nav="collapsed"] .nav__button[aria-current="page"] .nav__status {
-  border-color: var(--accent-tint);
+  border-color: var(--frame-active);
 }
 
 @media (max-width: 860px) {
@@ -566,12 +578,12 @@ body[data-nav="collapsed"] .nav__button[aria-current="page"] .nav__status {
     top: 6px;
     right: calc(50% - 16px);
     margin: 0;
-    border: 2px solid var(--desk);
+    border: 2px solid var(--frame);
     width: 11px;
     height: 11px;
   }
 
   body[data-nav="expanded"] .nav__button[aria-current="page"] .nav__status {
-    border-color: var(--accent-tint);
+    border-color: var(--frame-active);
   }
 }
