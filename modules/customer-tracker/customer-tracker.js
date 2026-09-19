@@ -25,7 +25,7 @@
 
   const MODULE_ID = 'customer-tracker';
   const MODULE_NAME = 'Customer Tracker';
-  const RUN_TIMEOUT_MS = 7 * 60 * 1000;
+  const RUN_TIMEOUT_MS = 9 * 60 * 1000;
   const CONFIRM_MS = 4000;
 
   const Data = () => window.MktforgeData;
@@ -138,7 +138,7 @@
     const rec = {
       title: box.title, rows: box.rows || [], lastRefreshed: box.lastRefreshed || 0,
       status: box.status || 'pending', note: box.note || '', companyName: box.companyName || '',
-      createdAt: box.createdAt || Date.now()
+      stats: box.stats || null, createdAt: box.createdAt || Date.now()
     };
     return Data().saveTrackerBox(rec).catch((err) => {
       console.error('[Customer Tracker] could not save', err);
@@ -195,6 +195,67 @@
     return job;
   }
 
+  /* ---------- the title's family, from persona files ----------
+     A Persona Builder PDF's Overview lists "Primary Job Title:" and
+     "Secondary Job Titles:" (comma-separated). If the tracked title is the
+     primary or one of the secondaries, every title in that persona counts
+     as the same role when the agent matches posts. Imported files laid out
+     the same way count too. */
+
+  const normTitle = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9&+/]+/g, ' ').trim();
+
+  function personaTitles(text) {
+    const t = String(text || '').replace(/\s+/g, ' ');
+    const primary = /Primary Job Title:\s*(.+?)\s*Secondary Job Titles:/i.exec(t);
+    if (!primary) return null;
+    const second = /Secondary Job Titles:\s*(.+?)\s*(?:Job Level:|Average Years|Company Size:|Industry:|Common Tools:|$)/i.exec(t);
+    const pieces = (second ? second[1] : '').split(/\s*[,;]\s*/)
+      .map((x) => x.trim()).filter((x) => x.length > 1 && !/^none found$/i.test(x) && x !== '—');
+    // The PDF joins titles with ", ", so "Senior Manager, Growth Marketing"
+    // arrives as two pieces. A piece that is only a level ("Senior Manager",
+    // "Director") belongs with the piece after it.
+    const secondaries = [];
+    for (let i = 0; i < pieces.length; i += 1) {
+      if (onlyLevel(pieces[i]) && i + 1 < pieces.length) {
+        secondaries.push(`${pieces[i]}, ${pieces[i + 1]}`);
+        i += 1;
+      } else if (!onlyLevel(pieces[i])) {
+        secondaries.push(pieces[i]);
+      }
+    }
+    return { primary: primary[1].trim(), secondaries };
+  }
+
+  const LEVEL_WORDS = new Set(['senior', 'sr', 'junior', 'jr', 'lead', 'manager', 'director', 'head', 'vp', 'svp', 'evp',
+    'avp', 'vice', 'president', 'chief', 'principal', 'associate', 'assistant', 'staff', 'officer', 'executive', 'of', 'the', 'and', '&']);
+  const onlyLevel = (t) => normTitle(t).split(' ').every((w) => LEVEL_WORDS.has(w));
+
+  const personaMemo = new Map();   // fileId -> { primary, secondaries } | null
+
+  async function titleFamily(title) {
+    const want = normTitle(title);
+    const out = new Map();         // normalized -> { title, from }
+    let files = [];
+    try { files = await Data().listFiles(); } catch (err) { return []; }
+    const personas = files.filter((f) => f.moduleId === 'persona-builder'
+      || (f.source === 'imported' && /persona/i.test(f.name)));
+    for (const f of personas.slice(0, 30)) {
+      if (!personaMemo.has(f.id)) {
+        try { personaMemo.set(f.id, personaTitles(await Data().getFileText(f.id))); }
+        catch (err) { personaMemo.set(f.id, null); }
+      }
+      const p = personaMemo.get(f.id);
+      if (!p) continue;
+      const all = [p.primary, ...p.secondaries];
+      if (!all.some((x) => normTitle(x) === want)) continue;
+      all.forEach((x) => {
+        const k = normTitle(x);
+        if (k && k !== want && !onlyLevel(x) && !out.has(k)) out.set(k, { title: x, from: `${f.name}${f.ext || ''}` });
+      });
+    }
+    return [...out.values()].slice(0, 20);
+  }
+
   /* ---------- a run ---------- */
 
   async function run(box) {
@@ -222,6 +283,7 @@
       box.progress = 'Reading your saved research about this title…';
       paintBox(box);
       const context = await contextFor(box.title);
+      const family = await titleFamily(box.title).catch(() => []);
       if (controller.signal.aborted) throw abortError();
 
       const token = window.MktforgeAuth && window.MktforgeAuth.getIdToken
@@ -239,6 +301,7 @@
           companyName: profile.companyName || '',
           competitorUrls: profile.competitors || [],
           context,
+          titleFamily: family,
           today: localDay()
         }),
         signal: controller.signal
@@ -261,6 +324,7 @@
       if (box.removed) return;
       box.rows = Array.isArray(result.rows) ? result.rows : [];
       box.note = result.note || '';
+      box.stats = result.stats || null;
       box.companyName = result.companyName || '';
       box.lastRefreshed = Date.now();
       box.status = 'done';
@@ -407,11 +471,32 @@
 
   const cssKey = (key) => encodeURIComponent(key);
 
-  const fmtDay = (iso) => {
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
-    if (!m) return '';
-    return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  /* "2026-09-03" -> "Sep 3, 2026"; "2026-08" -> "Aug 2026". Approximate
+     dates (month-only, or worked out from "2 weeks ago") get a leading ~. */
+  const fmtDay = (iso, approx) => {
+    const d = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+    const m = /^(\d{4})-(\d{2})$/.exec(iso || '');
+    let out = '';
+    if (d) out = new Date(+d[1], +d[2] - 1, +d[3]).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    else if (m) out = new Date(+m[1], +m[2] - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+    return out && (approx || m) ? `~${out}` : out;
   };
+
+  /* What the agent looked at and why things were left out. */
+  function statsText(stats) {
+    if (!stats || typeof stats !== 'object') return '';
+    const d = stats.dropped || {};
+    const n = (v) => Number(v) || 0;
+    const plural = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+    const parts = [];
+    if (n(d.date)) parts.push(`${n(d.date)} undated or older than 90 days`);
+    if (n(d.match)) parts.push(`${n(d.match)} not tied to this job title`);
+    if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} off-topic`);
+    if (n(d.owned)) parts.push(`${n(d.owned)} on your or a competitor’s own site`);
+    if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
+    const head = `${plural(n(stats.searched), 'search', 'searches')} · ${plural(n(stats.found), 'item', 'items')} found · ${n(stats.kept)} shown`;
+    return parts.length ? `${head}. Left out: ${parts.join(', ')}.` : `${head}.`;
+  }
 
   const fmtWhen = (ms) => new Date(ms).toLocaleString(undefined, {
     month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
@@ -430,7 +515,7 @@
       : r.why || '';
     return `
       <tr class="ctrk__row is-${tone}">
-        <td class="ctrk__c-date">${esc(fmtDay(r.date))}</td>
+        <td class="ctrk__c-date"${r.approx || /^\d{4}-\d{2}$/.test(r.date || '') ? ' title="Approximate date"' : ''}>${esc(fmtDay(r.date, r.approx))}</td>
         <td class="ctrk__c-source">
           <span class="ctrk__source">${esc(r.source)}</span>
           <span class="ctrk__kind">${esc(KIND[r.kind] || 'Post')}</span>
@@ -458,8 +543,12 @@
       if (!box.error) parts.push('<div class="ctrk__state">Research was interrupted before it finished. Click Refresh Data to run it again.</div>');
       return parts.join('');
     }
+    const stats = statsText(box.stats);
     if (!box.rows.length) {
-      parts.push('<div class="ctrk__state">No posts or articles from the last 90 days matched this job title.</div>');
+      parts.push(`<div class="ctrk__state">
+          <p>No posts or articles from the last 90 days matched this job title.</p>
+          ${stats ? `<p class="ctrk__stats">${esc(stats)}</p>` : ''}
+        </div>`);
       return parts.join('');
     }
     parts.push(`
@@ -476,7 +565,8 @@
           </tr></thead>
           <tbody>${box.rows.map(rowHtml).join('')}</tbody>
         </table>
-      </div>`);
+      </div>
+      ${stats ? `<p class="ctrk__stats">${esc(stats)}</p>` : ''}`);
     return parts.join('');
   }
 

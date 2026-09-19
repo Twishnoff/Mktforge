@@ -244,6 +244,17 @@
 }
 
 .ctrk__state.is-loading { font-style: normal; color: var(--ink-soft); }
+.ctrk__state:not(.is-loading) { flex-direction: column; gap: 6px; }
+.ctrk__state p { margin: 0; }
+
+.ctrk__stats {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
 
 .ctrk__dots { display: inline-flex; gap: 5px; }
 .ctrk__dots span {

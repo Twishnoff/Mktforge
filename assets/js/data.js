@@ -18,7 +18,7 @@
      users/{uid}/files/{fileId}/chunks/{i}   { data: Blob }       original bytes
      users/{uid}/files/{fileId}/text/{i}     { data: string }     extracted text
      users/{uid}/tracker/{boxId}        Customer Tracker: { title, rows: [...], lastRefreshed,
-                                          status, note, companyName, createdAt, updatedAt }
+                                          status, note, companyName, stats, createdAt, updatedAt }
 
    Security rules that make this private live in firestore.rules.
 
@@ -814,7 +814,7 @@ window.MktforgeData = (() => {
      the app reads. The id comes from the title (case-insensitive), so a
      title can only ever have one box. */
 
-  const TRACKER_FIELDS = ['title', 'rows', 'lastRefreshed', 'status', 'note', 'companyName', 'createdAt'];
+  const TRACKER_FIELDS = ['title', 'rows', 'lastRefreshed', 'status', 'note', 'companyName', 'stats', 'createdAt'];
   const trackerRef = (d) => userRef(d).collection('tracker');
 
   function trackerId(title) {
@@ -835,6 +835,7 @@ window.MktforgeData = (() => {
     out.status = String(out.status || 'pending');
     out.note = String(out.note || '');
     out.companyName = String(out.companyName || '');
+    out.stats = out.stats && typeof out.stats === 'object' ? out.stats : null;
     return out;
   }
 

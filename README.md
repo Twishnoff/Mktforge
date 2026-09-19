@@ -907,23 +907,45 @@ Each row also says whether the author **stated** their role or the agent
 
 ### What the agent does
 
-1. Reads your homepage and each competitor's homepage.
+1. Reads your homepage and each competitor's homepage, keeping each site's
+   own name (so it searches "Rival", not "rival.com"; if a homepage blocks
+   it, the brief looks the name up).
 2. Takes only the saved materials that mention this job title
    (`MktforgeResearch.build` with the title, then entries whose `match`
    includes "job title"). Imported files still outrank generated reports.
-3. Brief (no web search): what you do and the problems you solve, competitor
-   names, the title's pain points and initiatives *from those materials*, and
-   any platforms those materials name (a persona's "where they gather",
+3. **Brief**: what you do and the problems you solve, competitor names, the
+   title's pain points and initiatives *from those materials*, and any
+   platforms those materials name (a persona's "where they gather",
    Marketing Opportunities channels). LinkedIn/X/Facebook/Instagram are
    dropped — they can't be read.
-4. Research (web search): Reddit, G2, Capterra, TrustRadius, Hacker News,
+4. **Gather** (web search): Reddit, G2, Capterra, TrustRadius, Hacker News,
    forums/blogs/news covering the title's topics, plus the platforms from
-   step 3 — nothing else. Last 90 days, and only items whose date it can
-   confirm. Nothing on a competitor's or your own site.
-5. Job-title match: a stated role first; otherwise inferred from the pain
-   points / initiatives in your saved materials; otherwise dropped. With no
-   saved materials for the title, only stated roles count, and the box says
-   so and suggests running Persona Builder or Find My Customer for it.
+   step 3 — nothing else. It collects broadly and records each item's date
+   and whatever the author shows about their role, but doesn't judge
+   job-title fit. With competitors, a competitor run and a problems run go
+   side by side (12 searches each).
+5. **Classify** (no search) applies the job-title rule: a stated role
+   first; otherwise inferred from the pain points / initiatives in your
+   saved materials; otherwise dropped.
+   **Persona title families:** before a run, the page reads the Overview of
+   every Persona Builder PDF (and any imported file with "persona" in its
+   name laid out the same way): "Primary Job Title:" and "Secondary Job
+   Titles:". If the tracked title is the primary or one of the secondaries,
+   every other title in that persona counts as the same role — an author
+   showing any of them is a stated match. The box's note lists the extra
+   titles and which file they came from. Titles containing a comma
+   ("Senior Manager, Growth Marketing") are rejoined, and a bare level on
+   its own ("Senior Manager") is never used. With no saved materials for the
+   title, only stated roles count, and the box says so and suggests running
+   Persona Builder or Find My Customer for it.
+6. The Worker re-checks everything: last 90 days (a month-only date must be
+   wholly inside the window; month-only and "x weeks ago" dates show with a
+   ~), nothing on a vendor's own site, and the job-title rule again.
+
+Searching and judging used to happen in one step, which returned nothing:
+with every rule applied mid-search, the model played safe. Each box now
+ends with a line saying how many searches ran, how many items were found,
+and how many were left out for which reason.
 
 ### Runs and the nav light
 
@@ -932,14 +954,14 @@ modules, and several boxes can run at once, but a reload or sign-out ends
 them (the Worker notices within 15 s and stops the model call). A box whose
 first run was cut off says so and offers Refresh Data. The dot is yellow
 while any box is researching, then green — including when nothing was
-found — or red if a run failed or timed out (7 minutes on the page, 6 in the
-Worker).
+found — or red if a run failed or timed out (9 minutes on the page, 7½ in
+the Worker).
 
 ### Storage
 
 ```
 users/{uid}/tracker/{boxId}   title, rows, lastRefreshed, status, note,
-                              companyName, createdAt, updatedAt
+                              companyName, stats, createdAt, updatedAt
 ```
 
 One document per title (`MktforgeData.trackerId(title)`), so a box's results
