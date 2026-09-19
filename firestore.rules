@@ -43,6 +43,16 @@ service cloud.firestore {
       }
     }
 
+    // Customer Tracker: one document per tracked job title.
+    match /users/{uid}/tracker/{boxId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 200
+        && request.resource.data.rows is list
+        && request.resource.data.rows.size() <= 50;
+    }
+
     function isOwner(uid) {
       return request.auth != null
         && request.auth.uid == uid
