@@ -394,7 +394,7 @@
       <p class="ctrk__eyebrow">${MODULE_NAME}</p>
       <h1 class="ctrk__title">Hear what your buyers are saying</h1>
       <p class="ctrk__dek">Pick a job title and an agent searches Reddit, review sites, Hacker News,
-        and the forums, blogs and news your buyers read for the last 90 days of posts about your
+        and the forums, blogs and news your buyers read for the last 120 days of posts about your
         company, your competitors and the problems you solve. Green rows are openings for you; red
         rows are risks.</p>
     </header>
@@ -489,7 +489,7 @@
     const n = (v) => Number(v) || 0;
     const plural = (k, one, many) => `${k} ${k === 1 ? one : many}`;
     const parts = [];
-    if (n(d.date)) parts.push(`${n(d.date)} undated or older than 90 days`);
+    if (n(d.date)) parts.push(`${n(d.date)} older than 120 days`);
     if (n(d.match)) parts.push(`${n(d.match)} not tied to this job title`);
     if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} off-topic`);
     if (n(d.owned)) parts.push(`${n(d.owned)} on your or a competitor’s own site`);
@@ -515,7 +515,7 @@
       : r.why || '';
     return `
       <tr class="ctrk__row is-${tone}">
-        <td class="ctrk__c-date"${r.approx || /^\d{4}-\d{2}$/.test(r.date || '') ? ' title="Approximate date"' : ''}>${esc(fmtDay(r.date, r.approx))}</td>
+        <td class="ctrk__c-date${r.date ? '' : ' is-undated'}"${!r.date ? ' title="No publish date could be found"' : r.approx || /^\d{4}-\d{2}$/.test(r.date) ? ' title="Approximate date"' : ''}>${esc(r.date ? fmtDay(r.date, r.approx) : 'Undated')}</td>
         <td class="ctrk__c-source">
           <span class="ctrk__source">${esc(r.source)}</span>
           <span class="ctrk__kind">${esc(KIND[r.kind] || 'Post')}</span>
@@ -546,7 +546,7 @@
     const stats = statsText(box.stats);
     if (!box.rows.length) {
       parts.push(`<div class="ctrk__state">
-          <p>No posts or articles from the last 90 days matched this job title.</p>
+          <p>No posts or articles from the last 120 days matched this job title.</p>
           ${stats ? `<p class="ctrk__stats">${esc(stats)}</p>` : ''}
         </div>`);
       return parts.join('');

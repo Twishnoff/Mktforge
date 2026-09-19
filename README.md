@@ -938,9 +938,10 @@ Each row also says whether the author **stated** their role or the agent
    its own ("Senior Manager") is never used. With no saved materials for the
    title, only stated roles count, and the box says so and suggests running
    Persona Builder or Find My Customer for it.
-6. The Worker re-checks everything: last 90 days (a month-only date must be
+6. The Worker re-checks everything: last 120 days (a month-only date must be
    wholly inside the window; month-only and "x weeks ago" dates show with a
-   ~), nothing on a vendor's own site, and the job-title rule again.
+   ~; items with no date at all are kept, shown as "Undated" and listed
+   last), nothing on a vendor's own site, and the job-title rule again.
 
 Searching and judging used to happen in one step, which returned nothing:
 with every rule applied mid-search, the model played safe. Each box now

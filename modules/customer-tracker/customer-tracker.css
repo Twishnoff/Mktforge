@@ -340,6 +340,7 @@
 .ctrk__row.is-red td:first-child { border-left-color: var(--ctrk-crit); }
 
 .ctrk__c-date { width: 104px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.ctrk__c-date.is-undated { color: var(--muted); font-style: italic; }
 .ctrk__c-source { width: 150px; }
 .ctrk__c-mentions { width: 170px; }
 .ctrk__c-link { width: 64px; white-space: nowrap; text-align: right; }
