@@ -156,13 +156,13 @@ a.logo:hover { opacity: .8; }
 .logo img { display: block; height: 24px; width: auto; }
 
 /* Expanded lockup: sized so its squares match the 24px minimized mark.
-   The squares fill 252 of the lockup's 368-unit-tall viewBox (the wordmark's
-   ascenders and the "g" descender take the rest), and the viewBox is 2023
-   units wide, so 24px squares = a 193 x 35px lockup. On narrow screens,
-   where the nav is too slim for that, it scales down to fit instead of
-   spilling past the nav. */
+   In the SVG the squares and the "M" are both 252 units tall (the wordmark
+   was scaled down so its cap height lines up with the squares); the viewBox
+   is 1835 x 324, the extra height being the "g" descender. So 24px squares
+   = a 175 x 31px lockup. On narrow screens, where the nav is too slim for
+   that, it scales down to fit instead of spilling past the nav. */
 .nav__logo .logo { max-width: 100%; }
-.logo .logo__full { width: calc(24px * 2023 / 252); max-width: 100%; height: auto; }
+.logo .logo__full { width: calc(24px * 1835 / 252); max-width: 100%; height: auto; }
 
 .logo .logo__mark { display: none; }
 
