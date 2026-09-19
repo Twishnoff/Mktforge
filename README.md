@@ -26,6 +26,7 @@ modules/draft-messaging/    Draft Messaging (messaging + homepage copy, stages 6
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
 modules/battle-card-generator/  Battle Card Generator (ported from Battlecard-Generator)
 modules/marketing-opportunities/  Marketing Opportunities (ported from Syndication & Event Finder)
+modules/customer-tracker/   Customer Tracker (what a job title is saying online)
 ```
 
 ## Running it locally
@@ -55,7 +56,7 @@ are all handled by the shell.
 The nav lists modules in the order their `<script>` tags appear in
 `index.html`, which is the order a person works through them: My Company, Find
 My Customer, Persona Builder, Build Positioning, Draft Messaging, Marketing
-Opportunities, Battle Card Generator. Moving a module in the nav means moving
+Opportunities, Customer Tracker, Battle Card Generator. Moving a module in the nav means moving
 its one line.
 
 ### The contract
@@ -854,6 +855,103 @@ The Worker's `ALLOWED_ORIGIN` defaults to `*`. If it has been set to
 
 The standalone site and this module are now two copies of the same frontend.
 If you change one, port the change to the other.
+
+
+## Customer Tracker
+
+Watches what one job title at a time is saying online about your company,
+your competitors and the problems your product solves. Nav button directly
+below Marketing Opportunities (radar icon). Spec: Google Doc
+"Customer Tracker — Spec v2". Backend: its own Cloudflare Worker,
+`customer-tracker` (`C:\Users\Tyler\customer-tracker`, deploy steps in its
+README).
+
+```
+modules/customer-tracker/
+  customer-tracker.js    page, runs, results table
+  customer-tracker.css   (classes prefixed .ctrk)
+```
+
+### The page
+
+- **Job Title** drop-down: My Company's Target Job Titles, minus the ones
+  already being tracked. **Track Title** is disabled until one is picked, and
+  greyed out with *"Company URL required…"* when My Company has no URL.
+  No titles at all shows *"No job titles found…"*; no competitors shows a
+  reminder, and the tool still runs (company and pain-point posts only).
+- **Track Title** adds a full-width box for that title (same width as Build
+  Positioning's stage boxes, one per row, alphabetical) and starts the agent.
+- **Stop Tracking** (top right) asks for a second click, then cancels any run
+  and deletes the box and its results. **Refresh Data** (bottom right) is
+  disabled while that box is running and replaces the results when the new
+  run finishes; if the run fails, the old results stay with the error above
+  them.
+- Removing or renaming a title in My Company removes its box (a rename is a
+  remove plus an add). Adding or removing boxes never changes My Company.
+
+### Results table
+
+Date · Source · Excerpt / summary · Mentions · Link, newest first, up to 25
+rows. The row colour is what the item means for **you**:
+
+| About | Positive | Negative |
+|---|---|---|
+| your company | green | red |
+| a competitor | red | green |
+| a problem you solve | — | green (a complaint is an opening) |
+
+Neutral and mixed rows have no colour. The Worker sets the colour from the
+item's subject and sentiment, not the model's say-so, so it stays consistent.
+Each row also says whether the author **stated** their role or the agent
+**inferred** it, and why.
+
+### What the agent does
+
+1. Reads your homepage and each competitor's homepage.
+2. Takes only the saved materials that mention this job title
+   (`MktforgeResearch.build` with the title, then entries whose `match`
+   includes "job title"). Imported files still outrank generated reports.
+3. Brief (no web search): what you do and the problems you solve, competitor
+   names, the title's pain points and initiatives *from those materials*, and
+   any platforms those materials name (a persona's "where they gather",
+   Marketing Opportunities channels). LinkedIn/X/Facebook/Instagram are
+   dropped — they can't be read.
+4. Research (web search): Reddit, G2, Capterra, TrustRadius, Hacker News,
+   forums/blogs/news covering the title's topics, plus the platforms from
+   step 3 — nothing else. Last 90 days, and only items whose date it can
+   confirm. Nothing on a competitor's or your own site.
+5. Job-title match: a stated role first; otherwise inferred from the pain
+   points / initiatives in your saved materials; otherwise dropped. With no
+   saved materials for the title, only stated roles count, and the box says
+   so and suggests running Persona Builder or Find My Customer for it.
+
+### Runs and the nav light
+
+Runs behave like the other modules: they carry on while you're on other
+modules, and several boxes can run at once, but a reload or sign-out ends
+them (the Worker notices within 15 s and stops the model call). A box whose
+first run was cut off says so and offers Refresh Data. The dot is yellow
+while any box is researching, then green — including when nothing was
+found — or red if a run failed or timed out (7 minutes on the page, 6 in the
+Worker).
+
+### Storage
+
+```
+users/{uid}/tracker/{boxId}   title, rows, lastRefreshed, status, note,
+                              companyName, createdAt, updatedAt
+```
+
+One document per title (`MktforgeData.trackerId(title)`), so a box's results
+never bloat the `users/{uid}` record every other module reads. Results are not
+saved to Generated Materials yet, so other modules' agents don't read them.
+
+**Firestore rules must be re-published** for this module (Firestore → Rules →
+paste `firestore.rules` → Publish). Without the new `tracker` rule, boxes
+can't be saved.
+
+**Deploy order:** the Worker first, then publish the rules, then push this
+site.
 
 
 ## Authentication

@@ -17,6 +17,8 @@
                                           digest? (JSON string, short summary for agents) }
      users/{uid}/files/{fileId}/chunks/{i}   { data: Blob }       original bytes
      users/{uid}/files/{fileId}/text/{i}     { data: string }     extracted text
+     users/{uid}/tracker/{boxId}        Customer Tracker: { title, rows: [...], lastRefreshed,
+                                          status, note, companyName, createdAt, updatedAt }
 
    Security rules that make this private live in firestore.rules.
 
@@ -53,6 +55,10 @@
      setFileDigest(id, digest)       -> Promise; stores that summary on the file
      getPositioningAnswers()         -> Promise<{ key: text }> (Build Positioning)
      savePositioningAnswers(changes) -> Promise; { key: text } sets, { key: null } clears
+     listTrackerBoxes()              -> Promise<[box]> Customer Tracker job-title boxes
+     saveTrackerBox(box)             -> Promise<box>; box.id is made from the title
+     deleteTrackerBox(id)            -> Promise; id from listTrackerBoxes / trackerId(title)
+     trackerId(title)                -> the document id a title is saved under
      prefill(pairs)                  -> fills EMPTY inputs from the profile
      util.normalizeUrl / util.isValidUrl
    ========================================================================== */
@@ -802,6 +808,74 @@ window.MktforgeData = (() => {
     return { ...next };
   }
 
+  /* ---------- Customer Tracker boxes ----------
+     One document per tracked job title, so a box's results can be written or
+     deleted on their own and never bloat the users/{uid} record the rest of
+     the app reads. The id comes from the title (case-insensitive), so a
+     title can only ever have one box. */
+
+  const TRACKER_FIELDS = ['title', 'rows', 'lastRefreshed', 'status', 'note', 'companyName', 'createdAt'];
+  const trackerRef = (d) => userRef(d).collection('tracker');
+
+  function trackerId(title) {
+    const key = String(title || '').trim().toLowerCase();
+    let h = 5381;
+    for (let i = 0; i < key.length; i += 1) h = ((h * 33) ^ key.charCodeAt(i)) >>> 0;
+    const slug = key.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'title';
+    return `${slug}-${h.toString(36)}`;
+  }
+
+  function cleanTrackerBox(raw) {
+    const out = {};
+    TRACKER_FIELDS.forEach((k) => { if (raw[k] !== undefined) out[k] = raw[k]; });
+    out.title = String(out.title || '').trim().slice(0, 200);
+    out.rows = Array.isArray(out.rows) ? out.rows.slice(0, 50) : [];
+    out.createdAt = Number(out.createdAt) || Date.now();
+    out.lastRefreshed = Number(out.lastRefreshed) || 0;
+    out.status = String(out.status || 'pending');
+    out.note = String(out.note || '');
+    out.companyName = String(out.companyName || '');
+    return out;
+  }
+
+  async function listTrackerBoxes() {
+    if (isLocal()) {
+      return Object.entries(localRead().tracker || {}).map(([id, b]) => ({ id, ...cleanTrackerBox(b) }));
+    }
+    const d = await getDb();
+    const snap = await withTimeout(trackerRef(d).get(), TIMEOUT_MS, 'Loading your tracked titles');
+    return snap.docs.map((doc) => ({ id: doc.id, ...cleanTrackerBox(doc.data()) }));
+  }
+
+  async function saveTrackerBox(box) {
+    const clean = cleanTrackerBox(box || {});
+    if (!clean.title) throw new Error('A tracked title needs a name.');
+    const id = trackerId(clean.title);
+    if (isLocal()) {
+      const data = localRead();
+      data.tracker = data.tracker || {};
+      data.tracker[id] = { ...clean, updatedAt: Date.now() };
+      localWrite(data);
+    } else {
+      const d = await getDb();
+      await withTimeout(trackerRef(d).doc(id).set({ ...clean, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
+                        TIMEOUT_MS, 'Saving tracked results');
+    }
+    return { id, ...clean };
+  }
+
+  async function deleteTrackerBox(id) {
+    if (!id || /\//.test(id)) throw new Error('Unknown tracked title.');
+    if (isLocal()) {
+      const data = localRead();
+      if (data.tracker) delete data.tracker[id];
+      localWrite(data);
+      return;
+    }
+    const d = await getDb();
+    await withTimeout(trackerRef(d).doc(id).delete(), TIMEOUT_MS, 'Removing a tracked title');
+  }
+
   /* ---------- autofill for other modules ----------
      prefill([[inputEl, 'companyUrl'], [inputEl, p => p.targetTitles[0]]])
      Only fills inputs that are still empty when the profile arrives, and
@@ -827,6 +901,7 @@ window.MktforgeData = (() => {
     readFile, getFileDigest, setFileDigest, importFile, getFileText, isViewable,
     MAX_FILE_BYTES,
     getPositioningAnswers, savePositioningAnswers,
+    listTrackerBoxes, saveTrackerBox, deleteTrackerBox, trackerId,
     prefill,
     get isLocal() { return isLocal(); },
     util: { normalizeUrl, isValidUrl, imageToAvatarDataUrl }

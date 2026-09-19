@@ -88,6 +88,12 @@ window.MKTFORGE_CONFIG = {
     SEND_AUTH_TOKEN: true,
     // Imported/Generated Materials go with each request (Worker updated).
     USE_SAVED_MATERIALS: true
+  },
+
+  customerTracker: {
+    // Its own Worker (C:\Users\Tyler\customer-tracker, deployed as "customer-tracker").
+    // Signed-in accounts only: every request carries the Firebase ID token.
+    API_BASE_URL: 'https://customer-tracker.tyler-wishnoff.workers.dev'
   }
 
 };

@@ -60,6 +60,17 @@ window.MktforgeIcons = {
                 <path d="M20.3 7a7 7 0 0 1 0 10"/>
               </svg>`,
 
+  /* Customer Tracker — radar display: rings, a sweep and a couple of blips */
+  radar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5"/>
+            <circle cx="12" cy="12" r="5"/>
+            <path d="M12 12l6-6"/>
+            <circle cx="12" cy="12" r=".9" fill="currentColor" stroke="none"/>
+            <circle cx="15.6" cy="14.8" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="8.2" cy="9.4" r=".8" fill="currentColor" stroke="none"/>
+          </svg>`,
+
   /* Build Positioning — tower crane lifting a block */
   crane: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
