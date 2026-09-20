@@ -555,15 +555,17 @@
     </header>
 
     <section class="mtrk__card" aria-label="Track a job title or a competitor">
-      <div class="mtrk__pick">
-        <label class="mtrk__label" for="mtrk-title">Job Title</label>
-        <select id="mtrk-title" data-el="select"></select>
-        <button type="button" class="mtrk__btn" data-el="track">Track Title</button>
-      </div>
-      <div class="mtrk__pick">
-        <label class="mtrk__label" for="mtrk-competitor">Competitor</label>
-        <select id="mtrk-competitor" data-el="comp-select"></select>
-        <button type="button" class="mtrk__btn" data-el="track-comp">Track Competitor</button>
+      <div class="mtrk__picks">
+        <div class="mtrk__pick">
+          <label class="mtrk__label" for="mtrk-title">Job Title</label>
+          <select id="mtrk-title" data-el="select"></select>
+          <button type="button" class="mtrk__btn" data-el="track">Track Title</button>
+        </div>
+        <div class="mtrk__pick">
+          <label class="mtrk__label" for="mtrk-competitor">Competitor</label>
+          <select id="mtrk-competitor" data-el="comp-select"></select>
+          <button type="button" class="mtrk__btn" data-el="track-comp">Track Competitor</button>
+        </div>
       </div>
       <div class="mtrk__messages" data-el="messages"></div>
     </section>

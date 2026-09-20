@@ -1,33 +1,36 @@
 Mktforge — Market Tracker: competitor tracking, round 2 (site files)
 ====================================================================
 
-You already uploaded round 1 and published the Firestore rules. This is a
-small follow-up: only ONE file actually changed.
+REPLACES the round-2 zip sent a few minutes ago. Two files changed this time,
+not one.
 
 1. COPY over the repo, keeping the paths:
 
-       modules/market-tracker/market-tracker.js     90-day copy fix
+       modules/market-tracker/market-tracker.js     picker markup + 90-day copy
+       modules/market-tracker/market-tracker.css    picker spacing
        README.md                                    docs
 
-   The other files in here (assets/js/data.js, firestore.rules,
-   modules/market-tracker/market-tracker.css) are IDENTICAL to what you
-   already uploaded. They're included so the folder is a complete set —
-   copying them again is harmless.
+   assets/js/data.js and firestore.rules are IDENTICAL to what you already
+   uploaded and published. They're here so the folder is a complete set;
+   copying them again is harmless, and the Firestore rules do NOT need
+   re-publishing.
 
-   What changed: the page said "120 days" in two places (the empty-state line
-   and the stats line). The deployed Worker has always used 90, so the page
-   was telling users the wrong window. It now says 90.
+   What changed:
+   - The drop-downs and their buttons nearly touched. Both rows now sit in
+     one grid, so the two drop-downs start at the same x even though
+     "Job Title" and "Competitor" are different widths, and there's 24px
+     between each drop-down and its button. Under 560px wide the rows stack
+     instead.
+   - The page said "120 days" in two places. The Worker has always used 90,
+     so the page was quoting the wrong window. It now says 90.
 
-2. DEPLOY THE WORKER. This is the part that makes Track Competitor work.
+2. DEPLOY THE WORKER — this is what makes Track Competitor work at all.
 
        cd C:\Users\Tyler\customer-tracker
        npx wrangler deploy
 
-   src/index.js, src/competitor.js, src/shared.js and README.md have already
-   been written to that folder. src/competitor.js and src/shared.js are new
-   files; wrangler picks them up automatically (they're imported by index.js).
+   src/index.js, src/competitor.js, src/shared.js and README.md are already
+   written to that folder. competitor.js and shared.js are new files;
+   wrangler picks them up automatically.
 
-   Nothing else to configure. MAX_COMPETITOR_SEARCHES is optional and
-   defaults to 12.
-
-3. No Firestore change this round. Rules are already published.
+3. No Firestore change. Rules are already published and unchanged.

@@ -62,17 +62,23 @@
   box-shadow: var(--mtrk-shadow);
 }
 
-.mtrk__pick {
-  display: flex;
+/* One grid for both rows, so the two drop-downs start at the same x even
+   though "Job Title" and "Competitor" are different widths. `display:
+   contents` lets each row's label, select and button sit in the shared
+   columns without a wrapper of their own. */
+.mtrk__picks {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 460px) max-content;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 12px 14px;
+  gap: 14px 24px;
 }
+
+.mtrk__pick { display: contents; }
 
 .mtrk__label { font-size: 14px; font-weight: 600; }
 
 .mtrk select {
-  flex: 1 1 280px;
+  width: 100%;
   max-width: 460px;
   min-width: 0;
   font: inherit;
@@ -87,6 +93,12 @@
 }
 
 .mtrk select:disabled { color: var(--muted); cursor: not-allowed; }
+
+@media (max-width: 560px) {
+  .mtrk__picks { display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
+  .mtrk__pick { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .mtrk select { flex: 1 1 240px; }
+}
 
 .mtrk__messages:empty { display: none; }
 .mtrk__messages { margin-top: 12px; display: grid; gap: 6px; }
