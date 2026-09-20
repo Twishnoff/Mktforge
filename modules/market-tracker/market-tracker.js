@@ -678,7 +678,7 @@
       if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} not about this competitor`);
       if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
     } else {
-      if (n(d.date)) parts.push(`${n(d.date)} older than 120 days`);
+      if (n(d.date)) parts.push(`${n(d.date)} older than 90 days`);
       if (n(d.match)) parts.push(`${n(d.match)} not tied to this job title`);
       if (n(d.perspective)) parts.push(`${n(d.perspective)} reporting or explainers rather than first-hand experience`);
       if (n(d.paper)) parts.push(`${n(d.paper)} research papers`);
@@ -804,7 +804,7 @@
     if (!box.rows.length) {
       parts.push(`<div class="mtrk__state">
           <p>${esc(competitor ? quietNote(box)
-            : 'No posts or articles from the last 120 days matched this job title.')}</p>
+            : 'No posts or articles from the last 90 days matched this job title.')}</p>
           ${baseline}
           ${stats ? `<p class="mtrk__stats">${esc(stats)}</p>` : ''}
         </div>`);

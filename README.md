@@ -994,7 +994,7 @@ Each row also says whether the author **stated** their role or the agent
    even when they never name it — "Has anyone tried <Competitor> for X?"
    is usually answered three comments down by somebody who used it and
    doesn't repeat the name. Whether the commenter reads as the tracked role
-   is still judged normally, and comments outside the 120 days are dropped
+   is still judged normally, and comments outside the 90 days are dropped
    (the thread dates every comment exactly). Up to 12 threads and 40
    comments a run, of which at most 20 take candidate slots, so harvested
    comments can't crowd out everything the search found.
@@ -1032,7 +1032,7 @@ Each row also says whether the author **stated** their role or the agent
    publish-date tags, then a quick read of the page text. Blocked sites
    (G2, for one) stay undated. The count line says how many dates were
    read this way.
-7. The Worker re-checks everything: last 120 days (a month-only date must be
+7. The Worker re-checks everything: last 90 days (a month-only date must be
    wholly inside the window; month-only and "x weeks ago" dates show with a
    ~; items with no date at all are kept, shown as "Undated" and listed
    last), nothing on your or a competitor's site, the first-hand-experience
