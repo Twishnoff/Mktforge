@@ -941,7 +941,17 @@ Each row also says whether the author **stated** their role or the agent
 6. The Worker re-checks everything: last 120 days (a month-only date must be
    wholly inside the window; month-only and "x weeks ago" dates show with a
    ~; items with no date at all are kept, shown as "Undated" and listed
-   last), nothing on a vendor's own site, and the job-title rule again.
+   last), nothing on your or a competitor's site, no vendor marketing, and
+   the job-title rule again. **Vendor marketing** is a page on a company's
+   own site where the company sells something that addresses the problem
+   the page discusses — a data-warehouse vendor writing about
+   data-warehouse pain is dropped. A company writing as a user or buyer is
+   kept: an engineering blog on a problem it solved (e.g. an exchange on
+   scaling its database), or a customer's own case study or testimonial.
+   Those rows say "company's own site" under the source. Each source's
+   root-domain homepage decides whether it's a vendor and what it sells;
+   Reddit, review sites, Hacker News, Medium and the platforms your own
+   files name aren't checked, since their authors aren't the site's owner.
 
 Searching and judging used to happen in one step, which returned nothing:
 with every rule applied mid-search, the model played safe. Each box now

@@ -493,6 +493,7 @@
     if (n(d.match)) parts.push(`${n(d.match)} not tied to this job title`);
     if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} off-topic`);
     if (n(d.owned)) parts.push(`${n(d.owned)} on your or a competitor’s own site`);
+    if (n(d.vendor)) parts.push(`${n(d.vendor)} vendor marketing for its own product`);
     if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
     const head = `${plural(n(stats.searched), 'search', 'searches')} · ${plural(n(stats.found), 'item', 'items')} found · ${n(stats.kept)} shown`;
     return parts.length ? `${head}. Left out: ${parts.join(', ')}.` : `${head}.`;
@@ -518,7 +519,7 @@
         <td class="ctrk__c-date${r.date ? '' : ' is-undated'}"${!r.date ? ' title="No publish date could be found"' : r.approx || /^\d{4}-\d{2}$/.test(r.date) ? ' title="Approximate date"' : ''}>${esc(r.date ? fmtDay(r.date, r.approx) : 'Undated')}</td>
         <td class="ctrk__c-source">
           <span class="ctrk__source">${esc(r.source)}</span>
-          <span class="ctrk__kind">${esc(KIND[r.kind] || 'Post')}</span>
+          <span class="ctrk__kind">${esc(KIND[r.kind] || 'Post')}${r.companySite ? ' · company’s own site' : ''}</span>
         </td>
         <td class="ctrk__c-excerpt">
           <span class="ctrk__tone">${esc(TONE[tone])}</span>
