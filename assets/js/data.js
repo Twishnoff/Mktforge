@@ -918,7 +918,7 @@ window.MktforgeData = (() => {
      Stop Tracking: stop and restart tracking and you pick up where you left
      off. It dies only when the URL leaves My Company.
 
-       { url, companyName,
+       { v, url, companyName,
          homepage:  { heading, copy, cta, checkedAt },
          inventory: [ { u, k, d } ]   every page seen on the site (k = kind,
                                       d = publish date or '')
@@ -943,6 +943,9 @@ window.MktforgeData = (() => {
       })
       .filter(Boolean);
     return {
+      /* Set by the Worker. Bumped when something changes the meaning of what
+         is stored, so the next run knows to re-read it. Never invent one. */
+      v: Number(r.v) || 1,
       url: String(r.url || url || '').slice(0, 500),
       companyName: String(r.companyName || '').slice(0, 200),
       homepage: {

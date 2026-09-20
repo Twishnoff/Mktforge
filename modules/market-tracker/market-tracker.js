@@ -666,6 +666,21 @@
     return out && (approx || m) ? `~${out}` : out;
   };
 
+  /* The Date column. A publish date when the page gave one; otherwise the day
+     we first showed the row, which is the only date we honestly have. It is
+     labelled, so nobody reads a discovery date as a publication date. */
+  function dateCell(r) {
+    if (r.date) {
+      const approx = r.approx || /^\d{4}-\d{2}$/.test(r.date);
+      return `<td class="mtrk__c-date"${approx ? ' title="Approximate date"' : ''}>${esc(fmtDay(r.date, r.approx))}</td>`;
+    }
+    if (r.firstSurfaced) {
+      return `<td class="mtrk__c-date is-found" title="This page doesn’t show a publish date. This is when Market Tracker first surfaced it to you.">${
+        esc(fmtDay(new Date(Number(r.firstSurfaced)).toISOString().slice(0, 10)))}<span class="mtrk__found">first seen</span></td>`;
+    }
+    return `<td class="mtrk__c-date is-undated" title="No publish date could be found">Undated</td>`;
+  }
+
   /* What the agent looked at and why things were left out. */
   function statsText(box) {
     const stats = box.stats;
@@ -731,7 +746,7 @@
       ? `<p class="mtrk__thread">Changed: ${esc(r.changed.join(', '))}</p>` : '';
     return `
       <tr class="mtrk__row${competitor ? '' : ` is-${tone}`}">
-        <td class="mtrk__c-date${r.date ? '' : ' is-undated'}"${!r.date ? ' title="No publish date could be found"' : r.approx || /^\d{4}-\d{2}$/.test(r.date) ? ' title="Approximate date"' : ''}>${esc(r.date ? fmtDay(r.date, r.approx) : 'Undated')}</td>
+        ${dateCell(r)}
         <td class="mtrk__c-source">
           <span class="mtrk__source">${esc(r.source)}</span>
           <span class="mtrk__kind">${esc(KIND[r.kind] || 'Post')}${r.companySite ? ' · company’s own site' : ''}</span>

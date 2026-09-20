@@ -1,36 +1,40 @@
-Mktforge — Market Tracker: competitor tracking, round 2 (site files)
-====================================================================
+Mktforge — Market Tracker: date fixes (site files)
+==================================================
 
-REPLACES the round-2 zip sent a few minutes ago. Two files changed this time,
-not one.
+REPLACES every earlier zip. Three files changed since the last one.
 
 1. COPY over the repo, keeping the paths:
 
-       modules/market-tracker/market-tracker.js     picker markup + 90-day copy
-       modules/market-tracker/market-tracker.css    picker spacing
+       assets/js/data.js                            keeps the ledger version
+       modules/market-tracker/market-tracker.js     date column + picker + copy
+       modules/market-tracker/market-tracker.css    date column + picker
        README.md                                    docs
 
-   assets/js/data.js and firestore.rules are IDENTICAL to what you already
-   uploaded and published. They're here so the folder is a complete set;
-   copying them again is harmless, and the Firestore rules do NOT need
-   re-publishing.
+   firestore.rules is UNCHANGED and does NOT need re-publishing.
 
    What changed:
-   - The drop-downs and their buttons nearly touched. Both rows now sit in
-     one grid, so the two drop-downs start at the same x even though
-     "Job Title" and "Competitor" are different widths, and there's 24px
-     between each drop-down and its button. Under 560px wide the rows stack
-     instead.
-   - The page said "120 days" in two places. The Worker has always used 90,
-     so the page was quoting the wrong window. It now says 90.
+   - A row with no publish date now shows the day it was first surfaced,
+     labelled "first seen", instead of the word "Undated". A row that does
+     have a publish date is unaffected.
+   - The ledger now carries a version number, so the Worker knows when the
+     dates it stored were read by the old, broken extractor.
+   - (From the previous round, if you haven't uploaded it yet: the picker
+     rows are aligned with 24px between each drop-down and its button, and
+     the page says 90 days rather than 120.)
 
-2. DEPLOY THE WORKER — this is what makes Track Competitor work at all.
+2. DEPLOY THE WORKER — this carries the real date fix.
 
        cd C:\Users\Tyler\customer-tracker
        npx wrangler deploy
 
-   src/index.js, src/competitor.js, src/shared.js and README.md are already
-   written to that folder. competitor.js and shared.js are new files;
-   wrangler picks them up automatically.
+   src/index.js, src/competitor.js and src/shared.js are already written to
+   that folder.
 
-3. No Firestore change. Rules are already published and unchanged.
+3. AFTER DEPLOYING, hit Refresh Data on each competitor box once.
+
+   Your existing boxes hold dates read by the old extractor. The first
+   refresh after this deploy notices the ledger is version 1, re-opens every
+   page it had recorded a date for, and re-reads it properly. That one run
+   is slower than usual. Anything the old code wrongly dated as OLD (and so
+   never showed you) can surface on that run; anything it wrongly dated as
+   RECENT has already been shown and stays filtered out.

@@ -375,6 +375,18 @@
 
 .mtrk__c-date { width: 104px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
 .mtrk__c-date.is-undated { color: var(--muted); font-style: italic; }
+.mtrk__c-date.is-found { white-space: normal; }
+
+/* Marks a date as "when we first showed you this", not "when it was
+   published" — the page had no publish date to give. */
+.mtrk__found {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 .mtrk__c-source { width: 150px; }
 .mtrk__c-mentions { width: 170px; }
 .mtrk__c-link { width: 64px; white-space: nowrap; text-align: right; }
