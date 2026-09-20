@@ -1,13 +1,31 @@
 /* ==========================================================================
    Market Tracker
-   Watches what one job title at a time is saying online — about the user's
-   company, its competitors, and the problems its product solves — and lays
-   each finding out as a row coloured by what it means for the user.
+   Watches two things at once and lays each finding out as a row.
+
+   Tracked Buyers  — one box per job title. What that title is saying online
+     about the user's company, its competitors, and the problems the product
+     solves, coloured by what it means for the user. Unchanged.
+
+   Tracked Competitors — one box per competitor URL. What that competitor has
+     published or had published about it since the last look: homepage
+     messaging changes, new customer stories, blog posts, news and product
+     pages, plus mentions off their own site. No sentiment colour — it is a
+     record of activity, not an opportunity list.
 
    Page
-     Job Title [dropdown of My Company's Target Job Titles] [Track Title]
-     one full-width box per tracked title, alphabetical:
-       Stop Tracking (top right) · results table · Refresh Data (bottom right)
+     Job Title  [dropdown of My Company's Target Job Titles] [Track Title]
+     Competitor [dropdown of My Company's Competitors]       [Track Competitor]
+     Tracked Buyers      — title boxes, alphabetical
+     Tracked Competitors — competitor boxes, alphabetical by name
+
+   What "new" means for a competitor box
+     Every run is a report of what the agent had not shown before. A ledger
+     (users/{uid}/competitorLedger) remembers every page seen on the site and
+     every URL already reported, so a refresh does not repeat itself. Rows
+     first shown less than 48 hours ago are carried over so a quick second
+     refresh does not blank the box. The competitor's homepage is the one
+     exception to URL filtering — it is judged on whether its heading, copy
+     or CTA changed, not on whether the link has been seen.
 
    Runs
      Each box runs its own request to the Worker (/api/track, Server-Sent
@@ -18,8 +36,11 @@
      is researching, then green, or red if a run failed.
 
    Storage
-     users/{uid}/tracker/{boxId} (MktforgeData.saveTrackerBox). A title
-     removed from My Company takes its box with it.
+     users/{uid}/tracker/{boxId}               the boxes and their rows
+     users/{uid}/competitorLedger/{ledgerId}   what has already been seen
+     A title or competitor URL removed from My Company takes its box with it.
+     Stop Tracking removes the box but keeps the ledger; the ledger goes only
+     when the URL leaves My Company.
    ========================================================================== */
 
 (() => {
@@ -28,6 +49,10 @@
   const MODULE_NAME = 'Market Tracker';
   const RUN_TIMEOUT_MS = 9 * 60 * 1000;
   const CONFIRM_MS = 4000;
+
+  /* A row first shown less than this ago survives the next refresh, so a
+     refresh an hour later still shows what the last one found. */
+  const CARRY_MS = 48 * 60 * 60 * 1000;
 
   const Data = () => window.MktforgeData;
   const Kit = () => window.MktforgeKit;
@@ -40,14 +65,20 @@
      bites the next time a box is refreshed. */
   function otherTrackedTitles(box) {
     return [...state.boxes.values()]
-      .filter((b) => b !== box && b.title)
+      .filter((b) => b !== box && b.kind === 'title' && b.title)
       .map((b) => b.title);
   }
 
   const esc = (v) => String(v == null ? '' : v)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  const keyOf = (title) => String(title || '').trim().toLowerCase();
+
+  /* Box keys are namespaced so a job title and a competitor can never collide. */
+  const titleKey = (title) => `t:${String(title || '').trim().toLowerCase()}`;
+  const hostOf = (url) => (Data() && Data().competitorKey ? Data().competitorKey(url)
+    : String(url || '').trim().toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/^www\./, '').split(/[/?#]/)[0]);
+  const compKey = (url) => `c:${hostOf(url)}`;
+  const keyOfBox = (b) => (b.kind === 'competitor' ? compKey(b.competitorUrl) : titleKey(b.title));
 
   /* ---------- state (outlives mount/unmount) ---------- */
 
@@ -56,12 +87,13 @@
     loading: null,          // Promise while the first load is in flight
     loadError: '',
     profile: null,          // My Company profile
-    profileError: false,
     boxes: new Map(),       // key -> box
-    selected: ''
+    selectedTitle: '',
+    selectedCompetitor: ''
   };
 
-  /* box: { key, title, rows, lastRefreshed, status, note, companyName, createdAt,
+  /* box: { id, key, kind, title, competitorUrl, rows, lastRefreshed, status,
+            note, companyName, stats, runs, createdAt,
             running, progress, error, controller, confirmStop, confirmTimer } */
 
   let root = null;
@@ -92,6 +124,10 @@
     return (state.profile && state.profile.targetTitles) || [];
   }
 
+  function profileCompetitors() {
+    return ((state.profile && state.profile.competitors) || []).filter((u) => hostOf(u));
+  }
+
   function load() {
     if (state.loaded) return Promise.resolve();
     if (state.loading) return state.loading;
@@ -99,9 +135,8 @@
       try {
         const [profile, boxes] = await Promise.all([Data().getProfile(), Data().listTrackerBoxes()]);
         state.profile = profile;
-        state.profileError = false;
         boxes.forEach((b) => {
-          const key = keyOf(b.title);
+          const key = keyOfBox(b);
           if (!state.boxes.has(key)) state.boxes.set(key, { ...b, key, running: false, progress: '', error: '' });
         });
         state.loaded = true;
@@ -109,7 +144,7 @@
         reconcile();
       } catch (err) {
         console.error('[Market Tracker] could not load', err);
-        state.loadError = 'Couldn’t load your tracked titles. Check your connection and reopen this module.';
+        state.loadError = 'Couldn’t load what you’re tracking. Check your connection and reopen this module.';
       } finally {
         state.loading = null;
         paint();
@@ -118,22 +153,30 @@
     return state.loading;
   }
 
-  /* A title removed (or renamed) in My Company takes its box with it. */
+  /* A title or competitor URL removed (or edited) in My Company takes its box
+     with it. For a competitor that also means the ledger goes: the history was
+     about that URL, and re-adding it later should start clean. */
   function reconcile() {
     if (!state.profile) return;
-    const keep = new Set(profileTitles().map(keyOf));
+    const keepTitles = new Set(profileTitles().map(titleKey));
+    const keepComps = new Set(profileCompetitors().map(compKey));
     [...state.boxes.values()].forEach((box) => {
-      if (!keep.has(box.key)) removeBox(box, { quiet: true });
+      const alive = box.kind === 'competitor' ? keepComps.has(box.key) : keepTitles.has(box.key);
+      if (!alive) removeBox(box, { quiet: true, forgetLedger: box.kind === 'competitor' });
     });
-    if (state.selected && (!keep.has(keyOf(state.selected)) || state.boxes.has(keyOf(state.selected)))) {
-      state.selected = '';
+    if (state.selectedTitle
+      && (!keepTitles.has(titleKey(state.selectedTitle)) || state.boxes.has(titleKey(state.selectedTitle)))) {
+      state.selectedTitle = '';
+    }
+    if (state.selectedCompetitor
+      && (!keepComps.has(compKey(state.selectedCompetitor)) || state.boxes.has(compKey(state.selectedCompetitor)))) {
+      state.selectedCompetitor = '';
     }
   }
 
   if (window.MktforgeData) {
     window.MktforgeData.onProfile((p) => {
       state.profile = p;
-      state.profileError = false;
       if (state.loaded) reconcile();
       paint();
     });
@@ -141,59 +184,95 @@
 
   /* ---------- boxes ---------- */
 
-  function sortedBoxes() {
-    return [...state.boxes.values()]
-      .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+  const byName = (a, b) => displayName(a).localeCompare(displayName(b), undefined, { sensitivity: 'base' });
+  const displayName = (box) => box.title || hostOf(box.competitorUrl) || 'Competitor';
+
+  function boxesOfKind(kind) {
+    return [...state.boxes.values()].filter((b) => (b.kind === 'competitor') === (kind === 'competitor')).sort(byName);
   }
 
   function persist(box) {
     const rec = {
-      title: box.title, rows: box.rows || [], lastRefreshed: box.lastRefreshed || 0,
+      id: box.id,
+      title: box.title, kind: box.kind, competitorUrl: box.competitorUrl || '',
+      rows: box.rows || [], lastRefreshed: box.lastRefreshed || 0,
       status: box.status || 'pending', note: box.note || '', companyName: box.companyName || '',
-      stats: box.stats || null, createdAt: box.createdAt || Date.now()
+      stats: box.stats || null, runs: box.runs || 0, createdAt: box.createdAt || Date.now()
     };
     return Data().saveTrackerBox(rec).catch((err) => {
       console.error('[Market Tracker] could not save', err);
-      notify(`Couldn’t save the results for “${box.title}” to your account.`, 'error');
+      notify(`Couldn’t save the results for “${displayName(box)}” to your account.`, 'error');
     });
   }
 
-  function removeBox(box, { quiet = false } = {}) {
+  function removeBox(box, { quiet = false, forgetLedger = false } = {}) {
     clearTimeout(box.confirmTimer);
     if (box.controller) box.controller.abort();
     box.running = false;
     box.removed = true;
     state.boxes.delete(box.key);
     syncActivity();
-    Data().deleteTrackerBox(box.id || Data().trackerId(box.title)).catch((err) => {
+    Data().deleteTrackerBox(box.id).catch((err) => {
       console.error('[Market Tracker] could not delete', err);
-      if (!quiet) notify(`Couldn’t remove “${box.title}” from your account. Try again.`, 'error');
+      if (!quiet) notify(`Couldn’t remove “${displayName(box)}” from your account. Try again.`, 'error');
     });
+    /* Stop Tracking keeps the ledger — stop and restart and you pick up where
+       you left off. Only losing the URL in My Company wipes the history. */
+    if (forgetLedger && box.competitorUrl) {
+      Data().deleteCompetitorLedger(box.competitorUrl)
+        .catch((err) => console.warn('[Market Tracker] could not clear competitor history', err));
+    }
   }
 
   function trackTitle(title) {
-    const key = keyOf(title);
-    if (!key || state.boxes.has(key)) return;
+    const key = titleKey(title);
+    if (!String(title || '').trim() || state.boxes.has(key)) return;
     const box = {
-      id: Data().trackerId(title), key, title, rows: [], lastRefreshed: 0, status: 'pending', note: '', companyName: '',
+      id: Data().trackerId(title), key, kind: 'title', title, competitorUrl: '',
+      rows: [], lastRefreshed: 0, status: 'pending', note: '', companyName: '', runs: 0,
       createdAt: Date.now(), running: false, progress: '', error: ''
     };
     state.boxes.set(key, box);
-    state.selected = '';
+    state.selectedTitle = '';
     persist(box);
     run(box);
   }
 
-  /* ---------- saved materials: only the ones about this title ---------- */
+  function trackCompetitor(url) {
+    const host = hostOf(url);
+    const key = compKey(url);
+    if (!host || state.boxes.has(key)) return;
+    const box = {
+      id: Data().trackerCompetitorId(url), key, kind: 'competitor',
+      title: host,                      // until the agent works out whose site it is
+      competitorUrl: url,
+      rows: [], lastRefreshed: 0, status: 'pending', note: '', companyName: '', runs: 0,
+      createdAt: Date.now(), running: false, progress: '', error: ''
+    };
+    state.boxes.set(key, box);
+    state.selectedCompetitor = '';
+    persist(box);
+    run(box);
+  }
+
+  /* ---------- saved materials ----------
+     A title box reads only the files about that title. A competitor box reads
+     everything saved for the company, ranked so files that mention this
+     competitor (battle cards above all) come first. */
 
   let contextQueue = Promise.resolve();
 
-  function contextFor(title) {
+  function contextFor(box) {
     const job = contextQueue.then(async () => {
       if (!window.MktforgeResearch) return null;
       try {
+        if (box.kind === 'competitor') {
+          const { context } = await window.MktforgeResearch.build(
+            { competitorHost: hostOf(box.competitorUrl), budget: window.MktforgeResearch.BUDGETS.small });
+          return context.imported.length || context.generated.length ? context : null;
+        }
         const { context } = await window.MktforgeResearch.build(
-          { jobTitles: [title], budget: window.MktforgeResearch.BUDGETS.small });
+          { jobTitles: [box.title], budget: window.MktforgeResearch.BUDGETS.small });
         const aboutTitle = (e) => /job title/.test(e.match || '');
         const imported = context.imported.filter(aboutTitle);
         const generated = context.generated.filter(aboutTitle);
@@ -271,6 +350,23 @@
     return [...out.values()].slice(0, 20);
   }
 
+  /* ---------- merging a competitor report into the box ----------
+     The agent only ever returns what it had not shown before. Anything shown
+     in the last 48 hours is carried over so the box does not empty out between
+     two refreshes on the same day; anything older has been seen and read and
+     drops off. A row that comes back again (the homepage, when its copy
+     changed again) replaces the carried copy. */
+
+  function mergeRows(box, fresh) {
+    const now = Date.now();
+    const stamped = fresh.map((r) => ({ ...r, firstSurfaced: now }));
+    const seen = new Set(stamped.map((r) => r.url).filter(Boolean));
+    const carried = (box.rows || [])
+      .filter((r) => Number(r.firstSurfaced) && now - Number(r.firstSurfaced) < CARRY_MS)
+      .filter((r) => !r.url || !seen.has(r.url));
+    return stamped.concat(carried).slice(0, 50);
+  }
+
   /* ---------- a run ---------- */
 
   async function run(box) {
@@ -295,12 +391,50 @@
       const profile = await Data().getProfile();
       if (!profile.companyUrl) throw new Error('Company URL required. Please add a URL in your My Company module');
 
-      box.progress = 'Reading your saved research about this title…';
+      box.progress = box.kind === 'competitor'
+        ? 'Reading your saved research about this competitor…'
+        : 'Reading your saved research about this title…';
       paintBox(box);
-      const context = await contextFor(box.title);
-      const others = otherTrackedTitles(box);
-      const family = await titleFamily(box.title, others).catch(() => []);
+      const context = await contextFor(box);
       if (controller.signal.aborted) throw abortError();
+
+      let body;
+      let ledger = null;
+      if (box.kind === 'competitor') {
+        box.progress = 'Checking what you’ve already been shown…';
+        paintBox(box);
+        ledger = await Data().getCompetitorLedger(box.competitorUrl).catch((err) => {
+          console.warn('[Market Tracker] starting without competitor history', err);
+          return null;
+        });
+        if (controller.signal.aborted) throw abortError();
+        body = {
+          mode: 'competitor',
+          competitorUrl: box.competitorUrl,
+          companyUrl: profile.companyUrl,
+          companyName: profile.companyName || '',
+          otherCompetitorUrls: profileCompetitors().filter((u) => compKey(u) !== box.key),
+          context,
+          ledger,
+          firstRun: !box.runs,
+          today: localDay()
+        };
+      } else {
+        const others = otherTrackedTitles(box);
+        const family = await titleFamily(box.title, others).catch(() => []);
+        if (controller.signal.aborted) throw abortError();
+        body = {
+          mode: 'jobTitle',
+          jobTitle: box.title,
+          companyUrl: profile.companyUrl,
+          companyName: profile.companyName || '',
+          competitorUrls: profile.competitors || [],
+          context,
+          titleFamily: family,
+          otherTitles: others,
+          today: localDay()
+        };
+      }
 
       const token = window.MktforgeAuth && window.MktforgeAuth.getIdToken
         ? await window.MktforgeAuth.getIdToken() : null;
@@ -311,16 +445,7 @@
       const res = await fetch(`${cfg.API_BASE_URL}/api/track`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          jobTitle: box.title,
-          companyUrl: profile.companyUrl,
-          companyName: profile.companyName || '',
-          competitorUrls: profile.competitors || [],
-          context,
-          titleFamily: family,
-          otherTitles: others,
-          today: localDay()
-        }),
+        body: JSON.stringify(body),
         signal: controller.signal
       });
 
@@ -339,10 +464,25 @@
       if (!result) throw new Error('The connection closed before the research finished. Try Refresh Data.');
 
       if (box.removed) return;
-      box.rows = Array.isArray(result.rows) ? result.rows : [];
+      const rows = Array.isArray(result.rows) ? result.rows : [];
+      if (box.kind === 'competitor') {
+        box.rows = mergeRows(box, rows);
+        box.companyName = result.companyName || box.companyName || '';
+        if (box.companyName) box.title = box.companyName;
+        if (result.ledger) {
+          Data().saveCompetitorLedger(box.competitorUrl, result.ledger)
+            .catch((err) => {
+              console.error('[Market Tracker] could not save competitor history', err);
+              notify(`Couldn’t save what’s been shown for “${displayName(box)}”, so the next refresh may repeat itself.`, 'error');
+            });
+        }
+      } else {
+        box.rows = rows;
+        box.companyName = result.companyName || '';
+      }
       box.note = result.note || '';
       box.stats = result.stats || null;
-      box.companyName = result.companyName || '';
+      box.runs = (box.runs || 0) + 1;
       box.lastRefreshed = Date.now();
       box.status = 'done';
       persist(box);
@@ -409,19 +549,21 @@
   <div class="mtrk">
     <header class="mtrk__head">
       <p class="mtrk__eyebrow">${MODULE_NAME}</p>
-      <h1 class="mtrk__title">Hear what your buyers are saying</h1>
-      <p class="mtrk__dek">Pick a job title and an agent searches Reddit, review sites, Hacker News,
-        and the forums, blogs and news your buyers read for the last 120 days of first-hand posts
-        about your company, your competitors and the problems you solve — including the replies
-        buried in threads named after a competitor. Reporting, explainers and vendor marketing are
-        left out. Green rows are openings for you; red rows are risks.</p>
+      <h1 class="mtrk__title">Hear what buyers and competitors are saying</h1>
+      <p class="mtrk__dek">Track what potential buyers and competitors are saying about the challenges you
+        can solve, your company and products, and other market news.</p>
     </header>
 
-    <section class="mtrk__card" aria-label="Track a job title">
+    <section class="mtrk__card" aria-label="Track a job title or a competitor">
       <div class="mtrk__pick">
         <label class="mtrk__label" for="mtrk-title">Job Title</label>
         <select id="mtrk-title" data-el="select"></select>
         <button type="button" class="mtrk__btn" data-el="track">Track Title</button>
+      </div>
+      <div class="mtrk__pick">
+        <label class="mtrk__label" for="mtrk-competitor">Competitor</label>
+        <select id="mtrk-competitor" data-el="comp-select"></select>
+        <button type="button" class="mtrk__btn" data-el="track-comp">Track Competitor</button>
       </div>
       <div class="mtrk__messages" data-el="messages"></div>
     </section>
@@ -431,9 +573,8 @@
 
   const el = (name) => root && root.querySelector(`[data-el="${name}"]`);
 
-  function available() {
-    return profileTitles().filter((t) => !state.boxes.has(keyOf(t)));
-  }
+  const availableTitles = () => profileTitles().filter((t) => !state.boxes.has(titleKey(t)));
+  const availableCompetitors = () => profileCompetitors().filter((u) => !state.boxes.has(compKey(u)));
 
   function paint() {
     if (!mounted || !root) return;
@@ -444,40 +585,63 @@
   function paintPicker() {
     const select = el('select');
     const track = el('track');
+    const compSelect = el('comp-select');
+    const trackComp = el('track-comp');
     const messages = el('messages');
-    if (!select) return;
-
-    const titles = available();
-    if (state.selected && !titles.some((t) => keyOf(t) === keyOf(state.selected))) state.selected = '';
-    select.innerHTML = `<option value="">Select A Job Title To Track</option>`
-      + titles.map((t) => `<option value="${esc(t)}"${keyOf(t) === keyOf(state.selected) ? ' selected' : ''}>${esc(t)}</option>`).join('');
+    if (!select || !compSelect) return;
 
     const p = state.profile;
     const noUrl = !!p && !p.companyUrl;
-    const noTitles = !!p && profileTitles().length === 0;
+
+    const titles = availableTitles();
+    if (state.selectedTitle && !titles.some((t) => titleKey(t) === titleKey(state.selectedTitle))) state.selectedTitle = '';
+    select.innerHTML = `<option value="">Select A Job Title To Track</option>`
+      + titles.map((t) => `<option value="${esc(t)}"${titleKey(t) === titleKey(state.selectedTitle) ? ' selected' : ''}>${esc(t)}</option>`).join('');
     select.disabled = !state.loaded || titles.length === 0;
-    track.disabled = !state.loaded || noUrl || !state.selected;
+    track.disabled = !state.loaded || noUrl || !state.selectedTitle;
+
+    const comps = availableCompetitors();
+    if (state.selectedCompetitor && !comps.some((u) => compKey(u) === compKey(state.selectedCompetitor))) state.selectedCompetitor = '';
+    compSelect.innerHTML = `<option value="">Select A Competitor To Track</option>`
+      + comps.map((u) => `<option value="${esc(u)}"${compKey(u) === compKey(state.selectedCompetitor) ? ' selected' : ''}>${esc(hostOf(u))}</option>`).join('');
+    compSelect.disabled = !state.loaded || comps.length === 0;
+    trackComp.disabled = !state.loaded || noUrl || !state.selectedCompetitor;
+
+    const noTitles = !!p && profileTitles().length === 0;
+    const noComps = !!p && profileCompetitors().length === 0;
 
     const msgs = [];
     if (state.loadError) msgs.push(['error', state.loadError]);
-    else if (!state.loaded) msgs.push(['muted', 'Loading your job titles…']);
+    else if (!state.loaded) msgs.push(['muted', 'Loading your job titles and competitors…']);
     if (noUrl) msgs.push(['error', 'Company URL required. Please add a URL in your My Company module']);
     if (noTitles) {
       msgs.push(['error', 'No job titles found. Add them through the My Company module or generate them with the Find My Customer module.']);
     } else if (state.loaded && titles.length === 0) {
       msgs.push(['muted', 'Every job title in My Company is being tracked. Add more titles there to track them here.']);
     }
-    if (p && state.loaded && !(p.competitors || []).length) {
-      msgs.push(['warn', 'You currently have no competitors assigned to your company. To track competitor mentions, add competitors to your company information in your My Company module.']);
+    if (noComps) {
+      msgs.push(['error', 'No competitors found. Add competitor URLs in your My Company module to track them here — '
+        + 'they also let your buyer research pick up competitor mentions.']);
+    } else if (state.loaded && comps.length === 0) {
+      msgs.push(['muted', 'Every competitor in My Company is being tracked. Add more competitors there to track them here.']);
     }
     messages.innerHTML = msgs.map(([tone, text]) => `<p class="mtrk__msg is-${tone}">${esc(text)}</p>`).join('');
   }
 
+  /* Section headers appear only once their section has a box, so a user who
+     only tracks job titles never sees an empty "Tracked Competitors". */
   function paintBoxes() {
     const host = el('boxes');
     if (!host) return;
-    const boxes = sortedBoxes();
-    host.innerHTML = boxes.map(boxHtml).join('');
+    const sections = [
+      ['Tracked Buyers', boxesOfKind('title')],
+      ['Tracked Competitors', boxesOfKind('competitor')]
+    ].filter(([, boxes]) => boxes.length);
+    host.innerHTML = sections.map(([label, boxes]) => `
+      <section class="mtrk__group" aria-label="${esc(label)}">
+        <h2 class="mtrk__group-head">${esc(label)}</h2>
+        ${boxes.map(boxHtml).join('')}
+      </section>`).join('');
   }
 
   function paintBox(box) {
@@ -501,20 +665,28 @@
   };
 
   /* What the agent looked at and why things were left out. */
-  function statsText(stats) {
+  function statsText(box) {
+    const stats = box.stats;
     if (!stats || typeof stats !== 'object') return '';
     const d = stats.dropped || {};
     const n = (v) => Number(v) || 0;
     const plural = (k, one, many) => `${k} ${k === 1 ? one : many}`;
     const parts = [];
-    if (n(d.date)) parts.push(`${n(d.date)} older than 120 days`);
-    if (n(d.match)) parts.push(`${n(d.match)} not tied to this job title`);
-    if (n(d.perspective)) parts.push(`${n(d.perspective)} reporting or explainers rather than first-hand experience`);
-    if (n(d.paper)) parts.push(`${n(d.paper)} research papers`);
-    if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} off-topic`);
-    if (n(d.owned)) parts.push(`${n(d.owned)} on your or a competitor’s own site`);
-    if (n(d.vendor)) parts.push(`${n(d.vendor)} on the site of a vendor selling into the same industry`);
-    if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
+    if (box.kind === 'competitor') {
+      if (n(d.date)) parts.push(`${n(d.date)} older than 30 days`);
+      if (n(d.seen)) parts.push(`${n(d.seen)} already shown to you before`);
+      if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} not about this competitor`);
+      if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
+    } else {
+      if (n(d.date)) parts.push(`${n(d.date)} older than 120 days`);
+      if (n(d.match)) parts.push(`${n(d.match)} not tied to this job title`);
+      if (n(d.perspective)) parts.push(`${n(d.perspective)} reporting or explainers rather than first-hand experience`);
+      if (n(d.paper)) parts.push(`${n(d.paper)} research papers`);
+      if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} off-topic`);
+      if (n(d.owned)) parts.push(`${n(d.owned)} on your or a competitor’s own site`);
+      if (n(d.vendor)) parts.push(`${n(d.vendor)} on the site of a vendor selling into the same industry`);
+      if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
+    }
     const head = `${plural(n(stats.searched), 'search', 'searches')} · ${plural(n(stats.found), 'item', 'items')} found`
       + `${n(stats.threadsRead) ? ` · ${plural(n(stats.threadsRead), 'thread', 'threads')} read for comments` : ''}`
       + `${n(stats.datesRead) ? ` · ${plural(n(stats.datesRead), 'date', 'dates')} read from the pages` : ''} · ${n(stats.kept)} shown`;
@@ -527,32 +699,87 @@
 
   const safeUrl = (u) => (/^https?:\/\//i.test(String(u || '')) ? String(u) : '');
 
-  const KIND = { post: 'Post', comment: 'Comment', review: 'Review', article: 'Article' };
+  const KIND = { post: 'Post', comment: 'Comment', review: 'Review', article: 'Article', page: 'Page' };
   const TONE = { green: 'Opportunity', red: 'Risk', neutral: 'Neutral' };
 
-  function rowHtml(r) {
+  /* Competitor findings are grouped by what kind of move they are, in the
+     order the agent looks for them. Anything unrecognised falls to the end. */
+  const GROUPS = [
+    ['messaging', 'Messaging Update'],
+    ['story', 'Use Cases & Customer Stories'],
+    ['blog', 'Blog Posts'],
+    ['news', 'News & Announcements'],
+    ['product', 'Product & Solution Pages'],
+    ['offsite', 'Mentions Elsewhere'],
+    ['other', 'Other']
+  ];
+  const groupOf = (r) => (GROUPS.some(([k]) => k === r.group) ? r.group : 'other');
+
+  function rowHtml(r, kind) {
     const url = safeUrl(r.url);
+    const competitor = kind === 'competitor';
     const tone = ['green', 'red'].includes(r.opportunity) ? r.opportunity : 'neutral';
     const role = r.roleBasis === 'stated' && r.role ? `Stated role: ${r.role}`
       : r.roleBasis === 'inferred' ? `Role inferred${r.role ? ` (${r.role})` : ''}${r.why ? ` — ${r.why}` : ''}`
       : r.why || '';
     const thread = r.threadTitle ? `In thread: “${r.threadTitle}”` : '';
+    /* The homepage row says which parts of the messaging moved, when the
+       agent can tell — it is comparing all three anyway. */
+    const changed = competitor && Array.isArray(r.changed) && r.changed.length
+      ? `<p class="mtrk__thread">Changed: ${esc(r.changed.join(', '))}</p>` : '';
     return `
-      <tr class="mtrk__row is-${tone}">
+      <tr class="mtrk__row${competitor ? '' : ` is-${tone}`}">
         <td class="mtrk__c-date${r.date ? '' : ' is-undated'}"${!r.date ? ' title="No publish date could be found"' : r.approx || /^\d{4}-\d{2}$/.test(r.date) ? ' title="Approximate date"' : ''}>${esc(r.date ? fmtDay(r.date, r.approx) : 'Undated')}</td>
         <td class="mtrk__c-source">
           <span class="mtrk__source">${esc(r.source)}</span>
           <span class="mtrk__kind">${esc(KIND[r.kind] || 'Post')}${r.companySite ? ' · company’s own site' : ''}</span>
         </td>
         <td class="mtrk__c-excerpt">
-          <span class="mtrk__tone">${esc(TONE[tone])}${r.churn ? ' · left you' : ''}</span>
+          ${competitor ? '' : `<span class="mtrk__tone">${esc(TONE[tone])}${r.churn ? ' · left you' : ''}</span>`}
           <p>${esc(r.excerpt)}</p>
+          ${changed}
           ${thread ? `<p class="mtrk__thread">${esc(thread)}</p>` : ''}
-          ${role ? `<p class="mtrk__role">${esc(role)}</p>` : ''}
+          ${!competitor && role ? `<p class="mtrk__role">${esc(role)}</p>` : ''}
         </td>
         <td class="mtrk__c-mentions">${(r.mentions || []).map((m) => `<span class="mtrk__chip">${esc(m)}</span>`).join('')}</td>
         <td class="mtrk__c-link">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open<span class="mtrk__sr"> ${esc(r.source)} (opens in a new tab)</span> ↗</a>` : ''}</td>
       </tr>`;
+  }
+
+  function tableHtml(box) {
+    const competitor = box.kind === 'competitor';
+    let body;
+    if (competitor) {
+      const buckets = new Map(GROUPS.map(([k, label]) => [k, { label, rows: [] }]));
+      box.rows.forEach((r) => buckets.get(groupOf(r)).rows.push(r));
+      body = [...buckets.values()].filter((b) => b.rows.length).map((b) => `
+        <tr class="mtrk__group-row"><th scope="colgroup" colspan="5">${esc(b.label)}</th></tr>
+        ${b.rows.map((r) => rowHtml(r, box.kind)).join('')}`).join('');
+    } else {
+      body = box.rows.map((r) => rowHtml(r, box.kind)).join('');
+    }
+    return `
+      <div class="mtrk__table-wrap">
+        <table class="mtrk__table">
+          <thead><tr>
+            <th scope="col">Date</th><th scope="col">Source</th><th scope="col">Excerpt / summary</th>
+            <th scope="col">Mentions</th><th scope="col"><span class="mtrk__sr">Link</span></th>
+          </tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>`;
+  }
+
+  /* A competitor box reports what is new, so "nothing" is a real and common
+     answer. If the homepage moved but nothing else did, say so beside it
+     rather than contradicting the row above. */
+  function quietNote(box) {
+    if (box.kind !== 'competitor') return '';
+    const others = box.rows.filter((r) => groupOf(r) !== 'messaging');
+    if (others.length) return '';
+    return box.rows.length
+      ? 'No other new activity found since your last refresh.'
+      : 'No new activity found since your last refresh.';
   }
 
   function bodyHtml(box) {
@@ -568,42 +795,53 @@
       if (!box.error) parts.push('<div class="mtrk__state">Research was interrupted before it finished. Click Refresh Data to run it again.</div>');
       return parts.join('');
     }
-    const stats = statsText(box.stats);
+    const competitor = box.kind === 'competitor';
+    const stats = statsText(box);
+    const baseline = competitor && box.runs === 1
+      ? `<p class="mtrk__stats">First run — this competitor’s existing pages were recorded as a baseline, so later refreshes can show what’s changed.</p>`
+      : '';
+
     if (!box.rows.length) {
       parts.push(`<div class="mtrk__state">
-          <p>No posts or articles from the last 120 days matched this job title.</p>
+          <p>${esc(competitor ? quietNote(box)
+            : 'No posts or articles from the last 120 days matched this job title.')}</p>
+          ${baseline}
           ${stats ? `<p class="mtrk__stats">${esc(stats)}</p>` : ''}
         </div>`);
       return parts.join('');
     }
-    parts.push(`
-      <div class="mtrk__legend" aria-hidden="true">
-        <span><i class="is-green"></i>Opportunity — unhappy with a competitor, or happy with you</span>
-        <span><i class="is-red"></i>Risk — unhappy with you, or left you</span>
-        <span><i></i>Neutral</span>
-      </div>
-      <div class="mtrk__table-wrap">
-        <table class="mtrk__table">
-          <thead><tr>
-            <th scope="col">Date</th><th scope="col">Source</th><th scope="col">Excerpt / summary</th>
-            <th scope="col">Mentions</th><th scope="col"><span class="mtrk__sr">Link</span></th>
-          </tr></thead>
-          <tbody>${box.rows.map(rowHtml).join('')}</tbody>
-        </table>
-      </div>
-      ${stats ? `<p class="mtrk__stats">${esc(stats)}</p>` : ''}`);
+
+    if (!competitor) {
+      parts.push(`
+        <div class="mtrk__legend" aria-hidden="true">
+          <span><i class="is-green"></i>Opportunity — unhappy with a competitor, or happy with you</span>
+          <span><i class="is-red"></i>Risk — unhappy with you, or left you</span>
+          <span><i></i>Neutral</span>
+        </div>`);
+    }
+    parts.push(tableHtml(box));
+    const quiet = quietNote(box);
+    if (quiet) parts.push(`<p class="mtrk__quiet">${esc(quiet)}</p>`);
+    if (baseline) parts.push(baseline);
+    if (stats) parts.push(`<p class="mtrk__stats">${esc(stats)}</p>`);
     return parts.join('');
   }
 
   function boxHtml(box) {
+    const competitor = box.kind === 'competitor';
+    const name = displayName(box);
     const meta = box.running ? 'Researching…'
       : box.lastRefreshed ? `Last refreshed ${fmtWhen(box.lastRefreshed)}` : 'Not refreshed yet';
-    const count = !box.running && box.lastRefreshed ? ` · ${box.rows.length} result${box.rows.length === 1 ? '' : 's'}` : '';
+    const count = !box.running && box.lastRefreshed
+      ? ` · ${box.rows.length} ${competitor ? 'new item' : 'result'}${box.rows.length === 1 ? '' : 's'}` : '';
+    const host = competitor ? hostOf(box.competitorUrl) : '';
+    const sub = competitor && host && host !== name ? `<p class="mtrk__box-url">${esc(host)}</p>` : '';
     return `
-      <section class="mtrk__box${box.running ? ' is-running' : ''}" data-box="${cssKey(box.key)}" aria-label="${esc(box.title)}">
+      <section class="mtrk__box${box.running ? ' is-running' : ''}${competitor ? ' is-competitor' : ''}" data-box="${cssKey(box.key)}" aria-label="${esc(name)}">
         <header class="mtrk__box-head">
           <div class="mtrk__box-title">
-            <h2>${esc(box.title)}</h2>
+            <h3>${esc(name)}</h3>
+            ${sub}
             <p class="mtrk__meta">${esc(meta + count)}</p>
           </div>
           <button type="button" class="mtrk__stop${box.confirmStop ? ' is-confirm' : ''}" data-act="stop">
@@ -622,7 +860,10 @@
 
   function onChange(e) {
     if (e.target.matches('[data-el="select"]')) {
-      state.selected = e.target.value;
+      state.selectedTitle = e.target.value;
+      paintPicker();
+    } else if (e.target.matches('[data-el="comp-select"]')) {
+      state.selectedCompetitor = e.target.value;
       paintPicker();
     }
   }
@@ -632,7 +873,12 @@
     if (!btn || btn.disabled) return;
 
     if (btn.matches('[data-el="track"]')) {
-      if (state.selected) trackTitle(state.selected);
+      if (state.selectedTitle) trackTitle(state.selectedTitle);
+      paint();
+      return;
+    }
+    if (btn.matches('[data-el="track-comp"]')) {
+      if (state.selectedCompetitor) trackCompetitor(state.selectedCompetitor);
       paint();
       return;
     }
@@ -654,9 +900,10 @@
         if (again) again.focus();
         return;
       }
-      removeBox(box);
+      const wasCompetitor = box.kind === 'competitor';
+      removeBox(box);                              // ledger kept on purpose
       paint();
-      const select = el('select');
+      const select = el(wasCompetitor ? 'comp-select' : 'select');
       if (select) select.focus();
     }
   }

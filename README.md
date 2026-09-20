@@ -26,7 +26,7 @@ modules/draft-messaging/    Draft Messaging (messaging + homepage copy, stages 6
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
 modules/battle-card-generator/  Battle Card Generator (ported from Battlecard-Generator)
 modules/marketing-opportunities/  Marketing Opportunities (ported from Syndication & Event Finder)
-modules/market-tracker/     Market Tracker (what a job title is saying online)
+modules/market-tracker/     Market Tracker (what buyers and competitors are saying online)
 ```
 
 ## Running it locally
@@ -859,11 +859,15 @@ If you change one, port the change to the other.
 
 ## Market Tracker
 
-Watches what one job title at a time is saying online about your company,
-your competitors and the problems your product solves. Nav button directly
+Two things at once. **Tracked Buyers**: what one job title at a time is saying
+online about your company, your competitors and the problems your product
+solves. **Tracked Competitors**: what one competitor at a time has published,
+or had published about it, since the agent last looked. Nav button directly
 below Marketing Opportunities (radar icon). Spec: Google Docs
-"Customer Tracker — Spec v2" and "Customer Tracker Worker/Agent Updates"
-(the latter is what renamed it). Backend: its own Cloudflare Worker, which
+"Customer Tracker — Spec v2", "Customer Tracker Worker/Agent Updates"
+(the latter is what renamed it) and "Market Tracker Revisions" (competitor
+tracking). The competitor side of the Worker is specced in
+`WORKER-SPEC-competitor-mode.md` at the repo root. Backend: its own Cloudflare Worker, which
 keeps its original name `customer-tracker`
 (`C:\Users\Tyler\customer-tracker`, deploy steps in its README) so its URL
 never changed — only the module was renamed.
@@ -884,17 +888,56 @@ survived the rename untouched.
 - **Job Title** drop-down: My Company's Target Job Titles, minus the ones
   already being tracked. **Track Title** is disabled until one is picked, and
   greyed out with *"Company URL required…"* when My Company has no URL.
-  No titles at all shows *"No job titles found…"*; no competitors shows a
-  reminder, and the tool still runs (company and pain-point posts only).
-- **Track Title** adds a full-width box for that title (same width as Build
-  Positioning's stage boxes, one per row, alphabetical) and starts the agent.
+  No titles at all shows *"No job titles found…"*.
+- **Competitor** drop-down, below it: My Company's Competitors, minus the ones
+  already being tracked, shown as bare hosts (`acme.com`) because the company's
+  name isn't known until the agent has read the site. **Track Competitor** is
+  gated the same way as Track Title. No competitors at all shows one message
+  covering both uses — competitor boxes here, and competitor mentions in the
+  buyer research.
+- **Track Title** / **Track Competitor** adds a full-width box (same width as
+  Build Positioning's stage boxes, one per row) and starts the agent. Title
+  boxes sit under **Tracked Buyers**, competitor boxes under **Tracked
+  Competitors**; each header appears only once it has a box under it. Both
+  sections are alphabetical — competitor boxes by resolved company name.
 - **Stop Tracking** (top right) asks for a second click, then cancels any run
   and deletes the box and its results. **Refresh Data** (bottom right) is
   disabled while that box is running and replaces the results when the new
   run finishes; if the run fails, the old results stay with the error above
   them.
 - Removing or renaming a title in My Company removes its box (a rename is a
-  remove plus an add). Adding or removing boxes never changes My Company.
+  remove plus an add); the same goes for a competitor URL, and that also
+  deletes its ledger. Adding or removing boxes never changes My Company.
+
+### Competitor boxes
+
+A competitor box reports **what is new since the agent last looked**, so an
+empty box is a real and common answer, not a failure. Two spellings of one
+competitor (`acme.com`, `www.acme.com`, `https://acme.com/pricing`) are the
+same box and the same ledger.
+
+- Findings are grouped by the kind of move: Messaging Update, Use Cases &
+  Customer Stories, Blog Posts, News & Announcements, Product & Solution
+  Pages, Mentions Elsewhere.
+- **No sentiment colour.** Green/red are defined against *your* company and
+  don't map onto a competitor's own output, so every row is neutral here.
+- Rows first shown less than **48 hours** ago are carried over into the next
+  refresh, so refreshing twice in a day doesn't blank the box. Older rows have
+  been seen and drop off.
+- Nothing new at all: *"No new activity found since your last refresh."* If the
+  homepage moved but nothing else did, that line becomes *"No other new
+  activity found…"* and sits under the row rather than contradicting it.
+- The first run always reports the homepage and records everything else as a
+  baseline, so later refreshes have something to compare against. The box says
+  so under the table.
+
+**The ledger** (`users/{uid}/competitorLedger/{ledgerId}`) is what makes "new"
+mean anything: every page the agent has seen on the site, and every URL it has
+already shown you. **Stop Tracking keeps it** — stop and restart and you pick
+up where you left off. It is deleted only when the URL leaves My Company.
+Dated entries are purged at 30 days (the date filter would exclude them
+anyway); undated ones are kept for the life of the ledger, because the URL is
+the only handle on them.
 
 ### Results table
 

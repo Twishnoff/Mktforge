@@ -1,7 +1,9 @@
 /* ==========================================================================
    Market Tracker — module styles (scoped under .mtrk)
    Same tokens, card language and column width as Build Positioning, whose
-   stage boxes these job-title boxes match.
+   stage boxes these tracking boxes match. Two sections: Tracked Buyers (job
+   title boxes, sentiment-coloured) and Tracked Competitors (competitor boxes,
+   grouped by the kind of move, no colour).
    ========================================================================== */
 
 .mtrk {
@@ -144,7 +146,27 @@
 .mtrk__boxes {
   display: grid;
   grid-template-columns: 1fr;
+  gap: 30px;
+}
+
+/* --- Tracked Buyers / Tracked Competitors --- */
+
+.mtrk__group {
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 18px;
+}
+
+.mtrk__group-head {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--mtrk-line);
 }
 
 .mtrk__box {
@@ -167,7 +189,7 @@
 
 .mtrk__box-title { min-width: 0; flex: 1; }
 
-.mtrk__box-title h2 {
+.mtrk__box-title h3 {
   margin: 0;
   font-family: var(--font-display);
   font-size: 19px;
@@ -390,3 +412,40 @@
   .mtrk { padding: 28px 18px 56px; }
   .mtrk select { max-width: none; }
 }
+
+/* --- competitor boxes --- */
+
+.mtrk__box-url {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+/* The homepage moved but nothing else did — said beside the row, not instead
+   of it, so the box never claims there is nothing while showing something. */
+.mtrk__quiet {
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* A competitor's findings are grouped by the kind of move they are. */
+.mtrk__group-row th {
+  padding: 14px 12px 2px !important;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-align: left;
+  background: transparent;
+  border: 0;
+}
+
+.mtrk__table tbody tr:first-child .mtrk__group-row th,
+.mtrk__group-row:first-child th { padding-top: 2px !important; }
+
+.mtrk__box.is-competitor .mtrk__table td:first-child { border-left-color: transparent; }

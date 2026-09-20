@@ -1,29 +1,46 @@
-Mktforge — Market Tracker update (site files)
-=============================================
+Mktforge — Market Tracker: competitor tracking (site files)
+===========================================================
 
-The Customer Tracker module is now Market Tracker.
+Adds Tracked Competitors alongside Tracked Buyers. The job-title side is
+unchanged; every saved job-title box survives with its results intact.
 
-1. DELETE this folder from the repo:
-       modules/customer-tracker/
-   Its two files have been renamed and moved to modules/market-tracker/.
-   If you leave the old folder in place the old module still loads and you
-   get two radar buttons in the nav.
+1. UNZIP THIS SOMEWHERE, then copy its contents over the repo. The paths in
+   the zip are already repo-relative, so the folders line up as they are:
 
-2. COPY these over the repo, keeping the paths:
-       index.html                                   (script tag -> new path)
-       firestore.rules                              (comment only; no rule changed)
-       README.md                                    (docs)
-       assets/js/config.js                          (customerTracker -> marketTracker)
-       assets/js/data.js                            (comments only)
-       assets/js/icons.js                           (comment only)
-       modules/market-tracker/market-tracker.js     (new path)
-       modules/market-tracker/market-tracker.css    (new path)
+       assets/js/data.js                            competitor boxes + the ledger
+       firestore.rules                              new competitorLedger collection
+       modules/market-tracker/market-tracker.js     the module
+       modules/market-tracker/market-tracker.css    styles
+       README.md                                    docs
+       WORKER-SPEC-competitor-mode.md               what the Worker has to add
+       READ-ME-FIRST.txt                            this file
 
-3. Deploy the Worker first (see the worker zip), then push the site.
+   Uploading through github.com: open the repo, Add file -> Upload files, and
+   drag in the unzipped `assets` folder, the `modules` folder, and the four
+   loose files. GitHub merges folders rather than replacing them, so the other
+   modules and the rest of assets/js are left alone.
 
-No Firestore change. The collection is still users/{uid}/tracker, so every
-box you have saved survives the rename with its results intact. The rules
-file only had its comment updated — re-publishing it is optional.
+   Nothing else changed. index.html, config.js and icons.js are untouched.
 
-The Worker URL has NOT changed. It is still
-https://customer-tracker.tyler-wishnoff.workers.dev
+2. PUBLISH the Firestore rules.
+   Firebase console -> Firestore Database -> Rules -> paste firestore.rules ->
+   Publish. This one is NOT optional: the new ledger collection is denied by
+   default until the rules go up, and without it every refresh repeats itself.
+
+3. THE WORKER IS NOT DONE YET.
+   The site now sends { mode: "competitor", ... } to /api/track and expects a
+   ledger back. Until the Worker handles that, Track Competitor will fail with
+   an error in the box; job titles keep working normally.
+   WORKER-SPEC-competitor-mode.md is the full contract — request, response,
+   ledger algorithm and the research rules.
+
+   The Worker URL has NOT changed. It is still
+   https://customer-tracker.tyler-wishnoff.workers.dev
+
+4. WHILE YOU'RE IN THERE: modules/customer-tracker/ is still in the repo.
+   The last update said to delete it and it wasn't — index.html only loads
+   modules/market-tracker/, so it is dead weight rather than a live second
+   radar button, but it should go.
+
+No Firestore migration. Boxes still live in users/{uid}/tracker; the new
+collection is users/{uid}/competitorLedger.

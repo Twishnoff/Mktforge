@@ -17,7 +17,9 @@
                                           digest? (JSON string, short summary for agents) }
      users/{uid}/files/{fileId}/chunks/{i}   { data: Blob }       original bytes
      users/{uid}/files/{fileId}/text/{i}     { data: string }     extracted text
-     users/{uid}/tracker/{boxId}        Market Tracker: { title, rows: [...], lastRefreshed,
+     users/{uid}/competitorLedger/{id}  Market Tracker: what the agent has already seen on a
+                                        competitor's site and already shown you
+     users/{uid}/tracker/{boxId}        Market Tracker: { title, kind, rows: [...], lastRefreshed,
                                           status, note, companyName, stats, createdAt, updatedAt }
 
    Security rules that make this private live in firestore.rules.
@@ -55,10 +57,15 @@
      setFileDigest(id, digest)       -> Promise; stores that summary on the file
      getPositioningAnswers()         -> Promise<{ key: text }> (Build Positioning)
      savePositioningAnswers(changes) -> Promise; { key: text } sets, { key: null } clears
-     listTrackerBoxes()              -> Promise<[box]> Market Tracker job-title boxes
-     saveTrackerBox(box)             -> Promise<box>; box.id is made from the title
+     listTrackerBoxes()              -> Promise<[box]> Market Tracker boxes (titles and competitors)
+     saveTrackerBox(box)             -> Promise<box>; box.id, else made from the title or URL
      deleteTrackerBox(id)            -> Promise; id from listTrackerBoxes / trackerId(title)
      trackerId(title)                -> the document id a title is saved under
+     trackerCompetitorId(url)        -> the document id a competitor URL is saved under
+     competitorKey(url)              -> the bare host two spellings of one competitor share
+     getCompetitorLedger(url)        -> Promise<ledger>
+     saveCompetitorLedger(url, l)    -> Promise<ledger>
+     deleteCompetitorLedger(url)     -> Promise
      prefill(pairs)                  -> fills EMPTY inputs from the profile
      util.normalizeUrl / util.isValidUrl
    ========================================================================== */
@@ -814,8 +821,27 @@ window.MktforgeData = (() => {
      the app reads. The id comes from the title (case-insensitive), so a
      title can only ever have one box. */
 
-  const TRACKER_FIELDS = ['title', 'rows', 'lastRefreshed', 'status', 'note', 'companyName', 'stats', 'createdAt'];
+  const TRACKER_FIELDS = ['title', 'kind', 'competitorUrl', 'rows', 'lastRefreshed', 'status', 'note',
+    'companyName', 'stats', 'runs', 'createdAt'];
   const trackerRef = (d) => userRef(d).collection('tracker');
+  const ledgerRef  = (d) => userRef(d).collection('competitorLedger');
+
+  /* Two spellings of the same competitor have to land on one box and one
+     ledger, so everything is keyed on the bare host: "https://www.Acme.com/",
+     "acme.com" and "http://acme.com/pricing" are all `acme.com`. */
+  function competitorKey(raw) {
+    const v = String(raw || '').trim().toLowerCase();
+    if (!v) return '';
+    return v.replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/^www\./, '').split(/[/?#]/)[0];
+  }
+
+  function trackerCompetitorId(url) {
+    const key = competitorKey(url);
+    let h = 5381;
+    for (let i = 0; i < key.length; i += 1) h = ((h * 33) ^ key.charCodeAt(i)) >>> 0;
+    const slug = key.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'competitor';
+    return `c-${slug}-${h.toString(36)}`;
+  }
 
   function trackerId(title) {
     const key = String(title || '').trim().toLowerCase();
@@ -829,7 +855,10 @@ window.MktforgeData = (() => {
     const out = {};
     TRACKER_FIELDS.forEach((k) => { if (raw[k] !== undefined) out[k] = raw[k]; });
     out.title = String(out.title || '').trim().slice(0, 200);
+    out.kind = out.kind === 'competitor' ? 'competitor' : 'title';
+    out.competitorUrl = String(out.competitorUrl || '').trim().slice(0, 500);
     out.rows = Array.isArray(out.rows) ? out.rows.slice(0, 50) : [];
+    out.runs = Number(out.runs) || 0;
     out.createdAt = Number(out.createdAt) || Date.now();
     out.lastRefreshed = Number(out.lastRefreshed) || 0;
     out.status = String(out.status || 'pending');
@@ -850,8 +879,13 @@ window.MktforgeData = (() => {
 
   async function saveTrackerBox(box) {
     const clean = cleanTrackerBox(box || {});
-    if (!clean.title) throw new Error('A tracked title needs a name.');
-    const id = trackerId(clean.title);
+    if (!clean.title) throw new Error('A tracked box needs a name.');
+    /* A competitor box is filed under its URL, not its name — the agent may
+       rename it once it works out whose site it is, and the box has to stay
+       the same document when it does. */
+    const id = String((box && box.id) || '').trim()
+      || (clean.kind === 'competitor' ? trackerCompetitorId(clean.competitorUrl) : trackerId(clean.title));
+    if (!id || /\//.test(id)) throw new Error('Unknown tracked box.');
     if (isLocal()) {
       const data = localRead();
       data.tracker = data.tracker || {};
@@ -875,6 +909,87 @@ window.MktforgeData = (() => {
     }
     const d = await getDb();
     await withTimeout(trackerRef(d).doc(id).delete(), TIMEOUT_MS, 'Removing a tracked title');
+  }
+
+  /* ---------- competitor ledgers ----------
+     What the agent has already seen on a competitor's site and already shown
+     the user, so a refresh only reports what is new. It is keyed on the
+     competitor's host rather than on the box, because it has to outlive
+     Stop Tracking: stop and restart tracking and you pick up where you left
+     off. It dies only when the URL leaves My Company.
+
+       { url, companyName,
+         homepage:  { heading, copy, cta, checkedAt },
+         inventory: [ { u, k, d } ]   every page seen on the site (k = kind,
+                                      d = publish date or '')
+         surfaced:  [ { u, d, t } ] } every URL shown to the user
+                                      (t = when it was first shown)
+
+     Dated entries are dropped once they pass the freshness window — the date
+     filter would exclude them anyway. Undated entries are kept for the life
+     of the ledger, because a URL is the only handle we have on them. */
+
+  const LEDGER_CAP = 2000;
+
+  function cleanLedger(raw, url) {
+    const r = raw && typeof raw === 'object' ? raw : {};
+    const hp = r.homepage && typeof r.homepage === 'object' ? r.homepage : {};
+    const list = (v, keys) => (Array.isArray(v) ? v : []).slice(0, LEDGER_CAP)
+      .map((e) => {
+        if (!e || typeof e !== 'object' || !e.u) return null;
+        const out = { u: String(e.u).slice(0, 500) };
+        keys.forEach((k) => { if (e[k] !== undefined && e[k] !== null && e[k] !== '') out[k] = e[k]; });
+        return out;
+      })
+      .filter(Boolean);
+    return {
+      url: String(r.url || url || '').slice(0, 500),
+      companyName: String(r.companyName || '').slice(0, 200),
+      homepage: {
+        heading: String(hp.heading || '').slice(0, 2000),
+        copy: String(hp.copy || '').slice(0, 4000),
+        cta: String(hp.cta || '').slice(0, 500),
+        checkedAt: Number(hp.checkedAt) || 0
+      },
+      inventory: list(r.inventory, ['k', 'd']),
+      surfaced: list(r.surfaced, ['d', 't'])
+    };
+  }
+
+  async function getCompetitorLedger(url) {
+    const id = trackerCompetitorId(url);
+    if (isLocal()) return cleanLedger((localRead().competitorLedger || {})[id], url);
+    const d = await getDb();
+    const snap = await withTimeout(ledgerRef(d).doc(id).get(), TIMEOUT_MS, 'Loading competitor history');
+    return cleanLedger(snap.exists ? snap.data() : null, url);
+  }
+
+  async function saveCompetitorLedger(url, ledger) {
+    const id = trackerCompetitorId(url);
+    const clean = cleanLedger(ledger, url);
+    if (isLocal()) {
+      const data = localRead();
+      data.competitorLedger = data.competitorLedger || {};
+      data.competitorLedger[id] = { ...clean, updatedAt: Date.now() };
+      localWrite(data);
+      return clean;
+    }
+    const d = await getDb();
+    await withTimeout(ledgerRef(d).doc(id).set({ ...clean, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
+                      TIMEOUT_MS, 'Saving competitor history');
+    return clean;
+  }
+
+  async function deleteCompetitorLedger(url) {
+    const id = trackerCompetitorId(url);
+    if (isLocal()) {
+      const data = localRead();
+      if (data.competitorLedger) delete data.competitorLedger[id];
+      localWrite(data);
+      return;
+    }
+    const d = await getDb();
+    await withTimeout(ledgerRef(d).doc(id).delete(), TIMEOUT_MS, 'Removing competitor history');
   }
 
   /* ---------- autofill for other modules ----------
@@ -902,7 +1017,8 @@ window.MktforgeData = (() => {
     readFile, getFileDigest, setFileDigest, importFile, getFileText, isViewable,
     MAX_FILE_BYTES,
     getPositioningAnswers, savePositioningAnswers,
-    listTrackerBoxes, saveTrackerBox, deleteTrackerBox, trackerId,
+    listTrackerBoxes, saveTrackerBox, deleteTrackerBox, trackerId, trackerCompetitorId,
+    getCompetitorLedger, saveCompetitorLedger, deleteCompetitorLedger, competitorKey,
     prefill,
     get isLocal() { return isLocal(); },
     util: { normalizeUrl, isValidUrl, imageToAvatarDataUrl }

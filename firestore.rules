@@ -43,7 +43,7 @@ service cloud.firestore {
       }
     }
 
-    // Market Tracker: one document per tracked job title.
+    // Market Tracker: one document per tracked job title or competitor.
     match /users/{uid}/tracker/{boxId} {
       allow read, delete: if isOwner(uid);
       allow create, update: if isOwner(uid)
@@ -51,6 +51,20 @@ service cloud.firestore {
         && request.resource.data.title.size() <= 200
         && request.resource.data.rows is list
         && request.resource.data.rows.size() <= 50;
+    }
+
+    // Market Tracker: what the agent has already seen on a competitor's site
+    // and already reported, so a refresh only shows what is new. Outlives the
+    // box; removed when the URL leaves My Company.
+    match /users/{uid}/competitorLedger/{ledgerId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.url is string
+        && request.resource.data.url.size() <= 500
+        && request.resource.data.inventory is list
+        && request.resource.data.inventory.size() <= 2000
+        && request.resource.data.surfaced is list
+        && request.resource.data.surfaced.size() <= 2000;
     }
 
     function isOwner(uid) {
