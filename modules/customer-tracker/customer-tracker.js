@@ -495,7 +495,8 @@
     if (n(d.owned)) parts.push(`${n(d.owned)} on your or a competitor’s own site`);
     if (n(d.vendor)) parts.push(`${n(d.vendor)} vendor marketing for its own product`);
     if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
-    const head = `${plural(n(stats.searched), 'search', 'searches')} · ${plural(n(stats.found), 'item', 'items')} found · ${n(stats.kept)} shown`;
+    const head = `${plural(n(stats.searched), 'search', 'searches')} · ${plural(n(stats.found), 'item', 'items')} found`
+      + `${n(stats.datesRead) ? ` · ${plural(n(stats.datesRead), 'date', 'dates')} read from the pages` : ''} · ${n(stats.kept)} shown`;
     return parts.length ? `${head}. Left out: ${parts.join(', ')}.` : `${head}.`;
   }
 

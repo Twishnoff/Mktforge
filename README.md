@@ -938,6 +938,12 @@ Each row also says whether the author **stated** their role or the agent
    its own ("Senior Manager") is never used. With no saved materials for the
    title, only stated roles count, and the box says so and suggests running
    Persona Builder or Find My Customer for it.
+   **Dates from the pages:** items the search step couldn't date (or only
+   roughly) are opened by the Worker, which reads the publish date the page
+   stores — Reddit's and Hacker News's own data, structured data and
+   publish-date tags, then a quick read of the page text. Blocked sites
+   (G2, for one) stay undated. The count line says how many dates were
+   read this way.
 6. The Worker re-checks everything: last 120 days (a month-only date must be
    wholly inside the window; month-only and "x weeks ago" dates show with a
    ~; items with no date at all are kept, shown as "Undated" and listed
