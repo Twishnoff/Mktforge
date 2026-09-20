@@ -723,6 +723,7 @@
       if (n(d.unchanged)) parts.push(`${n(d.unchanged)} already on the site last time`);
       if (n(d.seen)) parts.push(`${n(d.seen)} already shown to you before`);
       if (n(d.unverified)) parts.push(`${n(d.unverified)} whose publish date couldn’t be confirmed`);
+      if (n(d.budget)) parts.push(`${n(d.budget)} found but not opened — the run hit its page limit`);
       if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} not about this competitor`);
       if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
     } else {

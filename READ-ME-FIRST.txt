@@ -1,44 +1,51 @@
-Mktforge — Market Tracker: ledger cleanup + stats wording (site files)
-======================================================================
+Mktforge — Market Tracker: crawl coverage + ledger cleanup (site files)
+=======================================================================
 
-Site files only. The Worker is unchanged since the last deploy — if you have
-already run `npx wrangler deploy` since the off-site date fix, you do NOT
-need to deploy again.
+Supersedes the previous zip. Both a site upload AND a Worker deploy.
 
 1. COPY over the repo, keeping the paths:
 
        modules/market-tracker/market-tracker.js
        README.md
 
-   This supersedes the market-tracker.js in the previous zip. If you never
-   uploaded that one, upload its market-tracker.css, assets/js/data.js and
-   README.md too — this zip doesn't carry them.
+   If you never uploaded the zip before this one, also take its
+   market-tracker.css and assets/js/data.js — this zip doesn't carry them.
 
-2. WHAT CHANGED
+2. DEPLOY THE WORKER:
 
-   a) The ledger now follows My Company's competitor list instead of the
-      boxes. Deleting a competitor's URL from My Company clears its history
-      whether or not a box still exists at that moment.
+       cd C:\Users\Tyler\customer-tracker
+       npx wrangler deploy
 
-      The bug: Stop Tracking deliberately KEEPS the ledger. The only code
-      that deleted a ledger lived inside "remove this box". So if you pressed
-      Stop Tracking first and removed the competitor from My Company second,
-      nothing was left to trigger the deletion, and re-adding that competitor
-      picked up its old history.
+3. WHAT CHANGED
 
-   b) The stats line under a competitor box no longer collapses four
-      different reasons into "already shown to you before".
+   a) CRAWL COVERAGE. A recent blog post could be found on the site and
+      never opened, so it never got a date and never appeared. Two causes:
 
-3. CLEARING THE CLICKHOUSE LEDGER YOU ALREADY HAVE
+      - The section index pages to expand were taken in the order the links
+        appeared on the homepage, capped at 8. A site with a long nav
+        (products, solutions, use cases, customers, platform, features,
+        news, blog...) could push /blog past the cap, so the blog index was
+        never expanded at all.
+      - Pages were then opened in discovery order against a 40-page budget.
+        Homepage links come first, so dozens of product and solution pages
+        were opened before any blog post was reached.
 
-   The fix is not retroactive — that stale ledger is still in Firestore.
-   After uploading this file, with the app open:
+      Now: one index per section is picked before the cap is filled, pages
+      are opened section by section in turn (blog, news, stories, product),
+      the budget is 80 pages read five at a time, and anything the budget
+      cuts off is COUNTED and reported, so this can't fail silently again.
 
-       1. Remove clickhouse.com from Competitors in My Company and save.
-          (This now deletes the ledger.)
-       2. Re-add clickhouse.com and save.
-       3. Track Competitor again — it will run as a true first run.
+   b) LEDGER CLEANUP (from the previous zip, if you haven't applied it):
+      deleting a competitor from My Company now clears its history whether
+      or not a box still exists.
 
-   Same steps for any other competitor you removed and re-added earlier.
+4. AFTER DEPLOYING, hit Refresh Data on the ClickHouse box. The run will be
+   slower than before — it is opening a lot more pages.
 
-4. No Firestore change.
+   The blog posts it finds this time will be new to the ledger, so they
+   should appear. If a recent post still doesn't, look at the line under
+   the box: "N found but not opened" means the page limit is still the
+   constraint, and "N whose publish date couldn't be confirmed" means the
+   post was opened but showed no date the agent could read.
+
+5. No Firestore change.
