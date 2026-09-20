@@ -1,28 +1,29 @@
-Mktforge — Market Tracker: date fixes (site files)
-==================================================
+Mktforge — Market Tracker: stats wording (site files)
+=====================================================
 
-REPLACES every earlier zip. Three files changed since the last one.
+ONE file this time.
 
-1. COPY over the repo, keeping the paths:
+1. COPY over the repo, keeping the path:
 
-       assets/js/data.js                            keeps the ledger version
-       modules/market-tracker/market-tracker.js     date column + picker + copy
-       modules/market-tracker/market-tracker.css    date column + picker
-       README.md                                    docs
+       modules/market-tracker/market-tracker.js
 
-   firestore.rules is UNCHANGED and does NOT need re-publishing.
+   If you haven't yet uploaded the previous zip, do that one first — this
+   file supersedes its copy of market-tracker.js, but that zip also carried
+   market-tracker.css, assets/js/data.js and README.md, which this one does
+   not.
 
-   What changed:
-   - A row with no publish date now shows the day it was first surfaced,
-     labelled "first seen", instead of the word "Undated". A row that does
-     have a publish date is unaffected.
-   - The ledger now carries a version number, so the Worker knows when the
-     dates it stored were read by the old, broken extractor.
-   - (From the previous round, if you haven't uploaded it yet: the picker
-     rows are aligned with 24px between each drop-down and its button, and
-     the page says 90 days rather than 120.)
+   What changed: the line under a competitor box used to collapse four
+   different reasons into "already shown to you before", which had a first
+   run claiming you'd been shown things the box had never fetched. They are
+   now reported separately:
 
-2. DEPLOY THE WORKER — this carries the real date fix.
+       N older than 30 days
+       N recorded as a baseline for next time
+       N already on the site last time
+       N already shown to you before
+       N whose publish date couldn't be confirmed
+
+2. DEPLOY THE WORKER — this carries the real fix.
 
        cd C:\Users\Tyler\customer-tracker
        npx wrangler deploy
@@ -30,11 +31,14 @@ REPLACES every earlier zip. Three files changed since the last one.
    src/index.js, src/competitor.js and src/shared.js are already written to
    that folder.
 
-3. AFTER DEPLOYING, hit Refresh Data on each competitor box once.
+   Off-site items (Medium, Substack, Reddit, HN) are now opened and their
+   publish date read from the page, the same way pages on the competitor's
+   own site already were. The model's date is only a hint and loses to the
+   page. An article whose page can't be opened is dropped rather than shown
+   with a date that might be wrong — the count of those appears in the line
+   above, so an empty section explains itself.
 
-   Your existing boxes hold dates read by the old extractor. The first
-   refresh after this deploy notices the ledger is version 1, re-opens every
-   page it had recorded a date for, and re-reads it properly. That one run
-   is slower than usual. Anything the old code wrongly dated as OLD (and so
-   never showed you) can surface on that run; anything it wrongly dated as
-   RECENT has already been shown and stays filtered out.
+   Expect competitor runs to take a little longer: up to 16 extra page
+   fetches, five at a time.
+
+3. No Firestore change.

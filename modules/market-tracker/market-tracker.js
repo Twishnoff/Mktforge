@@ -690,8 +690,14 @@
     const plural = (k, one, many) => `${k} ${k === 1 ? one : many}`;
     const parts = [];
     if (box.kind === 'competitor') {
+      /* Each of these is a different reason, and they used to share one
+         counter — which had a first run reporting that things had been
+         "shown before" when the box had never run. */
       if (n(d.date)) parts.push(`${n(d.date)} older than 30 days`);
+      if (n(d.baseline)) parts.push(`${n(d.baseline)} recorded as a baseline for next time`);
+      if (n(d.unchanged)) parts.push(`${n(d.unchanged)} already on the site last time`);
       if (n(d.seen)) parts.push(`${n(d.seen)} already shown to you before`);
+      if (n(d.unverified)) parts.push(`${n(d.unverified)} whose publish date couldn’t be confirmed`);
       if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} not about this competitor`);
       if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
     } else {
