@@ -1,0 +1,693 @@
+/* ==========================================================================
+   Market Tracker
+   Watches what one job title at a time is saying online — about the user's
+   company, its competitors, and the problems its product solves — and lays
+   each finding out as a row coloured by what it means for the user.
+
+   Page
+     Job Title [dropdown of My Company's Target Job Titles] [Track Title]
+     one full-width box per tracked title, alphabetical:
+       Stop Tracking (top right) · results table · Refresh Data (bottom right)
+
+   Runs
+     Each box runs its own request to the Worker (/api/track, Server-Sent
+     Events). The Worker is still deployed as "customer-tracker" — the module
+     was renamed, its backend URL was not. Runs keep going while you're on other
+     modules, and several boxes can run at once. A reload or sign-out ends
+     them; the box then offers Refresh Data. Nav light: yellow while any box
+     is researching, then green, or red if a run failed.
+
+   Storage
+     users/{uid}/tracker/{boxId} (MktforgeData.saveTrackerBox). A title
+     removed from My Company takes its box with it.
+   ========================================================================== */
+
+(() => {
+
+  const MODULE_ID = 'market-tracker';
+  const MODULE_NAME = 'Market Tracker';
+  const RUN_TIMEOUT_MS = 9 * 60 * 1000;
+  const CONFIRM_MS = 4000;
+
+  const Data = () => window.MktforgeData;
+  const Kit = () => window.MktforgeKit;
+  const config = () => (window.MKTFORGE_CONFIG && window.MKTFORGE_CONFIG.marketTracker) || {};
+
+  /* Titles that already have a box of their own. A title that exactly matches
+     one of them is never borrowed as an alternative title for another box —
+     a Data Platform Engineer box stops using "Data Engineer" once a Data
+     Engineer box exists. Results already on screen are left alone; the rule
+     bites the next time a box is refreshed. */
+  function otherTrackedTitles(box) {
+    return [...state.boxes.values()]
+      .filter((b) => b !== box && b.title)
+      .map((b) => b.title);
+  }
+
+  const esc = (v) => String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const keyOf = (title) => String(title || '').trim().toLowerCase();
+
+  /* ---------- state (outlives mount/unmount) ---------- */
+
+  const state = {
+    loaded: false,
+    loading: null,          // Promise while the first load is in flight
+    loadError: '',
+    profile: null,          // My Company profile
+    profileError: false,
+    boxes: new Map(),       // key -> box
+    selected: ''
+  };
+
+  /* box: { key, title, rows, lastRefreshed, status, note, companyName, createdAt,
+            running, progress, error, controller, confirmStop, confirmTimer } */
+
+  let root = null;
+  let mounted = false;
+
+  /* ---------- nav light ---------- */
+
+  const activity = { busy: false, failed: false };
+
+  function syncActivity(failed = false) {
+    const running = [...state.boxes.values()].some((b) => b.running);
+    if (running && !activity.busy) {
+      activity.busy = true;
+      activity.failed = false;
+      Mktforge.reportActivity(MODULE_ID, 'running');
+    }
+    if (failed) activity.failed = true;
+    if (!running && activity.busy) {
+      activity.busy = false;
+      Mktforge.reportActivity(MODULE_ID, activity.failed ? 'error' : 'idle');
+      activity.failed = false;
+    }
+  }
+
+  /* ---------- loading and keeping in step with My Company ---------- */
+
+  function profileTitles() {
+    return (state.profile && state.profile.targetTitles) || [];
+  }
+
+  function load() {
+    if (state.loaded) return Promise.resolve();
+    if (state.loading) return state.loading;
+    state.loading = (async () => {
+      try {
+        const [profile, boxes] = await Promise.all([Data().getProfile(), Data().listTrackerBoxes()]);
+        state.profile = profile;
+        state.profileError = false;
+        boxes.forEach((b) => {
+          const key = keyOf(b.title);
+          if (!state.boxes.has(key)) state.boxes.set(key, { ...b, key, running: false, progress: '', error: '' });
+        });
+        state.loaded = true;
+        state.loadError = '';
+        reconcile();
+      } catch (err) {
+        console.error('[Market Tracker] could not load', err);
+        state.loadError = 'Couldn’t load your tracked titles. Check your connection and reopen this module.';
+      } finally {
+        state.loading = null;
+        paint();
+      }
+    })();
+    return state.loading;
+  }
+
+  /* A title removed (or renamed) in My Company takes its box with it. */
+  function reconcile() {
+    if (!state.profile) return;
+    const keep = new Set(profileTitles().map(keyOf));
+    [...state.boxes.values()].forEach((box) => {
+      if (!keep.has(box.key)) removeBox(box, { quiet: true });
+    });
+    if (state.selected && (!keep.has(keyOf(state.selected)) || state.boxes.has(keyOf(state.selected)))) {
+      state.selected = '';
+    }
+  }
+
+  if (window.MktforgeData) {
+    window.MktforgeData.onProfile((p) => {
+      state.profile = p;
+      state.profileError = false;
+      if (state.loaded) reconcile();
+      paint();
+    });
+  }
+
+  /* ---------- boxes ---------- */
+
+  function sortedBoxes() {
+    return [...state.boxes.values()]
+      .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+  }
+
+  function persist(box) {
+    const rec = {
+      title: box.title, rows: box.rows || [], lastRefreshed: box.lastRefreshed || 0,
+      status: box.status || 'pending', note: box.note || '', companyName: box.companyName || '',
+      stats: box.stats || null, createdAt: box.createdAt || Date.now()
+    };
+    return Data().saveTrackerBox(rec).catch((err) => {
+      console.error('[Market Tracker] could not save', err);
+      notify(`Couldn’t save the results for “${box.title}” to your account.`, 'error');
+    });
+  }
+
+  function removeBox(box, { quiet = false } = {}) {
+    clearTimeout(box.confirmTimer);
+    if (box.controller) box.controller.abort();
+    box.running = false;
+    box.removed = true;
+    state.boxes.delete(box.key);
+    syncActivity();
+    Data().deleteTrackerBox(box.id || Data().trackerId(box.title)).catch((err) => {
+      console.error('[Market Tracker] could not delete', err);
+      if (!quiet) notify(`Couldn’t remove “${box.title}” from your account. Try again.`, 'error');
+    });
+  }
+
+  function trackTitle(title) {
+    const key = keyOf(title);
+    if (!key || state.boxes.has(key)) return;
+    const box = {
+      id: Data().trackerId(title), key, title, rows: [], lastRefreshed: 0, status: 'pending', note: '', companyName: '',
+      createdAt: Date.now(), running: false, progress: '', error: ''
+    };
+    state.boxes.set(key, box);
+    state.selected = '';
+    persist(box);
+    run(box);
+  }
+
+  /* ---------- saved materials: only the ones about this title ---------- */
+
+  let contextQueue = Promise.resolve();
+
+  function contextFor(title) {
+    const job = contextQueue.then(async () => {
+      if (!window.MktforgeResearch) return null;
+      try {
+        const { context } = await window.MktforgeResearch.build(
+          { jobTitles: [title], budget: window.MktforgeResearch.BUDGETS.small });
+        const aboutTitle = (e) => /job title/.test(e.match || '');
+        const imported = context.imported.filter(aboutTitle);
+        const generated = context.generated.filter(aboutTitle);
+        return imported.length || generated.length ? { imported, generated } : null;
+      } catch (err) {
+        console.warn('[Market Tracker] continuing without saved materials', err);
+        return null;
+      }
+    });
+    contextQueue = job.catch(() => null);   // one build at a time; they share caches
+    return job;
+  }
+
+  /* ---------- the title's family, from persona files ----------
+     A Persona Builder PDF's Overview lists "Primary Job Title:" and
+     "Secondary Job Titles:" (comma-separated). If the tracked title is the
+     primary or one of the secondaries, every title in that persona counts
+     as the same role when the agent matches posts. Imported files laid out
+     the same way count too. */
+
+  const normTitle = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9&+/]+/g, ' ').trim();
+
+  function personaTitles(text) {
+    const t = String(text || '').replace(/\s+/g, ' ');
+    const primary = /Primary Job Title:\s*(.+?)\s*Secondary Job Titles:/i.exec(t);
+    if (!primary) return null;
+    const second = /Secondary Job Titles:\s*(.+?)\s*(?:Job Level:|Average Years|Company Size:|Industry:|Common Tools:|$)/i.exec(t);
+    const pieces = (second ? second[1] : '').split(/\s*[,;]\s*/)
+      .map((x) => x.trim()).filter((x) => x.length > 1 && !/^none found$/i.test(x) && x !== '—');
+    // The PDF joins titles with ", ", so "Senior Manager, Growth Marketing"
+    // arrives as two pieces. A piece that is only a level ("Senior Manager",
+    // "Director") belongs with the piece after it.
+    const secondaries = [];
+    for (let i = 0; i < pieces.length; i += 1) {
+      if (onlyLevel(pieces[i]) && i + 1 < pieces.length) {
+        secondaries.push(`${pieces[i]}, ${pieces[i + 1]}`);
+        i += 1;
+      } else if (!onlyLevel(pieces[i])) {
+        secondaries.push(pieces[i]);
+      }
+    }
+    return { primary: primary[1].trim(), secondaries };
+  }
+
+  const LEVEL_WORDS = new Set(['senior', 'sr', 'junior', 'jr', 'lead', 'manager', 'director', 'head', 'vp', 'svp', 'evp',
+    'avp', 'vice', 'president', 'chief', 'principal', 'associate', 'assistant', 'staff', 'officer', 'executive', 'of', 'the', 'and', '&']);
+  const onlyLevel = (t) => normTitle(t).split(' ').every((w) => LEVEL_WORDS.has(w));
+
+  const personaMemo = new Map();   // fileId -> { primary, secondaries } | null
+
+  async function titleFamily(title, exclude = []) {
+    const want = normTitle(title);
+    const blocked = new Set(exclude.map(normTitle).filter(Boolean));
+    const out = new Map();         // normalized -> { title, from }
+    let files = [];
+    try { files = await Data().listFiles(); } catch (err) { return []; }
+    const personas = files.filter((f) => f.moduleId === 'persona-builder'
+      || (f.source === 'imported' && /persona/i.test(f.name)));
+    for (const f of personas.slice(0, 30)) {
+      if (!personaMemo.has(f.id)) {
+        try { personaMemo.set(f.id, personaTitles(await Data().getFileText(f.id))); }
+        catch (err) { personaMemo.set(f.id, null); }
+      }
+      const p = personaMemo.get(f.id);
+      if (!p) continue;
+      const all = [p.primary, ...p.secondaries];
+      if (!all.some((x) => normTitle(x) === want)) continue;
+      all.forEach((x) => {
+        const k = normTitle(x);
+        if (k && k !== want && !blocked.has(k) && !onlyLevel(x) && !out.has(k)) {
+          out.set(k, { title: x, from: `${f.name}${f.ext || ''}` });
+        }
+      });
+    }
+    return [...out.values()].slice(0, 20);
+  }
+
+  /* ---------- a run ---------- */
+
+  async function run(box) {
+    if (box.running) return;
+    const cfg = config();
+    box.running = true;
+    box.error = '';
+    box.progress = 'Starting…';
+    box.controller = new AbortController();
+    const controller = box.controller;
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, RUN_TIMEOUT_MS);
+    syncActivity();
+    paint();
+
+    let failed = false;
+    try {
+      if (!cfg.API_BASE_URL) throw new Error('Market Tracker isn’t configured — set marketTracker.API_BASE_URL in assets/js/config.js.');
+      const noAccess = Kit().accessProblem();
+      if (noAccess) throw new Error(noAccess);
+
+      const profile = await Data().getProfile();
+      if (!profile.companyUrl) throw new Error('Company URL required. Please add a URL in your My Company module');
+
+      box.progress = 'Reading your saved research about this title…';
+      paintBox(box);
+      const context = await contextFor(box.title);
+      const others = otherTrackedTitles(box);
+      const family = await titleFamily(box.title, others).catch(() => []);
+      if (controller.signal.aborted) throw abortError();
+
+      const token = window.MktforgeAuth && window.MktforgeAuth.getIdToken
+        ? await window.MktforgeAuth.getIdToken() : null;
+      if (!token) throw new Error(Kit().NO_ACCESS);
+
+      box.progress = 'Sending to the research agent…';
+      paintBox(box);
+      const res = await fetch(`${cfg.API_BASE_URL}/api/track`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          jobTitle: box.title,
+          companyUrl: profile.companyUrl,
+          companyName: profile.companyName || '',
+          competitorUrls: profile.competitors || [],
+          context,
+          titleFamily: family,
+          otherTitles: others,
+          today: localDay()
+        }),
+        signal: controller.signal
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        const message = payload && payload.message;
+        throw new Error(Kit().accessError(res.status, message) || message || `Request failed (${res.status}).`);
+      }
+
+      let result = null;
+      await readStream(res, {
+        status: (d) => { box.progress = d.message || box.progress; paintBox(box); },
+        result: (d) => { result = d; },
+        error: (d) => { throw Object.assign(new Error(d.message || 'Something went wrong.'), { code: d.code }); }
+      });
+      if (!result) throw new Error('The connection closed before the research finished. Try Refresh Data.');
+
+      if (box.removed) return;
+      box.rows = Array.isArray(result.rows) ? result.rows : [];
+      box.note = result.note || '';
+      box.stats = result.stats || null;
+      box.companyName = result.companyName || '';
+      box.lastRefreshed = Date.now();
+      box.status = 'done';
+      persist(box);
+    } catch (err) {
+      if (box.removed) return;                       // Stop Tracking, or the title went away
+      if (err && err.name === 'AbortError' && !timedOut) return;
+      failed = true;
+      console.error('[Market Tracker] run failed', err);
+      box.error = timedOut
+        ? 'The research took too long and was stopped. Try Refresh Data.'
+        : (err && err.message && !/Failed to fetch|NetworkError|Load failed/i.test(err.message)
+          ? err.message : 'Could not reach the research service. Try Refresh Data.');
+    } finally {
+      clearTimeout(timer);
+      if (box.controller === controller) box.controller = null;
+      box.running = false;
+      box.progress = '';
+      syncActivity(failed);
+      if (!box.removed) paintBox(box);
+    }
+  }
+
+  function abortError() {
+    const e = new Error('Aborted');
+    e.name = 'AbortError';
+    return e;
+  }
+
+  function localDay() {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+
+  async function readStream(res, handlers) {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let i;
+      while ((i = buffer.indexOf('\n\n')) !== -1) {
+        const raw = buffer.slice(0, i);
+        buffer = buffer.slice(i + 2);
+        const type = ((raw.match(/^event:\s*(.+)$/m) || [])[1] || 'message').trim();
+        const dataLine = (raw.match(/^data:\s*(.+)$/m) || [])[1];
+        if (!dataLine) continue;              // ": ping" keep-alives
+        let data;
+        try { data = JSON.parse(dataLine); } catch (e) { continue; }
+        if (handlers[type]) handlers[type](data);
+      }
+    }
+  }
+
+  function notify(message, tone = 'info') {
+    document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message, tone } }));
+  }
+
+  /* ---------- rendering ---------- */
+
+  const MARKUP = `
+  <div class="mtrk">
+    <header class="mtrk__head">
+      <p class="mtrk__eyebrow">${MODULE_NAME}</p>
+      <h1 class="mtrk__title">Hear what your buyers are saying</h1>
+      <p class="mtrk__dek">Pick a job title and an agent searches Reddit, review sites, Hacker News,
+        and the forums, blogs and news your buyers read for the last 120 days of first-hand posts
+        about your company, your competitors and the problems you solve — including the replies
+        buried in threads named after a competitor. Reporting, explainers and vendor marketing are
+        left out. Green rows are openings for you; red rows are risks.</p>
+    </header>
+
+    <section class="mtrk__card" aria-label="Track a job title">
+      <div class="mtrk__pick">
+        <label class="mtrk__label" for="mtrk-title">Job Title</label>
+        <select id="mtrk-title" data-el="select"></select>
+        <button type="button" class="mtrk__btn" data-el="track">Track Title</button>
+      </div>
+      <div class="mtrk__messages" data-el="messages"></div>
+    </section>
+
+    <div class="mtrk__boxes" data-el="boxes"></div>
+  </div>`;
+
+  const el = (name) => root && root.querySelector(`[data-el="${name}"]`);
+
+  function available() {
+    return profileTitles().filter((t) => !state.boxes.has(keyOf(t)));
+  }
+
+  function paint() {
+    if (!mounted || !root) return;
+    paintPicker();
+    paintBoxes();
+  }
+
+  function paintPicker() {
+    const select = el('select');
+    const track = el('track');
+    const messages = el('messages');
+    if (!select) return;
+
+    const titles = available();
+    if (state.selected && !titles.some((t) => keyOf(t) === keyOf(state.selected))) state.selected = '';
+    select.innerHTML = `<option value="">Select A Job Title To Track</option>`
+      + titles.map((t) => `<option value="${esc(t)}"${keyOf(t) === keyOf(state.selected) ? ' selected' : ''}>${esc(t)}</option>`).join('');
+
+    const p = state.profile;
+    const noUrl = !!p && !p.companyUrl;
+    const noTitles = !!p && profileTitles().length === 0;
+    select.disabled = !state.loaded || titles.length === 0;
+    track.disabled = !state.loaded || noUrl || !state.selected;
+
+    const msgs = [];
+    if (state.loadError) msgs.push(['error', state.loadError]);
+    else if (!state.loaded) msgs.push(['muted', 'Loading your job titles…']);
+    if (noUrl) msgs.push(['error', 'Company URL required. Please add a URL in your My Company module']);
+    if (noTitles) {
+      msgs.push(['error', 'No job titles found. Add them through the My Company module or generate them with the Find My Customer module.']);
+    } else if (state.loaded && titles.length === 0) {
+      msgs.push(['muted', 'Every job title in My Company is being tracked. Add more titles there to track them here.']);
+    }
+    if (p && state.loaded && !(p.competitors || []).length) {
+      msgs.push(['warn', 'You currently have no competitors assigned to your company. To track competitor mentions, add competitors to your company information in your My Company module.']);
+    }
+    messages.innerHTML = msgs.map(([tone, text]) => `<p class="mtrk__msg is-${tone}">${esc(text)}</p>`).join('');
+  }
+
+  function paintBoxes() {
+    const host = el('boxes');
+    if (!host) return;
+    const boxes = sortedBoxes();
+    host.innerHTML = boxes.map(boxHtml).join('');
+  }
+
+  function paintBox(box) {
+    if (!mounted || !root) return;
+    const node = root.querySelector(`[data-box="${cssKey(box.key)}"]`);
+    if (!node) { paintBoxes(); return; }
+    node.outerHTML = boxHtml(box);
+  }
+
+  const cssKey = (key) => encodeURIComponent(key);
+
+  /* "2026-09-03" -> "Sep 3, 2026"; "2026-08" -> "Aug 2026". Approximate
+     dates (month-only, or worked out from "2 weeks ago") get a leading ~. */
+  const fmtDay = (iso, approx) => {
+    const d = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+    const m = /^(\d{4})-(\d{2})$/.exec(iso || '');
+    let out = '';
+    if (d) out = new Date(+d[1], +d[2] - 1, +d[3]).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    else if (m) out = new Date(+m[1], +m[2] - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+    return out && (approx || m) ? `~${out}` : out;
+  };
+
+  /* What the agent looked at and why things were left out. */
+  function statsText(stats) {
+    if (!stats || typeof stats !== 'object') return '';
+    const d = stats.dropped || {};
+    const n = (v) => Number(v) || 0;
+    const plural = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+    const parts = [];
+    if (n(d.date)) parts.push(`${n(d.date)} older than 120 days`);
+    if (n(d.match)) parts.push(`${n(d.match)} not tied to this job title`);
+    if (n(d.perspective)) parts.push(`${n(d.perspective)} reporting or explainers rather than first-hand experience`);
+    if (n(d.paper)) parts.push(`${n(d.paper)} research papers`);
+    if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} off-topic`);
+    if (n(d.owned)) parts.push(`${n(d.owned)} on your or a competitor’s own site`);
+    if (n(d.vendor)) parts.push(`${n(d.vendor)} on the site of a vendor selling into the same industry`);
+    if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
+    const head = `${plural(n(stats.searched), 'search', 'searches')} · ${plural(n(stats.found), 'item', 'items')} found`
+      + `${n(stats.threadsRead) ? ` · ${plural(n(stats.threadsRead), 'thread', 'threads')} read for comments` : ''}`
+      + `${n(stats.datesRead) ? ` · ${plural(n(stats.datesRead), 'date', 'dates')} read from the pages` : ''} · ${n(stats.kept)} shown`;
+    return parts.length ? `${head}. Left out: ${parts.join(', ')}.` : `${head}.`;
+  }
+
+  const fmtWhen = (ms) => new Date(ms).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+  });
+
+  const safeUrl = (u) => (/^https?:\/\//i.test(String(u || '')) ? String(u) : '');
+
+  const KIND = { post: 'Post', comment: 'Comment', review: 'Review', article: 'Article' };
+  const TONE = { green: 'Opportunity', red: 'Risk', neutral: 'Neutral' };
+
+  function rowHtml(r) {
+    const url = safeUrl(r.url);
+    const tone = ['green', 'red'].includes(r.opportunity) ? r.opportunity : 'neutral';
+    const role = r.roleBasis === 'stated' && r.role ? `Stated role: ${r.role}`
+      : r.roleBasis === 'inferred' ? `Role inferred${r.role ? ` (${r.role})` : ''}${r.why ? ` — ${r.why}` : ''}`
+      : r.why || '';
+    const thread = r.threadTitle ? `In thread: “${r.threadTitle}”` : '';
+    return `
+      <tr class="mtrk__row is-${tone}">
+        <td class="mtrk__c-date${r.date ? '' : ' is-undated'}"${!r.date ? ' title="No publish date could be found"' : r.approx || /^\d{4}-\d{2}$/.test(r.date) ? ' title="Approximate date"' : ''}>${esc(r.date ? fmtDay(r.date, r.approx) : 'Undated')}</td>
+        <td class="mtrk__c-source">
+          <span class="mtrk__source">${esc(r.source)}</span>
+          <span class="mtrk__kind">${esc(KIND[r.kind] || 'Post')}${r.companySite ? ' · company’s own site' : ''}</span>
+        </td>
+        <td class="mtrk__c-excerpt">
+          <span class="mtrk__tone">${esc(TONE[tone])}${r.churn ? ' · left you' : ''}</span>
+          <p>${esc(r.excerpt)}</p>
+          ${thread ? `<p class="mtrk__thread">${esc(thread)}</p>` : ''}
+          ${role ? `<p class="mtrk__role">${esc(role)}</p>` : ''}
+        </td>
+        <td class="mtrk__c-mentions">${(r.mentions || []).map((m) => `<span class="mtrk__chip">${esc(m)}</span>`).join('')}</td>
+        <td class="mtrk__c-link">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open<span class="mtrk__sr"> ${esc(r.source)} (opens in a new tab)</span> ↗</a>` : ''}</td>
+      </tr>`;
+  }
+
+  function bodyHtml(box) {
+    if (box.running) {
+      return `<div class="mtrk__state is-loading" role="status">
+          <span class="mtrk__dots" aria-hidden="true"><span></span><span></span><span></span></span>
+          <span>${esc(box.progress || 'Researching…')}</span>
+        </div>`;
+    }
+    const parts = [];
+    if (box.error) parts.push(`<p class="mtrk__error" role="alert">${esc(box.error)}</p>`);
+    if (!box.lastRefreshed) {
+      if (!box.error) parts.push('<div class="mtrk__state">Research was interrupted before it finished. Click Refresh Data to run it again.</div>');
+      return parts.join('');
+    }
+    const stats = statsText(box.stats);
+    if (!box.rows.length) {
+      parts.push(`<div class="mtrk__state">
+          <p>No posts or articles from the last 120 days matched this job title.</p>
+          ${stats ? `<p class="mtrk__stats">${esc(stats)}</p>` : ''}
+        </div>`);
+      return parts.join('');
+    }
+    parts.push(`
+      <div class="mtrk__legend" aria-hidden="true">
+        <span><i class="is-green"></i>Opportunity — unhappy with a competitor, or happy with you</span>
+        <span><i class="is-red"></i>Risk — unhappy with you, or left you</span>
+        <span><i></i>Neutral</span>
+      </div>
+      <div class="mtrk__table-wrap">
+        <table class="mtrk__table">
+          <thead><tr>
+            <th scope="col">Date</th><th scope="col">Source</th><th scope="col">Excerpt / summary</th>
+            <th scope="col">Mentions</th><th scope="col"><span class="mtrk__sr">Link</span></th>
+          </tr></thead>
+          <tbody>${box.rows.map(rowHtml).join('')}</tbody>
+        </table>
+      </div>
+      ${stats ? `<p class="mtrk__stats">${esc(stats)}</p>` : ''}`);
+    return parts.join('');
+  }
+
+  function boxHtml(box) {
+    const meta = box.running ? 'Researching…'
+      : box.lastRefreshed ? `Last refreshed ${fmtWhen(box.lastRefreshed)}` : 'Not refreshed yet';
+    const count = !box.running && box.lastRefreshed ? ` · ${box.rows.length} result${box.rows.length === 1 ? '' : 's'}` : '';
+    return `
+      <section class="mtrk__box${box.running ? ' is-running' : ''}" data-box="${cssKey(box.key)}" aria-label="${esc(box.title)}">
+        <header class="mtrk__box-head">
+          <div class="mtrk__box-title">
+            <h2>${esc(box.title)}</h2>
+            <p class="mtrk__meta">${esc(meta + count)}</p>
+          </div>
+          <button type="button" class="mtrk__stop${box.confirmStop ? ' is-confirm' : ''}" data-act="stop">
+            ${box.confirmStop ? 'Click again to stop' : 'Stop Tracking'}
+          </button>
+        </header>
+        <div class="mtrk__box-body">${bodyHtml(box)}</div>
+        <footer class="mtrk__box-foot">
+          <p class="mtrk__note">${box.note && !box.running ? esc(box.note) : ''}</p>
+          <button type="button" class="mtrk__btn mtrk__btn--ghost" data-act="refresh"${box.running ? ' disabled' : ''}>Refresh Data</button>
+        </footer>
+      </section>`;
+  }
+
+  /* ---------- events ---------- */
+
+  function onChange(e) {
+    if (e.target.matches('[data-el="select"]')) {
+      state.selected = e.target.value;
+      paintPicker();
+    }
+  }
+
+  function onClick(e) {
+    const btn = e.target.closest('button');
+    if (!btn || btn.disabled) return;
+
+    if (btn.matches('[data-el="track"]')) {
+      if (state.selected) trackTitle(state.selected);
+      paint();
+      return;
+    }
+
+    const node = btn.closest('[data-box]');
+    if (!node) return;
+    const box = state.boxes.get(decodeURIComponent(node.dataset.box));
+    if (!box) return;
+
+    if (btn.dataset.act === 'refresh') {
+      run(box);
+    } else if (btn.dataset.act === 'stop') {
+      if (!box.confirmStop) {
+        box.confirmStop = true;
+        clearTimeout(box.confirmTimer);
+        box.confirmTimer = setTimeout(() => { box.confirmStop = false; paintBox(box); }, CONFIRM_MS);
+        paintBox(box);
+        const again = root && root.querySelector(`[data-box="${cssKey(box.key)}"] [data-act="stop"]`);
+        if (again) again.focus();
+        return;
+      }
+      removeBox(box);
+      paint();
+      const select = el('select');
+      if (select) select.focus();
+    }
+  }
+
+  /* ---------- module ---------- */
+
+  Mktforge.register({
+    id:     MODULE_ID,
+    label:  MODULE_NAME,
+    icon:   'radar',
+    styles: 'modules/market-tracker/market-tracker.css',
+
+    mount(container) {
+      mounted = true;
+      container.innerHTML = MARKUP;
+      root = container.firstElementChild;
+      root.addEventListener('change', onChange);
+      root.addEventListener('click', onClick);
+      paint();
+      if (state.loaded) {
+        // Pick up anything changed elsewhere (e.g. titles added from Find My Customer).
+        Data().getProfile().then((p) => { state.profile = p; reconcile(); paint(); }).catch(() => {});
+      } else {
+        load();
+      }
+    },
+
+    unmount() {
+      mounted = false;
+      // Runs in flight keep going and land in `state`.
+      root = null;
+    }
+  });
+})();

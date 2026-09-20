@@ -43,7 +43,7 @@ service cloud.firestore {
       }
     }
 
-    // Customer Tracker: one document per tracked job title.
+    // Market Tracker: one document per tracked job title.
     match /users/{uid}/tracker/{boxId} {
       allow read, delete: if isOwner(uid);
       allow create, update: if isOwner(uid)

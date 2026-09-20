@@ -90,8 +90,10 @@ window.MKTFORGE_CONFIG = {
     USE_SAVED_MATERIALS: true
   },
 
-  customerTracker: {
+  marketTracker: {
     // Its own Worker (C:\Users\Tyler\customer-tracker, deployed as "customer-tracker").
+    // The module was renamed to Market Tracker; the Worker keeps its original
+    // name so its URL — and the deploy you already have — never change.
     // Signed-in accounts only: every request carries the Firebase ID token.
     API_BASE_URL: 'https://customer-tracker.tyler-wishnoff.workers.dev'
   }

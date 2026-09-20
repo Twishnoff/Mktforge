@@ -26,7 +26,7 @@ modules/draft-messaging/    Draft Messaging (messaging + homepage copy, stages 6
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
 modules/battle-card-generator/  Battle Card Generator (ported from Battlecard-Generator)
 modules/marketing-opportunities/  Marketing Opportunities (ported from Syndication & Event Finder)
-modules/customer-tracker/   Customer Tracker (what a job title is saying online)
+modules/market-tracker/     Market Tracker (what a job title is saying online)
 ```
 
 ## Running it locally
@@ -56,7 +56,7 @@ are all handled by the shell.
 The nav lists modules in the order their `<script>` tags appear in
 `index.html`, which is the order a person works through them: My Company, Find
 My Customer, Persona Builder, Build Positioning, Draft Messaging, Marketing
-Opportunities, Customer Tracker, Battle Card Generator. Moving a module in the nav means moving
+Opportunities, Market Tracker, Battle Card Generator. Moving a module in the nav means moving
 its one line.
 
 ### The contract
@@ -857,20 +857,27 @@ The standalone site and this module are now two copies of the same frontend.
 If you change one, port the change to the other.
 
 
-## Customer Tracker
+## Market Tracker
 
 Watches what one job title at a time is saying online about your company,
 your competitors and the problems your product solves. Nav button directly
-below Marketing Opportunities (radar icon). Spec: Google Doc
-"Customer Tracker — Spec v2". Backend: its own Cloudflare Worker,
-`customer-tracker` (`C:\Users\Tyler\customer-tracker`, deploy steps in its
-README).
+below Marketing Opportunities (radar icon). Spec: Google Docs
+"Customer Tracker — Spec v2" and "Customer Tracker Worker/Agent Updates"
+(the latter is what renamed it). Backend: its own Cloudflare Worker, which
+keeps its original name `customer-tracker`
+(`C:\Users\Tyler\customer-tracker`, deploy steps in its README) so its URL
+never changed — only the module was renamed.
 
 ```
-modules/customer-tracker/
-  customer-tracker.js    page, runs, results table
-  customer-tracker.css   (classes prefixed .ctrk)
+modules/market-tracker/
+  market-tracker.js      page, runs, results table
+  market-tracker.css     (classes prefixed .mtrk)
 ```
+
+Renamed from **Customer Tracker**. The module id is now `market-tracker`
+(so the route is `#/market-tracker`) and the config key is `marketTracker`.
+The Firestore collection is still `users/{uid}/tracker`, so every saved box
+survived the rename untouched.
 
 ### The page
 
@@ -892,16 +899,27 @@ modules/customer-tracker/
 ### Results table
 
 Date · Source · Excerpt / summary · Mentions · Link, newest first, up to 25
-rows. The row colour is what the item means for **you**:
+rows. The row colour is what the item means for **you**, and it is
+deliberately narrow:
 
 | About | Positive | Negative |
 |---|---|---|
-| your company | green | red |
-| a competitor | red | green |
-| a problem you solve | — | green (a complaint is an opening) |
+| your company | green | **red** |
+| a competitor | — | **green** |
+| a problem you solve | — | — |
 
-Neutral and mixed rows have no colour. The Worker sets the colour from the
-item's subject and sentiment, not the model's say-so, so it stays consistent.
+Plus: anyone saying they **left you as a customer** is red, whatever the
+sentiment reads as. Everything else — praise for a competitor, complaints
+about a problem you solve, neutral and mixed rows — has no colour. Praise
+for a competitor and pain-point complaints used to be red and green; the
+Worker/Agent Updates spec narrowed both to neutral, so green now means a
+real opening and red a real risk, and a box will show fewer coloured rows
+than it used to. The Worker sets the colour from the item's subject,
+sentiment and the churn flag, not the model's say-so, so it stays
+consistent.
+
+A comment harvested from a thread whose title names a competitor says which
+thread it came from, under the excerpt.
 Each row also says whether the author **stated** their role or the agent
 **inferred** it, and why.
 
@@ -924,9 +942,36 @@ Each row also says whether the author **stated** their role or the agent
    and whatever the author shows about their role, but doesn't judge
    job-title fit. With competitors, a competitor run and a problems run go
    side by side (12 searches each).
-5. **Classify** (no search) applies the job-title rule: a stated role
+5. **Threads named after a competitor**: every Reddit and Hacker News
+   thread step 4 found is opened (one request each — Reddit's own JSON,
+   Hacker News through Algolia). When the thread's *title* names a
+   competitor, or its opening post mentions your company, its comments are
+   added as candidates of their own, carrying the thread's title and
+   subject. A commenter is then treated as talking about that competitor
+   even when they never name it — "Has anyone tried <Competitor> for X?"
+   is usually answered three comments down by somebody who used it and
+   doesn't repeat the name. Whether the commenter reads as the tracked role
+   is still judged normally, and comments outside the 120 days are dropped
+   (the thread dates every comment exactly). Up to 12 threads and 40
+   comments a run, of which at most 20 take candidate slots, so harvested
+   comments can't crowd out everything the search found.
+6. **Classify** (no search) applies the job-title rule: a stated role
    first; otherwise inferred from the pain points / initiatives in your
    saved materials; otherwise dropped.
+   **First-hand experience only:** the writer has to be describing what
+   they or their team actually did, chose, paid for, struggled with or
+   switched away from — "I", "we", "my", "our". Neutral industry
+   reporting, explainers, how-tos, "what is X" pages, listicles, round-ups
+   and analyst commentary are dropped, as are research and academic papers.
+   Posts, comments and reviews almost always qualify; an article has to be
+   a practitioner writing up their own experience.
+   **Sibling job titles:** a title that exactly matches another box's
+   tracked title is never borrowed as an alternative title. Once you have a
+   Data Engineer box, a Data Platform Engineer box stops searching the
+   exact title "Data Engineer" — but "Senior Data Engineer" and other
+   titles merely containing it still count. Results already on screen are
+   left alone; the rule bites the next time that box is refreshed, and the
+   note says which titles were set aside.
    **Persona title families:** before a run, the page reads the Overview of
    every Persona Builder PDF (and any imported file with "persona" in its
    name laid out the same way): "Primary Job Title:" and "Secondary Job
@@ -944,25 +989,33 @@ Each row also says whether the author **stated** their role or the agent
    publish-date tags, then a quick read of the page text. Blocked sites
    (G2, for one) stay undated. The count line says how many dates were
    read this way.
-6. The Worker re-checks everything: last 120 days (a month-only date must be
+7. The Worker re-checks everything: last 120 days (a month-only date must be
    wholly inside the window; month-only and "x weeks ago" dates show with a
    ~; items with no date at all are kept, shown as "Undated" and listed
-   last), nothing on your or a competitor's site, no vendor marketing, and
-   the job-title rule again. **Vendor marketing** is a page on a company's
-   own site where the company sells something that addresses the problem
-   the page discusses — a data-warehouse vendor writing about
-   data-warehouse pain is dropped. A company writing as a user or buyer is
-   kept: an engineering blog on a problem it solved (e.g. an exchange on
-   scaling its database), or a customer's own case study or testimonial.
-   Those rows say "company's own site" under the source. Each source's
-   root-domain homepage decides whether it's a vendor and what it sells;
-   Reddit, review sites, Hacker News, Medium and the platforms your own
-   files name aren't checked, since their authors aren't the site's owner.
+   last), nothing on your or a competitor's site, the first-hand-experience
+   rule, the vendor rule, and the job-title rule again. A candidate whose
+   perspective the classifier didn't establish is dropped, so a loose
+   `keep: true` can't get a write-up through.
+   **Vendor content** is an article or blog hosted on a domain owned by a
+   company that is primarily a vendor or seller in the *same industry* as
+   the piece is about — a data-analytics vendor writing about data or
+   analytics. The test is the industry the owner sells into, not just the
+   exact problem, so a vendor blog can't dodge it with an adjacent pain
+   point. A company writing outside what it sells is kept: Pinterest's
+   engineering blog on infrastructure is fine, because Pinterest sells
+   social media, and so is a customer's own case study or testimonial about
+   somebody else's product. Those rows say "company's own site" under the
+   source. Each source's root-domain homepage decides whether it's a vendor,
+   what it sells and which industry it sells into; Reddit, review sites,
+   Hacker News, Medium and the platforms your own files name aren't checked,
+   since their authors aren't the site's owner.
 
 Searching and judging used to happen in one step, which returned nothing:
 with every rule applied mid-search, the model played safe. Each box now
 ends with a line saying how many searches ran, how many items were found,
-and how many were left out for which reason.
+how many threads were read for comments, and how many items were left out
+for which reason — including the ones dropped as reporting or explainers
+rather than first-hand experience, and as research papers.
 
 ### Runs and the nav light
 

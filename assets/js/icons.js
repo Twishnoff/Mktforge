@@ -60,7 +60,7 @@ window.MktforgeIcons = {
                 <path d="M20.3 7a7 7 0 0 1 0 10"/>
               </svg>`,
 
-  /* Customer Tracker — radar display: rings, a sweep and a couple of blips */
+  /* Market Tracker — radar display: rings, a sweep and a couple of blips */
   radar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="8.5"/>

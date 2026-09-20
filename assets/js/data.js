@@ -17,7 +17,7 @@
                                           digest? (JSON string, short summary for agents) }
      users/{uid}/files/{fileId}/chunks/{i}   { data: Blob }       original bytes
      users/{uid}/files/{fileId}/text/{i}     { data: string }     extracted text
-     users/{uid}/tracker/{boxId}        Customer Tracker: { title, rows: [...], lastRefreshed,
+     users/{uid}/tracker/{boxId}        Market Tracker: { title, rows: [...], lastRefreshed,
                                           status, note, companyName, stats, createdAt, updatedAt }
 
    Security rules that make this private live in firestore.rules.
@@ -55,7 +55,7 @@
      setFileDigest(id, digest)       -> Promise; stores that summary on the file
      getPositioningAnswers()         -> Promise<{ key: text }> (Build Positioning)
      savePositioningAnswers(changes) -> Promise; { key: text } sets, { key: null } clears
-     listTrackerBoxes()              -> Promise<[box]> Customer Tracker job-title boxes
+     listTrackerBoxes()              -> Promise<[box]> Market Tracker job-title boxes
      saveTrackerBox(box)             -> Promise<box>; box.id is made from the title
      deleteTrackerBox(id)            -> Promise; id from listTrackerBoxes / trackerId(title)
      trackerId(title)                -> the document id a title is saved under
@@ -808,7 +808,7 @@ window.MktforgeData = (() => {
     return { ...next };
   }
 
-  /* ---------- Customer Tracker boxes ----------
+  /* ---------- Market Tracker boxes ----------
      One document per tracked job title, so a box's results can be written or
      deleted on their own and never bloat the users/{uid} record the rest of
      the app reads. The id comes from the title (case-insensitive), so a

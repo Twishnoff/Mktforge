@@ -1,0 +1,29 @@
+Mktforge — Market Tracker update (site files)
+=============================================
+
+The Customer Tracker module is now Market Tracker.
+
+1. DELETE this folder from the repo:
+       modules/customer-tracker/
+   Its two files have been renamed and moved to modules/market-tracker/.
+   If you leave the old folder in place the old module still loads and you
+   get two radar buttons in the nav.
+
+2. COPY these over the repo, keeping the paths:
+       index.html                                   (script tag -> new path)
+       firestore.rules                              (comment only; no rule changed)
+       README.md                                    (docs)
+       assets/js/config.js                          (customerTracker -> marketTracker)
+       assets/js/data.js                            (comments only)
+       assets/js/icons.js                           (comment only)
+       modules/market-tracker/market-tracker.js     (new path)
+       modules/market-tracker/market-tracker.css    (new path)
+
+3. Deploy the Worker first (see the worker zip), then push the site.
+
+No Firestore change. The collection is still users/{uid}/tracker, so every
+box you have saved survives the rename with its results intact. The rules
+file only had its comment updated — re-publishing it is optional.
+
+The Worker URL has NOT changed. It is still
+https://customer-tracker.tyler-wishnoff.workers.dev
