@@ -934,7 +934,11 @@ same box and the same ledger.
 **The ledger** (`users/{uid}/competitorLedger/{ledgerId}`) is what makes "new"
 mean anything: every page the agent has seen on the site, and every URL it has
 already shown you. **Stop Tracking keeps it** — stop and restart and you pick
-up where you left off. It is deleted only when the URL leaves My Company.
+up where you left off. It is deleted only when the URL leaves My Company, and
+that is tracked against My Company's competitor list itself rather than
+against the boxes: removing the box first and the competitor second has to
+clear it just the same, or a competitor you re-add comes back with a history
+you thought you had thrown away.
 Dated entries are purged at 30 days (the date filter would exclude them
 anyway); undated ones are kept for the life of the ledger, because the URL is
 the only handle on them.

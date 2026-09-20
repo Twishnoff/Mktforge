@@ -39,8 +39,10 @@
      users/{uid}/tracker/{boxId}               the boxes and their rows
      users/{uid}/competitorLedger/{ledgerId}   what has already been seen
      A title or competitor URL removed from My Company takes its box with it.
-     Stop Tracking removes the box but keeps the ledger; the ledger goes only
-     when the URL leaves My Company.
+     Stop Tracking removes the box but keeps the ledger. The ledger is deleted
+     when the URL leaves My Company — tracked against the competitor list
+     itself, not against the boxes, so it happens whether or not a box was
+     still there at the time.
    ========================================================================== */
 
 (() => {
@@ -135,6 +137,7 @@
       try {
         const [profile, boxes] = await Promise.all([Data().getProfile(), Data().listTrackerBoxes()]);
         state.profile = profile;
+        syncLedgers(profile);
         boxes.forEach((b) => {
           const key = keyOfBox(b);
           if (!state.boxes.has(key)) state.boxes.set(key, { ...b, key, running: false, progress: '', error: '' });
@@ -162,7 +165,7 @@
     const keepComps = new Set(profileCompetitors().map(compKey));
     [...state.boxes.values()].forEach((box) => {
       const alive = box.kind === 'competitor' ? keepComps.has(box.key) : keepTitles.has(box.key);
-      if (!alive) removeBox(box, { quiet: true, forgetLedger: box.kind === 'competitor' });
+      if (!alive) removeBox(box, { quiet: true });
     });
     if (state.selectedTitle
       && (!keepTitles.has(titleKey(state.selectedTitle)) || state.boxes.has(titleKey(state.selectedTitle)))) {
@@ -174,9 +177,37 @@
     }
   }
 
+  /* Ledgers live and die with the competitor list in My Company, and nothing
+     else. Tying the deletion to a box was wrong: Stop Tracking deliberately
+     keeps the ledger, so removing the box first and the competitor second
+     left the ledger with nothing to delete it — and re-adding that competitor
+     picked up a history the user thought they had thrown away.
+
+     This runs off the profile itself, from a listener registered when the
+     module's script loads rather than when the module is opened, so it works
+     whichever module the user is looking at when they edit My Company. */
+  let knownCompetitors = null;          // key -> url, as of the last profile seen
+
+  function syncLedgers(profile) {
+    const now = new Map();
+    ((profile && profile.competitors) || []).forEach((u) => {
+      const host = hostOf(u);
+      if (host) now.set(compKey(u), u);
+    });
+    if (knownCompetitors) {
+      knownCompetitors.forEach((url, key) => {
+        if (now.has(key)) return;
+        Data().deleteCompetitorLedger(url)
+          .catch((err) => console.warn('[Market Tracker] could not clear competitor history', err));
+      });
+    }
+    knownCompetitors = now;
+  }
+
   if (window.MktforgeData) {
     window.MktforgeData.onProfile((p) => {
       state.profile = p;
+      syncLedgers(p);
       if (state.loaded) reconcile();
       paint();
     });
@@ -205,7 +236,7 @@
     });
   }
 
-  function removeBox(box, { quiet = false, forgetLedger = false } = {}) {
+  function removeBox(box, { quiet = false } = {}) {
     clearTimeout(box.confirmTimer);
     if (box.controller) box.controller.abort();
     box.running = false;
@@ -216,12 +247,6 @@
       console.error('[Market Tracker] could not delete', err);
       if (!quiet) notify(`Couldn’t remove “${displayName(box)}” from your account. Try again.`, 'error');
     });
-    /* Stop Tracking keeps the ledger — stop and restart and you pick up where
-       you left off. Only losing the URL in My Company wipes the history. */
-    if (forgetLedger && box.competitorUrl) {
-      Data().deleteCompetitorLedger(box.competitorUrl)
-        .catch((err) => console.warn('[Market Tracker] could not clear competitor history', err));
-    }
   }
 
   function trackTitle(title) {
@@ -924,7 +949,7 @@
         return;
       }
       const wasCompetitor = box.kind === 'competitor';
-      removeBox(box);                              // ledger kept on purpose
+      removeBox(box);          // the ledger stays; only My Company can wipe it
       paint();
       const select = el(wasCompetitor ? 'comp-select' : 'select');
       if (select) select.focus();
@@ -948,7 +973,7 @@
       paint();
       if (state.loaded) {
         // Pick up anything changed elsewhere (e.g. titles added from Find My Customer).
-        Data().getProfile().then((p) => { state.profile = p; reconcile(); paint(); }).catch(() => {});
+        Data().getProfile().then((p) => { state.profile = p; syncLedgers(p); reconcile(); paint(); }).catch(() => {});
       } else {
         load();
       }

@@ -1,44 +1,44 @@
-Mktforge — Market Tracker: stats wording (site files)
-=====================================================
+Mktforge — Market Tracker: ledger cleanup + stats wording (site files)
+======================================================================
 
-ONE file this time.
+Site files only. The Worker is unchanged since the last deploy — if you have
+already run `npx wrangler deploy` since the off-site date fix, you do NOT
+need to deploy again.
 
-1. COPY over the repo, keeping the path:
+1. COPY over the repo, keeping the paths:
 
        modules/market-tracker/market-tracker.js
+       README.md
 
-   If you haven't yet uploaded the previous zip, do that one first — this
-   file supersedes its copy of market-tracker.js, but that zip also carried
-   market-tracker.css, assets/js/data.js and README.md, which this one does
-   not.
+   This supersedes the market-tracker.js in the previous zip. If you never
+   uploaded that one, upload its market-tracker.css, assets/js/data.js and
+   README.md too — this zip doesn't carry them.
 
-   What changed: the line under a competitor box used to collapse four
-   different reasons into "already shown to you before", which had a first
-   run claiming you'd been shown things the box had never fetched. They are
-   now reported separately:
+2. WHAT CHANGED
 
-       N older than 30 days
-       N recorded as a baseline for next time
-       N already on the site last time
-       N already shown to you before
-       N whose publish date couldn't be confirmed
+   a) The ledger now follows My Company's competitor list instead of the
+      boxes. Deleting a competitor's URL from My Company clears its history
+      whether or not a box still exists at that moment.
 
-2. DEPLOY THE WORKER — this carries the real fix.
+      The bug: Stop Tracking deliberately KEEPS the ledger. The only code
+      that deleted a ledger lived inside "remove this box". So if you pressed
+      Stop Tracking first and removed the competitor from My Company second,
+      nothing was left to trigger the deletion, and re-adding that competitor
+      picked up its old history.
 
-       cd C:\Users\Tyler\customer-tracker
-       npx wrangler deploy
+   b) The stats line under a competitor box no longer collapses four
+      different reasons into "already shown to you before".
 
-   src/index.js, src/competitor.js and src/shared.js are already written to
-   that folder.
+3. CLEARING THE CLICKHOUSE LEDGER YOU ALREADY HAVE
 
-   Off-site items (Medium, Substack, Reddit, HN) are now opened and their
-   publish date read from the page, the same way pages on the competitor's
-   own site already were. The model's date is only a hint and loses to the
-   page. An article whose page can't be opened is dropped rather than shown
-   with a date that might be wrong — the count of those appears in the line
-   above, so an empty section explains itself.
+   The fix is not retroactive — that stale ledger is still in Firestore.
+   After uploading this file, with the app open:
 
-   Expect competitor runs to take a little longer: up to 16 extra page
-   fetches, five at a time.
+       1. Remove clickhouse.com from Competitors in My Company and save.
+          (This now deletes the ledger.)
+       2. Re-add clickhouse.com and save.
+       3. Track Competitor again — it will run as a true first run.
 
-3. No Firestore change.
+   Same steps for any other competitor you removed and re-added earlier.
+
+4. No Firestore change.
