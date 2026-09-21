@@ -1,23 +1,20 @@
-Mktforge — Market Tracker: a stats line that explains itself
-============================================================
+Mktforge — Market Tracker: clearer wording
+==========================================
 
-1. UPLOAD  modules/market-tracker/market-tracker.js
-           (open the modules/market-tracker folder first, then upload)
+UPLOAD ONLY  modules/market-tracker/market-tracker.js
+             (open the modules/market-tracker folder first, then upload)
 
-2. DEPLOY  cd C:\Users\Tyler\customer-tracker
-           npx wrangler deploy
+No Worker deploy — the Worker is already sending everything this needs.
+After uploading, hard-refresh (Ctrl+Shift+R) before checking.
 
-   Both are needed. The page shows the new wording, but only if the Worker
-   is sending the new numbers.
+WHAT CHANGED — wording only
 
-3. WHAT CHANGED in the line under a job-title box
+  Before:  "None of the 10 sites your reports name is a Discourse forum
+            (2 more are on reddit.com, joereis.substack.com)."
+  After:   "None of the 12 sites your reports name is a Discourse forum —
+            10 were checked, and the ones on Reddit and Substack were
+            skipped, since those are never Discourse."
 
-   - "posts read from Reddit and Hacker News" now says "from Hacker News"
-     when Reddit isn't connected.
-   - It says how many posts the agent was actually handed, e.g.
-       "92 posts read from Hacker News, 45 judged against this title
-        · 1 item kept"
-     so "1 kept" reads as 1 of 45 judged, not as nothing found.
-   - The Discourse check always reports. If every site your reports name is
-     on Reddit, Medium, Substack, YouTube, GitHub, LinkedIn, Slack or
-     Discord, it says so rather than printing nothing.
+  The guide line now says "15 places they name" rather than "15 sites":
+  r/dataengineering and r/datascience are two places but one site, which
+  is why the two numbers differed.

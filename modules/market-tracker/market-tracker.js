@@ -931,7 +931,7 @@
         + 'searched only the default sources and could only count posts where the author states '
         + 'their job title. Run Persona Builder for this title to change that.';
     }
-    const sites = g.sites ? `, and ${g.sites} site${g.sites === 1 ? '' : 's'} they name` : '';
+    const sites = g.sites ? `, and ${g.sites} place${g.sites === 1 ? '' : 's'} they name` : '';
     return `Guided by ${g.used.join(', ')}${sites}.`;
   }
 
@@ -986,20 +986,40 @@
        clear whether reading them would be worth building. */
     const dc = stats.discourse;
     let forums = '';
+    /* "joereis.substack.com" read like an error. What the reader needs is the
+       platform — Substack — and why it was skipped. */
+    const PLATFORMS = [
+      [/(^|\.)reddit\.com$/, 'Reddit'], [/(^|\.)substack\.com$/, 'Substack'],
+      [/(^|\.)medium\.com$/, 'Medium'], [/(^|\.)youtube\.com$/, 'YouTube'],
+      [/(^|\.)github\.com$/, 'GitHub'], [/(^|\.)ycombinator\.com$/, 'Hacker News'],
+      [/(^|\.)linkedin\.com$/, 'LinkedIn'], [/(^|\.)(twitter|x)\.com$/, 'X'],
+      [/(^|\.)slack\.com$/, 'Slack'], [/(^|\.)discord\.(com|gg)$/, 'Discord'],
+    ];
+    const platformOf = (h) => {
+      const host = String(h || '').toLowerCase();
+      const hit = PLATFORMS.find(([re]) => re.test(host));
+      return hit ? hit[1] : host;
+    };
+    const andList = (xs) => (xs.length < 2 ? xs.join('')
+      : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+    const skippedOn = dc ? andList([...new Set((dc.skipped || []).map(platformOf))]) : '';
     if (box.kind !== 'competitor' && dc && dc.failed) {
       forums = ' The Discourse check couldn’t run this time.';
     } else if (box.kind !== 'competitor' && dc && !n(dc.checked)) {
       /* Every named site was one we know isn't Discourse. That's an answer,
          and leaving the line off made it look like the check hadn't run. */
       forums = n(dc.named)
-        ? ` All ${plural(n(dc.named), 'site', 'sites')} your reports name ${n(dc.named) === 1 ? 'is' : 'are'} on platforms that aren’t Discourse (${(dc.skipped || []).join(', ')}), so there are no forums to read.`
+        ? ` Every site your reports name is on ${skippedOn || 'a platform'} — none of them Discourse, so there are no forums to read.`
         : '';
     } else if (box.kind !== 'competitor' && dc && n(dc.checked)) {
       const readable = (dc.readable || []).map((x) => x.name);
       const blocked = (dc.blocked || []).map((x) => x.name);
       if (!readable.length && !blocked.length) {
-        forums = ` None of the ${plural(n(dc.checked), 'site', 'sites')} your reports name is a Discourse forum`
-          + ((dc.skipped || []).length ? ` (${dc.skipped.length} more are on ${dc.skipped.join(', ')})` : '') + '.';
+        forums = skippedOn
+          ? ` None of the ${plural(n(dc.named) || n(dc.checked), 'site', 'sites')} your reports name is a Discourse forum — `
+            + `${n(dc.checked)} ${n(dc.checked) === 1 ? 'was' : 'were'} checked, and the ones on ${skippedOn} `
+            + `were skipped, since those are never Discourse.`
+          : ` None of the ${plural(n(dc.checked), 'site', 'sites')} your reports name is a Discourse forum.`;
       } else {
         const bits = [];
         if (readable.length) bits.push(`${readable.length} ${readable.length === 1 ? 'is a Discourse forum' : 'are Discourse forums'} (${readable.join(', ')})`);
