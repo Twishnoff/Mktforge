@@ -963,10 +963,17 @@
       if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} off-topic`);
     }
     if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
-    const head = `${plural(n(stats.searched), 'search', 'searches')} · ${plural(n(stats.found), 'item', 'items')} found`
+    const direct = box.kind !== 'competitor' && n(stats.fetched)
+      ? ` · ${plural(n(stats.fetched), 'post', 'posts')} read from Reddit and Hacker News` : '';
+    const head = `${plural(n(stats.searched), 'search', 'searches')}${direct} · ${plural(n(stats.found), 'item', 'items')} kept after reading`
       + `${n(stats.threadsRead) ? ` · ${plural(n(stats.threadsRead), 'thread', 'threads')} read for comments` : ''}`
       + `${n(stats.datesRead) ? ` · ${plural(n(stats.datesRead), 'date', 'dates')} read from the pages` : ''} · ${n(stats.kept)} shown`;
-    return parts.length ? `${head}. Left out: ${parts.join(', ')}.` : `${head}.`;
+    const reddit = box.kind === 'competitor' ? ''
+      : stats.reddit === 'not connected' ? ' Reddit isn’t connected, so it wasn’t read.'
+      : stats.reddit === 'rejected' ? ' Reddit refused the sign-in — check the Worker’s Reddit secrets.'
+      : stats.reddit === 'error' ? ' Reddit couldn’t be reached this run.'
+      : '';
+    return (parts.length ? `${head}. Left out: ${parts.join(', ')}.` : `${head}.`) + reddit;
   }
 
   const fmtWhen = (ms) => new Date(ms).toLocaleString(undefined, {

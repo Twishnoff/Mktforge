@@ -1,39 +1,67 @@
-Mktforge — Market Tracker: relative dates + a box that explains itself
-======================================================================
+Mktforge — Market Tracker: Reddit and Hacker News, read directly
+=================================================================
 
 1. UPLOAD:  modules/market-tracker/market-tracker.js
+            (open the modules/market-tracker folder on github.com FIRST,
+             then Add file -> Upload files)
 
-2. DEPLOY:  cd C:\Users\Tyler\customer-tracker
-            npx wrangler deploy
+2. REGISTER A REDDIT APP  (about five minutes, free)
 
-3. WHAT CHANGED
+   a. Sign in to Reddit and go to  https://www.reddit.com/prefs/apps
+   b. Scroll to the bottom: "are you a developer? create an app..."
+   c. Fill in:
+        name          Mktforge Market Tracker
+        type          script          <- important
+        description   (anything)
+        about url     (leave blank)
+        redirect uri  http://localhost:8080   (required, never used)
+   d. Click "create app".
+   e. You now have two values:
+        CLIENT ID      the short string directly under "personal use script"
+        CLIENT SECRET  the longer string labelled "secret"
 
-   a) RELATIVE TIMESTAMPS COUNT AS DATES. The agent was told to open the
-      page, read the publish date, and drop anything it couldn't confirm —
-      never guess. Reddit and Hacker News don't print dates. They print
-      "7d ago". Under that instruction the agent had to throw those away
-      itself, before anything reached the filters, which is why the box said
-      "0 items found" with nothing listed as dropped.
+   If Reddit asks you to accept its Data API terms or register first, do
+   that — it's the same free tier.
 
-      It now works the real date out from today's date, marks it approximate,
-      and the row shows it with a ~. An item is only left out when the page
-      gives no indication at all of when it was posted.
+3. GIVE THE WORKER THOSE VALUES, then deploy:
 
-   b) THE BOX NOW SAYS WHAT STEERED IT. Under the results:
+       cd C:\Users\Tyler\customer-tracker
+       npx wrangler secret put REDDIT_CLIENT_ID
+       npx wrangler secret put REDDIT_CLIENT_SECRET
+       npx wrangler deploy
 
-         "Guided by Persona — Data Engineer.pdf, Marketing
-          Opportunities.pdf, and 6 sites they name."
+   Each secret command prompts you to paste the value. Secrets are stored by
+   Cloudflare, never in the code.
 
-      or, when nothing matched:
+   Optional, recommended by Reddit: add your Reddit username to
+   wrangler.jsonc under "vars" as  "REDDIT_USERNAME": "yourname"  so the
+   requests identify who is making them. Without it they say "mktforge".
 
-         "No persona, opportunity list or customer report matched this
-          title, so the agent searched only the default sources and could
-          only count posts where the author states their job title. Run
-          Persona Builder for this title to change that."
+4. WHAT CHANGED
 
-      That second message is the one to watch for. It means the reports
-      aren't being read, which on its own guarantees an empty box — with no
-      priorities to match against, the agent falls back to needing the
-      author to state their job title outright, and on a forum nobody does.
+   Reddit was invisible. Reddit stopped letting search engines other than
+   Google index it in 2024, so a "site:reddit.com/r/dataengineering" search
+   returns Wikipedia and Substack, not Reddit. The agent ran 20 searches and
+   honestly found nothing. It now reads Reddit through Reddit's own API:
+     - the subreddits your personas and opportunity lists name, for the
+       title's challenges and every competitor/company name
+     - Reddit site-wide for competitor and company names
+     - the comments of any thread whose TITLE names a competitor or you
 
-4. No Firestore change.
+   Hacker News is read through its own API too, so its dates are real.
+
+   Both give exact publish dates — no more "7d ago" guessing for either.
+
+   Also fixed: every Hacker News item was keyed identically (they differ only
+   by ?id=), so at most one could ever surface and the rest read as already
+   shown. Any site that identifies pages by query string had the same
+   problem.
+
+5. THE LINE UNDER THE BOX now says how it went, e.g.
+       "4 searches · 31 posts read from Reddit and Hacker News · ..."
+   and, if something's off:
+       "Reddit isn't connected, so it wasn't read."        <- secrets missing
+       "Reddit refused the sign-in — check the Worker's Reddit secrets."
+
+6. If you deploy BEFORE adding the secrets, everything still works — Reddit is
+   just skipped and the box says so.
