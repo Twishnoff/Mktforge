@@ -1,67 +1,34 @@
-Mktforge — Market Tracker: Reddit and Hacker News, read directly
-=================================================================
+Mktforge — Market Tracker: Discourse forum detection
+====================================================
 
-1. UPLOAD:  modules/market-tracker/market-tracker.js
-            (open the modules/market-tracker folder on github.com FIRST,
-             then Add file -> Upload files)
+Replaces the Reddit zip (whose Reddit-app steps no longer apply).
 
-2. REGISTER A REDDIT APP  (about five minutes, free)
+1. UPLOAD  modules/market-tracker/market-tracker.js
+           Open the modules/market-tracker folder on github.com FIRST,
+           then Add file -> Upload files.
 
-   a. Sign in to Reddit and go to  https://www.reddit.com/prefs/apps
-   b. Scroll to the bottom: "are you a developer? create an app..."
-   c. Fill in:
-        name          Mktforge Market Tracker
-        type          script          <- important
-        description   (anything)
-        about url     (leave blank)
-        redirect uri  http://localhost:8080   (required, never used)
-   d. Click "create app".
-   e. You now have two values:
-        CLIENT ID      the short string directly under "personal use script"
-        CLIENT SECRET  the longer string labelled "secret"
+2. DEPLOY  cd C:\Users\Tyler\customer-tracker
+           npx wrangler deploy
+           (src/index.js and src/sources.js are already on your machine.
+            No secrets needed.)
 
-   If Reddit asks you to accept its Data API terms or register first, do
-   that — it's the same free tier.
+3. WHAT IT DOES
 
-3. GIVE THE WORKER THOSE VALUES, then deploy:
+   Detection only — nothing is read from the forums yet. On each job-title
+   run the Worker checks the sites your reports name and asks two things:
+   is this a Discourse forum, and does its robots.txt let a tool read its
+   topic listings?
 
-       cd C:\Users\Tyler\customer-tracker
-       npx wrangler secret put REDDIT_CLIENT_ID
-       npx wrangler secret put REDDIT_CLIENT_SECRET
-       npx wrangler deploy
+   The answer appears at the end of the line under the box, e.g.
 
-   Each secret command prompts you to paste the value. Secrets are stored by
-   Cloudflare, never in the code.
+     "Of the 15 sites your reports name, 2 are Discourse forums
+      (dbt Community, Airbyte Forum) — not read yet."
 
-   Optional, recommended by Reddit: add your Reddit username to
-   wrangler.jsonc under "vars" as  "REDDIT_USERNAME": "yourname"  so the
-   requests identify who is making them. Without it they say "mktforge".
+   or "None of the 15 sites your reports name is a Discourse forum."
 
-4. WHAT CHANGED
+   Reddit, Hacker News, Medium, Substack, YouTube and GitHub are skipped —
+   none of them is Discourse. Each site gets a few seconds; a slow one is
+   given up on rather than holding up the run.
 
-   Reddit was invisible. Reddit stopped letting search engines other than
-   Google index it in 2024, so a "site:reddit.com/r/dataengineering" search
-   returns Wikipedia and Substack, not Reddit. The agent ran 20 searches and
-   honestly found nothing. It now reads Reddit through Reddit's own API:
-     - the subreddits your personas and opportunity lists name, for the
-       title's challenges and every competitor/company name
-     - Reddit site-wide for competitor and company names
-     - the comments of any thread whose TITLE names a competitor or you
-
-   Hacker News is read through its own API too, so its dates are real.
-
-   Both give exact publish dates — no more "7d ago" guessing for either.
-
-   Also fixed: every Hacker News item was keyed identically (they differ only
-   by ?id=), so at most one could ever surface and the rest read as already
-   shown. Any site that identifies pages by query string had the same
-   problem.
-
-5. THE LINE UNDER THE BOX now says how it went, e.g.
-       "4 searches · 31 posts read from Reddit and Hacker News · ..."
-   and, if something's off:
-       "Reddit isn't connected, so it wasn't read."        <- secrets missing
-       "Reddit refused the sign-in — check the Worker's Reddit secrets."
-
-6. If you deploy BEFORE adding the secrets, everything still works — Reddit is
-   just skipped and the box says so.
+4. NEXT: if some turn up, the reader is the follow-up build. If none do,
+   we stop here.

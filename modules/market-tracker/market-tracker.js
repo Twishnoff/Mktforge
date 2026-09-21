@@ -973,7 +973,23 @@
       : stats.reddit === 'rejected' ? ' Reddit refused the sign-in — check the Worker’s Reddit secrets.'
       : stats.reddit === 'error' ? ' Reddit couldn’t be reached this run.'
       : '';
-    return (parts.length ? `${head}. Left out: ${parts.join(', ')}.` : `${head}.`) + reddit;
+    /* Detection only for now: which named sites are Discourse forums, so it's
+       clear whether reading them would be worth building. */
+    const dc = stats.discourse;
+    let forums = '';
+    if (box.kind !== 'competitor' && dc && n(dc.checked)) {
+      const readable = (dc.readable || []).map((x) => x.name);
+      const blocked = (dc.blocked || []).map((x) => x.name);
+      if (!readable.length && !blocked.length) {
+        forums = ` None of the ${plural(n(dc.checked), 'site', 'sites')} your reports name is a Discourse forum.`;
+      } else {
+        const bits = [];
+        if (readable.length) bits.push(`${readable.length} ${readable.length === 1 ? 'is a Discourse forum' : 'are Discourse forums'} (${readable.join(', ')})`);
+        if (blocked.length) bits.push(`${blocked.length} ${blocked.length === 1 ? 'is one that closes' : 'are ones that close'} its listings to tools (${blocked.join(', ')})`);
+        forums = ` Of the ${plural(n(dc.checked), 'site', 'sites')} your reports name, ${bits.join('; ')} — not read yet.`;
+      }
+    }
+    return (parts.length ? `${head}. Left out: ${parts.join(', ')}.` : `${head}.`) + reddit + forums;
   }
 
   const fmtWhen = (ms) => new Date(ms).toLocaleString(undefined, {
