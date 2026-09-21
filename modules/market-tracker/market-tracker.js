@@ -248,7 +248,8 @@
       title: box.title, kind: box.kind, competitorUrl: box.competitorUrl || '',
       rows: box.rows || [], lastRefreshed: box.lastRefreshed || 0,
       status: box.status || 'pending', note: box.note || '', companyName: box.companyName || '',
-      stats: box.stats || null, runs: box.runs || 0, createdAt: box.createdAt || Date.now()
+      stats: box.stats || null, guide: box.guide || null,
+      runs: box.runs || 0, createdAt: box.createdAt || Date.now()
     };
     return Data().saveTrackerBox(rec).catch((err) => {
       console.error('[Market Tracker] could not save', err);
@@ -703,6 +704,11 @@
       }
       box.note = result.note || '';
       box.stats = result.stats || null;
+      box.guide = box.kind === 'competitor' ? null : {
+        used: Array.isArray(result.usedReports) ? result.usedReports : [],
+        sites: Number(result.reportSites) || 0,
+        guided: result.guided !== false
+      };
       box.runs = (box.runs || 0) + 1;
       box.lastRefreshed = Date.now();
       box.status = 'done';
@@ -911,6 +917,24 @@
     return `<td class="mtrk__c-date is-undated" title="No publish date could be found">Undated</td>`;
   }
 
+  /* Which of the account's own reports steered the run. A job-title box that
+     finds nothing is usually a box that was told nothing: with no persona and
+     no opportunity list, the agent has no priorities to match a post against
+     and falls back to demanding the author state their job title outright,
+     which on a forum means finding nothing at all. Saying so out loud is the
+     difference between a puzzle and an answer. */
+  function guideText(box) {
+    const g = box.guide;
+    if (!g || box.kind === 'competitor') return '';
+    if (!g.used.length) {
+      return 'No persona, opportunity list or customer report matched this title, so the agent '
+        + 'searched only the default sources and could only count posts where the author states '
+        + 'their job title. Run Persona Builder for this title to change that.';
+    }
+    const sites = g.sites ? `, and ${g.sites} site${g.sites === 1 ? '' : 's'} they name` : '';
+    return `Guided by ${g.used.join(', ')}${sites}.`;
+  }
+
   /* What the agent looked at and why things were left out. */
   function statsText(box) {
     const stats = box.stats;
@@ -1048,6 +1072,7 @@
     }
     const competitor = box.kind === 'competitor';
     const stats = statsText(box);
+    const guide = guideText(box);
     const baseline = competitor && box.runs === 1
       ? `<p class="mtrk__stats">First run — this competitor’s existing pages were recorded as a baseline, so later refreshes can show what’s changed.</p>`
       : '';
@@ -1056,6 +1081,7 @@
       parts.push(`<div class="mtrk__state">
           <p>${esc(quietNote(box))}</p>
           ${baseline}
+          ${guide ? `<p class="mtrk__stats">${esc(guide)}</p>` : ''}
           ${stats ? `<p class="mtrk__stats">${esc(stats)}</p>` : ''}
         </div>`);
       return parts.join('');
@@ -1073,6 +1099,7 @@
     const quiet = quietNote(box);
     if (quiet) parts.push(`<p class="mtrk__quiet">${esc(quiet)}</p>`);
     if (baseline) parts.push(baseline);
+    if (guide) parts.push(`<p class="mtrk__stats">${esc(guide)}</p>`);
     if (stats) parts.push(`<p class="mtrk__stats">${esc(stats)}</p>`);
     return parts.join('');
   }

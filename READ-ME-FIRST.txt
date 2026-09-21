@@ -1,43 +1,39 @@
-Mktforge — repo cleanup: four files landed at the root
-======================================================
+Mktforge — Market Tracker: relative dates + a box that explains itself
+======================================================================
 
-Nothing here is new code. These are the files you already uploaded, in the
-folders they belong in.
+1. UPLOAD:  modules/market-tracker/market-tracker.js
 
-WHAT HAPPENED
+2. DEPLOY:  cd C:\Users\Tyler\customer-tracker
+            npx wrangler deploy
 
-Five files were uploaded to the repo root instead of into their folders:
+3. WHAT CHANGED
 
-    /data.js               /extract.js            /market-tracker.js
-    /opportunities-pdf.js  /persona-pdf.js
+   a) RELATIVE TIMESTAMPS COUNT AS DATES. The agent was told to open the
+      page, read the publish date, and drop anything it couldn't confirm —
+      never guess. Reddit and Hacker News don't print dates. They print
+      "7d ago". Under that instruction the agent had to throw those away
+      itself, before anything reached the filters, which is why the box said
+      "0 items found" with nothing listed as dropped.
 
-index.html loads assets/js/data.js and assets/js/extract.js, not the root
-copies, so the root files are doing nothing and the app is still running the
-OLD versions. Right now the live site has no title ledgers, no links-aware
-text, and Marketing Opportunities still prints "Visit Site".
+      It now works the real date out from today's date, marks it approximate,
+      and the row shows it with a ~. An item is only left out when the page
+      gives no indication at all of when it was posted.
 
-market-tracker.js is the exception — the copy in modules/market-tracker/ is
-already correct. Its root twin is just a stale duplicate.
+   b) THE BOX NOW SAYS WHAT STEERED IT. Under the results:
 
-FIX — 1. UPLOAD these four, into these folders:
+         "Guided by Persona — Data Engineer.pdf, Marketing
+          Opportunities.pdf, and 6 sites they name."
 
-    assets/js/data.js
-    assets/js/extract.js
-    modules/marketing-opportunities/opportunities-pdf.js
-    modules/persona-builder/persona-pdf.js
+      or, when nothing matched:
 
-On github.com: open the target FOLDER first, then Add file -> Upload files.
-Uploading from the repo root drops the file at the root, which is how this
-happened.
+         "No persona, opportunity list or customer report matched this
+          title, so the agent searched only the default sources and could
+          only count posts where the author states their job title. Run
+          Persona Builder for this title to change that."
 
-FIX — 2. DELETE all five root files:
+      That second message is the one to watch for. It means the reports
+      aren't being read, which on its own guarantees an empty box — with no
+      priorities to match against, the agent falls back to needing the
+      author to state their job title outright, and on a forum nobody does.
 
-    /data.js
-    /extract.js
-    /market-tracker.js
-    /opportunities-pdf.js
-    /persona-pdf.js
-
-Open each one, trash icon, commit.
-
-No Worker deploy. No Firestore change.
+4. No Firestore change.
