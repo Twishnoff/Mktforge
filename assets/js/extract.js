@@ -89,6 +89,48 @@ window.MktforgeExtract = (() => {
     return pdfjs;
   }
 
+  /* A PDF's links are annotations, not text, so getTextContent() never sees
+     them. Mktforge's own reports lean on that: Marketing Opportunities prints
+     "Visit Site" in its link column and Persona Builder prints "Name (type)",
+     with the actual address attached as a clickable rectangle. Extract them
+     here and write them out beside the row they belong to, or a report's
+     entire list of sites is invisible to anything reading the file. */
+  async function pageLinks(page, content) {
+    let annots = [];
+    try { annots = await page.getAnnotations(); } catch (err) { return []; }
+    const items = content.items
+      .filter((it) => it.str && it.str.trim())
+      .map((it) => ({
+        str: it.str.trim(),
+        x: it.transform[4],
+        y: it.transform[5],
+        h: it.height || 10,
+      }));
+    const seen = new Set();
+    const out = [];
+    annots.forEach((a) => {
+      const url = a && (a.url || a.unsafeUrl);
+      if (!url || !/^https?:\/\//i.test(url) || !Array.isArray(a.rect)) return;
+      if (seen.has(url)) return;
+      seen.add(url);
+      const top = Math.max(a.rect[1], a.rect[3]);
+      const bottom = Math.min(a.rect[1], a.rect[3]);
+      /* Whatever sits on the same line as the link is its label — for a table
+         that is the whole row, which is what makes "The New Stack" and its
+         address land together. */
+      const label = items
+        .filter((it) => it.y + it.h >= bottom - 2 && it.y <= top + 2)
+        .sort((p1, p2) => p1.x - p2.x)
+        .map((it) => it.str)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .replace(/\s*(Visit Site|N\/A)\s*/gi, ' ')
+        .trim();
+      out.push(label ? `${label} — ${url}` : url);
+    });
+    return out;
+  }
+
   async function fromPdf(blob) {
     const lib = await loadPdfJs();
     const pdf = await lib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
@@ -98,7 +140,9 @@ window.MktforgeExtract = (() => {
       for (let i = 1; i <= n; i += 1) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        pages.push(content.items.map((it) => it.str + (it.hasEOL ? '\n' : ' ')).join(''));
+        const text = content.items.map((it) => it.str + (it.hasEOL ? '\n' : ' ')).join('');
+        const links = await pageLinks(page, content);
+        pages.push(links.length ? `${text}\n\nLINKS ON THIS PAGE\n${links.join('\n')}` : text);
       }
       return { text: pages.join('\n\n'), pages: pdf.numPages, truncated: pdf.numPages > MAX_PDF_PAGES };
     } finally {

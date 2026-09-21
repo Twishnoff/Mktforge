@@ -68,7 +68,15 @@ window.MktforgePersonaPdf = (function () {
     } else if (boxKey === 'gather') {
       const rows = persona.where_they_gather || [];
       if (rows.length === 0) push('No channels found.', false, 4);
-      else rows.forEach((r, i) => push(`${r.name} (${r.type})`, false, i === rows.length - 1 ? 4 : 6, r.url));
+      /* Name on one line, address on the next. The address used to live only
+         in the link annotation, so anything reading this file as text — a
+         person with a printout, or one of Mktforge's own agents — saw a list
+         of names and no way to reach any of them. */
+      else rows.forEach((r, i) => {
+        const last = i === rows.length - 1;
+        push(`${r.name} (${r.type})`, false, r.url ? 2 : (last ? 4 : 6), r.url);
+        if (r.url) push(r.url, false, last ? 4 : 6, r.url);
+      });
 
     } else if (boxKey === 'org') {
       const org = persona.org_structure || {};

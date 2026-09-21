@@ -1,35 +1,43 @@
-Mktforge — Market Tracker: posts count as challenges content
-=============================================================
+Mktforge — repo cleanup: four files landed at the root
+======================================================
 
-Follow-up to the job-title zip. If you haven't uploaded that one yet, do it
-first — it carried extract.js, data.js and the two PDF generators, which this
-zip does not.
+Nothing here is new code. These are the files you already uploaded, in the
+folders they belong in.
 
-1. COPY over the repo:
+WHAT HAPPENED
 
-       modules/market-tracker/market-tracker.js      (one stats label)
+Five files were uploaded to the repo root instead of into their folders:
 
-2. DEPLOY THE WORKER — this is where the actual change is:
+    /data.js               /extract.js            /market-tracker.js
+    /opportunities-pdf.js  /persona-pdf.js
 
-       cd C:\Users\Tyler\customer-tracker
-       npx wrangler deploy
+index.html loads assets/js/data.js and assets/js/extract.js, not the root
+copies, so the root files are doing nothing and the app is still running the
+OLD versions. Right now the live site has no title ledgers, no links-aware
+text, and Marketing Opportunities still prints "Visit Site".
 
-3. WHAT CHANGED
+market-tracker.js is the exception — the copy in modules/market-tracker/ is
+already correct. Its root twin is just a stale duplicate.
 
-   The challenges category used to accept only comments and first-person
-   blog articles, so a top-level Reddit post about a listed priority was
-   never collected. Forum and social posts now count, and neither posts nor
-   comments have to be written in the first person.
+FIX — 1. UPLOAD these four, into these folders:
 
-   Blog articles still do: an article only counts as challenges content when
-   the writer is recounting something they did, not explaining a topic.
+    assets/js/data.js
+    assets/js/extract.js
+    modules/marketing-opportunities/opportunities-pdf.js
+    modules/persona-builder/persona-pdf.js
 
-   Competitor and company mentions were never restricted this way and are
-   unchanged.
+On github.com: open the target FOLDER first, then Add file -> Upload files.
+Uploading from the repo root drops the file at the root, which is how this
+happened.
 
-4. EXPECT MORE ROWS, AND MORE NOISE. Dropping the voice requirement for
-   posts means general discussion threads can now qualify on subject alone.
-   If the boxes get noisy, the knob to turn back is requiring first person
-   for posts while leaving comments open.
+FIX — 2. DELETE all five root files:
 
-5. No Firestore change.
+    /data.js
+    /extract.js
+    /market-tracker.js
+    /opportunities-pdf.js
+    /persona-pdf.js
+
+Open each one, trash icon, commit.
+
+No Worker deploy. No Firestore change.

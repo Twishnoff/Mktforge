@@ -45,7 +45,8 @@
                                                   mimeType, size, createdAt, textStatus }]>
      importFile(file, { onStage })   -> Promise<{ id, name }>; reads the file's text, then
                                         saves bytes + text as an Imported Material
-     getFileText(id)                 -> Promise<string>; stored text, or extracted and
+     getFileText(id, { withLinks })  -> Promise<string>; withLinks re-reads a
+                                        file stored before PDF links were captured; stored text, or extracted and
                                         stored on first use (generated PDFs)
      openFile(id)                    -> opens the PDF in a new tab
      deleteFile(id)                  -> Promise
@@ -63,6 +64,9 @@
      trackerId(title)                -> the document id a title is saved under
      trackerCompetitorId(url)        -> the document id a competitor URL is saved under
      competitorKey(url)              -> the bare host two spellings of one competitor share
+     getTitleLedger(title)           -> Promise<ledger>
+     saveTitleLedger(title, l)       -> Promise<ledger>
+     deleteTitleLedger(title)        -> Promise
      getCompetitorLedger(url)        -> Promise<ledger>
      saveCompetitorLedger(url, l)    -> Promise<ledger>
      deleteCompetitorLedger(url)     -> Promise
@@ -75,6 +79,12 @@ window.MktforgeData = (() => {
   const CHUNK_BYTES = 700 * 1024;          // Firestore docs cap at 1 MiB
   const MAX_FILE_BYTES = 15 * 1024 * 1024; // sanity cap per PDF
   const TIMEOUT_MS = 12000;
+  /* Bumped when extraction starts capturing something it used to miss. v1
+     added a PDF's link annotations, without which a Marketing Opportunities
+     or Persona Builder report carries no addresses at all. A file stored
+     before that is re-read once, on demand. */
+  const LINKS_V = 1;
+
   const TEXT_CHUNK_CHARS = 300000;          // ≤ ~900 KB UTF-8 per document
   const MAX_TEXT_CHUNKS = 5;
 
@@ -511,19 +521,23 @@ window.MktforgeData = (() => {
 
   /* Stored text for any saved file. Generated PDFs have none until an agent
      first needs it; it's extracted then and kept. */
-  async function getFileText(id) {
+  /* withLinks: re-read the file if its stored text predates link extraction.
+     Only worth asking for when the addresses matter — a Marketing
+     Opportunities or Persona Builder report is useless without them. */
+  async function getFileText(id, { withLinks = false } = {}) {
     if (isLocal()) {
       const f = (localRead().files || []).find((x) => x.id === id);
       if (!f) throw new Error('That file no longer exists.');
-      if (typeof f.text === 'string') return f.text;
+      if (typeof f.text === 'string' && (!withLinks || (Number(f.linksV) || 0) >= LINKS_V)) return f.text;
     } else {
       const d = await getDb();
       const meta = filesRef(d).doc(id);
       const snap = await withTimeout(meta.get(), TIMEOUT_MS, 'Reading a saved file');
       if (!snap.exists) throw new Error('That file no longer exists.');
       const m = snap.data();
-      if (m.textStatus === 'empty') return '';
-      if (m.textChunks > 0) {
+      const stale = withLinks && (Number(m.linksV) || 0) < LINKS_V;
+      if (m.textStatus === 'empty' && !stale) return '';
+      if (m.textChunks > 0 && !stale) {
         const parts = await withTimeout(Promise.all(
           Array.from({ length: m.textChunks }, (_, i) => meta.collection('text').doc(String(i)).get())
         ), 30000, 'Reading a saved file');
@@ -540,7 +554,7 @@ window.MktforgeData = (() => {
   async function setFileText(id, text) {
     const parts = textParts(text);
     const fields = { textChunks: parts.length, textChars: parts.reduce((n, x) => n + x.length, 0),
-                     textStatus: parts.length ? 'ok' : 'empty' };
+                     textStatus: parts.length ? 'ok' : 'empty', linksV: LINKS_V };
     if (isLocal()) {
       const data = localRead();
       const f = (data.files || []).find((x) => x.id === id);
@@ -835,6 +849,19 @@ window.MktforgeData = (() => {
     return v.replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/^www\./, '').split(/[/?#]/)[0];
   }
 
+  /* Job titles get a ledger too, in the same collection. The collection is
+     called competitorLedger because that is what it held first — the same
+     reason the Worker is still deployed as "customer-tracker". Renaming it
+     would orphan every history already saved, so the name stays and the
+     document id says which kind it is. */
+  function trackerTitleId(title) {
+    const key = String(title || '').trim().toLowerCase();
+    let h = 5381;
+    for (let i = 0; i < key.length; i += 1) h = ((h * 33) ^ key.charCodeAt(i)) >>> 0;
+    const slug = key.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'title';
+    return `t-${slug}-${h.toString(36)}`;
+  }
+
   function trackerCompetitorId(url) {
     const key = competitorKey(url);
     let h = 5381;
@@ -959,6 +986,43 @@ window.MktforgeData = (() => {
     };
   }
 
+  async function getLedgerById(id, label) {
+    if (isLocal()) return cleanLedger((localRead().competitorLedger || {})[id], label);
+    const d = await getDb();
+    const snap = await withTimeout(ledgerRef(d).doc(id).get(), TIMEOUT_MS, 'Loading history');
+    return cleanLedger(snap.exists ? snap.data() : null, label);
+  }
+
+  async function saveLedgerById(id, label, ledger) {
+    const clean = cleanLedger(ledger, label);
+    if (isLocal()) {
+      const data = localRead();
+      data.competitorLedger = data.competitorLedger || {};
+      data.competitorLedger[id] = { ...clean, updatedAt: Date.now() };
+      localWrite(data);
+      return clean;
+    }
+    const d = await getDb();
+    await withTimeout(ledgerRef(d).doc(id).set({ ...clean, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
+                      TIMEOUT_MS, 'Saving history');
+    return clean;
+  }
+
+  async function deleteLedgerById(id) {
+    if (isLocal()) {
+      const data = localRead();
+      if (data.competitorLedger) delete data.competitorLedger[id];
+      localWrite(data);
+      return;
+    }
+    const d = await getDb();
+    await withTimeout(ledgerRef(d).doc(id).delete(), TIMEOUT_MS, 'Removing history');
+  }
+
+  const getTitleLedger    = (title) => getLedgerById(trackerTitleId(title), title);
+  const saveTitleLedger   = (title, l) => saveLedgerById(trackerTitleId(title), title, l);
+  const deleteTitleLedger = (title) => deleteLedgerById(trackerTitleId(title));
+
   async function getCompetitorLedger(url) {
     const id = trackerCompetitorId(url);
     if (isLocal()) return cleanLedger((localRead().competitorLedger || {})[id], url);
@@ -1020,8 +1084,9 @@ window.MktforgeData = (() => {
     readFile, getFileDigest, setFileDigest, importFile, getFileText, isViewable,
     MAX_FILE_BYTES,
     getPositioningAnswers, savePositioningAnswers,
-    listTrackerBoxes, saveTrackerBox, deleteTrackerBox, trackerId, trackerCompetitorId,
+    listTrackerBoxes, saveTrackerBox, deleteTrackerBox, trackerId, trackerCompetitorId, trackerTitleId,
     getCompetitorLedger, saveCompetitorLedger, deleteCompetitorLedger, competitorKey,
+    getTitleLedger, saveTitleLedger, deleteTitleLedger,
     prefill,
     get isLocal() { return isLocal(); },
     util: { normalizeUrl, isValidUrl, imageToAvatarDataUrl }

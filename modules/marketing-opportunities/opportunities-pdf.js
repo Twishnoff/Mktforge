@@ -81,9 +81,12 @@ window.MktforgeOpportunitiesPdf = (function () {
     const pageHeight = doc.internal.pageSize.getHeight();
     let y = 56;
 
+    /* The address is printed, not hidden behind "Visit Site". A report that
+       gets printed, emailed or read by an agent has to carry its links as
+       text — a clickable rectangle is worth nothing to any of them. */
     const toRows = (items, withChannel) => items.map((i) => {
       const url = safeUrl(i.url);
-      const link = { content: url ? 'Visit Site' : 'N/A', url };
+      const link = { content: url || 'N/A', url };
       return withChannel
         ? [i.name || 'Untitled', i.channel || '', link]
         : [i.name || 'Untitled', link];
