@@ -963,8 +963,17 @@
       if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} off-topic`);
     }
     if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
+    /* Where the fetched posts came from — "Reddit and Hacker News" was printed
+       even when Reddit wasn't connected — and how many of them the agent was
+       actually handed. Without that denominator, "1 kept" gives no hint that
+       it was 1 of 45, which is the number that says the agent judged and
+       rejected rather than never saw. */
+    const from = stats.reddit === 'connected' ? 'Reddit and Hacker News' : 'Hacker News';
+    const judged = n(stats.judged);
     const direct = box.kind !== 'competitor' && n(stats.fetched)
-      ? ` · ${plural(n(stats.fetched), 'post', 'posts')} read from Reddit and Hacker News` : '';
+      ? ` · ${plural(n(stats.fetched), 'post', 'posts')} read from ${from}`
+        + (judged ? `, ${judged} judged against this title` : '')
+      : '';
     const head = `${plural(n(stats.searched), 'search', 'searches')}${direct} · ${plural(n(stats.found), 'item', 'items')} kept after reading`
       + `${n(stats.threadsRead) ? ` · ${plural(n(stats.threadsRead), 'thread', 'threads')} read for comments` : ''}`
       + `${n(stats.datesRead) ? ` · ${plural(n(stats.datesRead), 'date', 'dates')} read from the pages` : ''} · ${n(stats.kept)} shown`;
@@ -977,11 +986,20 @@
        clear whether reading them would be worth building. */
     const dc = stats.discourse;
     let forums = '';
-    if (box.kind !== 'competitor' && dc && n(dc.checked)) {
+    if (box.kind !== 'competitor' && dc && dc.failed) {
+      forums = ' The Discourse check couldn’t run this time.';
+    } else if (box.kind !== 'competitor' && dc && !n(dc.checked)) {
+      /* Every named site was one we know isn't Discourse. That's an answer,
+         and leaving the line off made it look like the check hadn't run. */
+      forums = n(dc.named)
+        ? ` All ${plural(n(dc.named), 'site', 'sites')} your reports name ${n(dc.named) === 1 ? 'is' : 'are'} on platforms that aren’t Discourse (${(dc.skipped || []).join(', ')}), so there are no forums to read.`
+        : '';
+    } else if (box.kind !== 'competitor' && dc && n(dc.checked)) {
       const readable = (dc.readable || []).map((x) => x.name);
       const blocked = (dc.blocked || []).map((x) => x.name);
       if (!readable.length && !blocked.length) {
-        forums = ` None of the ${plural(n(dc.checked), 'site', 'sites')} your reports name is a Discourse forum.`;
+        forums = ` None of the ${plural(n(dc.checked), 'site', 'sites')} your reports name is a Discourse forum`
+          + ((dc.skipped || []).length ? ` (${dc.skipped.length} more are on ${dc.skipped.join(', ')})` : '') + '.';
       } else {
         const bits = [];
         if (readable.length) bits.push(`${readable.length} ${readable.length === 1 ? 'is a Discourse forum' : 'are Discourse forums'} (${readable.join(', ')})`);

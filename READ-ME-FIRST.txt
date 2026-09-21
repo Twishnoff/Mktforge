@@ -1,34 +1,23 @@
-Mktforge — Market Tracker: Discourse forum detection
-====================================================
-
-Replaces the Reddit zip (whose Reddit-app steps no longer apply).
+Mktforge — Market Tracker: a stats line that explains itself
+============================================================
 
 1. UPLOAD  modules/market-tracker/market-tracker.js
-           Open the modules/market-tracker folder on github.com FIRST,
-           then Add file -> Upload files.
+           (open the modules/market-tracker folder first, then upload)
 
 2. DEPLOY  cd C:\Users\Tyler\customer-tracker
            npx wrangler deploy
-           (src/index.js and src/sources.js are already on your machine.
-            No secrets needed.)
 
-3. WHAT IT DOES
+   Both are needed. The page shows the new wording, but only if the Worker
+   is sending the new numbers.
 
-   Detection only — nothing is read from the forums yet. On each job-title
-   run the Worker checks the sites your reports name and asks two things:
-   is this a Discourse forum, and does its robots.txt let a tool read its
-   topic listings?
+3. WHAT CHANGED in the line under a job-title box
 
-   The answer appears at the end of the line under the box, e.g.
-
-     "Of the 15 sites your reports name, 2 are Discourse forums
-      (dbt Community, Airbyte Forum) — not read yet."
-
-   or "None of the 15 sites your reports name is a Discourse forum."
-
-   Reddit, Hacker News, Medium, Substack, YouTube and GitHub are skipped —
-   none of them is Discourse. Each site gets a few seconds; a slow one is
-   given up on rather than holding up the run.
-
-4. NEXT: if some turn up, the reader is the follow-up build. If none do,
-   we stop here.
+   - "posts read from Reddit and Hacker News" now says "from Hacker News"
+     when Reddit isn't connected.
+   - It says how many posts the agent was actually handed, e.g.
+       "92 posts read from Hacker News, 45 judged against this title
+        · 1 item kept"
+     so "1 kept" reads as 1 of 45 judged, not as nothing found.
+   - The Discourse check always reports. If every site your reports name is
+     on Reddit, Medium, Substack, YouTube, GitHub, LinkedIn, Slack or
+     Discord, it says so rather than printing nothing.
