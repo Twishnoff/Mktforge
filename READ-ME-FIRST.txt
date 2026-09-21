@@ -1,63 +1,35 @@
-Mktforge — Market Tracker: new job-title agent rules
-====================================================
+Mktforge — Market Tracker: posts count as challenges content
+=============================================================
 
-Site upload AND a Worker deploy.
+Follow-up to the job-title zip. If you haven't uploaded that one yet, do it
+first — it carried extract.js, data.js and the two PDF generators, which this
+zip does not.
 
-1. COPY over the repo, keeping the paths:
+1. COPY over the repo:
 
-       assets/js/extract.js                            reads PDF link annotations
-       assets/js/data.js                               title ledgers, links-aware text
-       modules/market-tracker/market-tracker.js        report parsing, ledger, copy
-       modules/marketing-opportunities/opportunities-pdf.js   prints URLs
-       modules/persona-builder/persona-pdf.js                 prints URLs
+       modules/market-tracker/market-tracker.js      (one stats label)
 
-2. DEPLOY THE WORKER:
+2. DEPLOY THE WORKER — this is where the actual change is:
 
        cd C:\Users\Tyler\customer-tracker
        npx wrangler deploy
 
-3. WHAT CHANGED — job-title boxes
+3. WHAT CHANGED
 
-   SOURCES  Reddit, Hacker News, Medium, Substack, G2, Capterra, TrustRadius,
-            plus every site named in the Where They Gather section of a
-            persona for this title and in the Publications, Other Syndication
-            Platforms, Influencers and Social Media and Blogs lists of a
-            Marketing Opportunities report for this title or a secondary one.
-            A persona naming r/dataengineering is passed through as that
-            subreddit, not flattened to "reddit.com".
+   The challenges category used to accept only comments and first-person
+   blog articles, so a top-level Reddit post about a listed priority was
+   never collected. Forum and social posts now count, and neither posts nor
+   comments have to be written in the first person.
 
-   REVIEWS  A G2/Capterra/TrustRadius review is only surfaced when the
-            reviewer's own listed job title is the tracked title or one of
-            its secondaries. Never inferred.
+   Blog articles still do: an article only counts as challenges content when
+   the writer is recounting something they did, not explaining a topic.
 
-   WINDOW   30 days, down from 90.
+   Competitor and company mentions were never restricted this way and are
+   unchanged.
 
-   LEDGER   Each title now has one. A refresh reports what you haven't been
-            shown, with a 24-hour carry-over. Kept by Stop Tracking, deleted
-            when the title leaves My Company. An empty box is now a normal
-            result and says "No new activity found since your last refresh."
+4. EXPECT MORE ROWS, AND MORE NOISE. Dropping the voice requirement for
+   posts means general discussion threads can now qualify on subject alone.
+   If the boxes get noisy, the knob to turn back is requiring first person
+   for posts while leaving comments open.
 
-   COLOUR   Only about your company. Positive green, negative red, everything
-            else uncoloured. Competitor complaints are no longer green.
-
-   VOICE    First person is required for challenges content only. A neutral
-            article naming your company or a competitor now qualifies.
-
-   BLOCKED  Your own and competitors' domains, content authored by them
-            anywhere (a competitor's Medium post is still the competitor),
-            and vendor blogs about their own market.
-
-4. WHAT CHANGED — PDF links (this is why extract.js and the two PDF files
-   are in here)
-
-   The Marketing Opportunities report printed "Visit Site" and attached the
-   address as a click target; Persona Builder printed "Name (type)" the same
-   way. Text extraction never saw either, so the site lists the new rules
-   depend on were invisible. Extraction now reads link annotations, and both
-   generators print the address as text.
-
-   Reports already in your account are re-read automatically the first time
-   Market Tracker needs one. That run is slower.
-
-5. No Firestore change. Title ledgers live in the existing competitorLedger
-   collection under t- ids, so the published rules already cover them.
+5. No Firestore change.

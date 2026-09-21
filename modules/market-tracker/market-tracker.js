@@ -4,7 +4,10 @@
 
    Tracked Buyers  — one box per job title. What that title is saying online
      about the user's company, its competitors, and the problems the product
-     solves, coloured by what it means for the user. Unchanged.
+     solves. Guided by the account's own reports: the personas decide which
+     titles count and where they gather, Marketing Opportunities supplies the
+     publications and social sites, Find My Customer the competitors and the
+     initiatives. Colour is only ever about the user's own company.
 
    Tracked Competitors — one box per competitor URL. What that competitor has
      published or had published about it since the last look: homepage
@@ -18,12 +21,12 @@
      Tracked Buyers      — title boxes, alphabetical
      Tracked Competitors — competitor boxes, alphabetical by name
 
-   What "new" means for a competitor box
-     Every run is a report of what the agent had not shown before. A ledger
-     (users/{uid}/competitorLedger) remembers every page seen on the site and
-     every URL already reported, so a refresh does not repeat itself. Rows
-     first shown less than 48 hours ago are carried over so a quick second
-     refresh does not blank the box. The competitor's homepage is the one
+   What "new" means
+     Both kinds of box report what the agent had not shown before. A ledger
+     remembers every URL already reported, and for a competitor also every
+     page seen on its site, so a refresh does not repeat itself. Rows first
+     shown recently are carried over so a quick second refresh does not blank
+     the box — 48 hours for a competitor, 24 for a job title. The competitor's homepage is the one
      exception to URL filtering — it is judged on whether its heading, copy
      or CTA changed, not on whether the link has been seen.
 
@@ -53,8 +56,10 @@
   const CONFIRM_MS = 4000;
 
   /* A row first shown less than this ago survives the next refresh, so a
-     refresh an hour later still shows what the last one found. */
-  const CARRY_MS = 48 * 60 * 60 * 1000;
+     refresh an hour later still shows what the last one found. The two kinds
+     were given different windows deliberately. */
+  const CARRY_MS = 48 * 60 * 60 * 1000;          // competitor boxes
+  const CARRY_TITLE_MS = 24 * 60 * 60 * 1000;    // job-title boxes
 
   const Data = () => window.MktforgeData;
   const Kit = () => window.MktforgeKit;
@@ -187,21 +192,36 @@
      module's script loads rather than when the module is opened, so it works
      whichever module the user is looking at when they edit My Company. */
   let knownCompetitors = null;          // key -> url, as of the last profile seen
+  let knownTitles = null;               // key -> title
 
   function syncLedgers(profile) {
-    const now = new Map();
+    const comps = new Map();
     ((profile && profile.competitors) || []).forEach((u) => {
-      const host = hostOf(u);
-      if (host) now.set(compKey(u), u);
+      if (hostOf(u)) comps.set(compKey(u), u);
     });
     if (knownCompetitors) {
       knownCompetitors.forEach((url, key) => {
-        if (now.has(key)) return;
+        if (comps.has(key)) return;
         Data().deleteCompetitorLedger(url)
           .catch((err) => console.warn('[Market Tracker] could not clear competitor history', err));
       });
     }
-    knownCompetitors = now;
+    knownCompetitors = comps;
+
+    /* Job titles follow the same rule: a renamed title is a remove plus an
+       add as far as My Company is concerned, so its history goes with it. */
+    const titles = new Map();
+    ((profile && profile.targetTitles) || []).forEach((t) => {
+      if (String(t || '').trim()) titles.set(titleKey(t), t);
+    });
+    if (knownTitles) {
+      knownTitles.forEach((title, key) => {
+        if (titles.has(key)) return;
+        Data().deleteTitleLedger(title)
+          .catch((err) => console.warn('[Market Tracker] could not clear title history', err));
+      });
+    }
+    knownTitles = titles;
   }
 
   if (window.MktforgeData) {
@@ -311,14 +331,95 @@
     return job;
   }
 
-  /* ---------- the title's family, from persona files ----------
-     A Persona Builder PDF's Overview lists "Primary Job Title:" and
-     "Secondary Job Titles:" (comma-separated). If the tracked title is the
-     primary or one of the secondaries, every title in that persona counts
-     as the same role when the agent matches posts. Imported files laid out
-     the same way count too. */
+  /* ---------- reading the account's own reports ----------
+     The job-title agent is only as good as what it knows about the title, and
+     everything it can know is already sitting in My Company: who the title
+     is, what they are working on, and where they spend time online. Three
+     reports carry it, each in a fixed layout Mktforge wrote itself, so the
+     parts that matter are pulled out here rather than left for the model to
+     find in a wall of text.
+
+       Persona Builder      primary + secondary titles, Where They Gather,
+                            Their Immediate Work Priorities, Their
+                            Development Priorities
+       Marketing Opportunities   Publications, Other Syndication Platforms,
+                            Influencers, Social Media and Blogs
+       Find My Customer     Pain Points / Initiatives, Competitors To Watch
+
+     Addresses are the point of two of those lists, and until recently they
+     existed only as click targets — see getFileText({ withLinks }). */
 
   const normTitle = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9&+/]+/g, ' ').trim();
+
+  /* LINKS ON THIS PAGE is what extraction appends after a page's text. It has
+     to terminate a section like any other heading, or the last section on a
+     page absorbs every link on it. */
+  const LINKS_HEADING = 'LINKS ON THIS PAGE';
+  const PERSONA_HEADINGS = ['Overview', 'Sample Profiles', 'Where They Gather',
+    'Organizational Structure', 'Their Immediate Work Priorities', 'Their Development Priorities',
+    LINKS_HEADING];
+  const MO_HEADINGS = ['All Results', 'Events and Tradeshows', 'Smaller Group Events', 'Newsletters',
+    'Influencers', 'Publications', 'Other Syndication Platforms', 'Social Media and Blogs',
+    LINKS_HEADING];
+  const FMC_HEADINGS = ['Customer List', 'Job Titles', 'Pain Points / Initiatives', 'Top Needs',
+    'Competitors To Watch', LINKS_HEADING];
+
+  /* The run of text under one heading, up to whichever heading comes next. */
+  function section(text, heading, headings) {
+    const flat = String(text || '');
+    const at = flat.search(new RegExp(`(^|\\n|\\s)${escapeRe(heading)}\\b`, 'i'));
+    if (at === -1) return '';
+    const from = at + heading.length;
+    let to = flat.length;
+    headings.forEach((h) => {
+      if (h === heading) return;
+      const i = flat.slice(from).search(new RegExp(`(^|\\n|\\s)${escapeRe(h)}\\b`, 'i'));
+      if (i !== -1 && from + i < to) to = from + i;
+    });
+    return flat.slice(from, to);
+  }
+
+  const escapeRe = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  /* "The New Stack — https://thenewstack.io" lines that extraction appends for
+     every link annotation, plus any address printed as ordinary text. */
+  function linkPairs(text) {
+    const out = [];
+    const re = /^(.*?)\s+[—-]\s+(https?:\/\/\S+)\s*$/gm;
+    let m;
+    while ((m = re.exec(String(text || ''))) !== null) {
+      out.push({ name: m[1].trim().replace(/\s+/g, ' ').slice(0, 120), url: m[2].replace(/[),.]+$/, '') });
+    }
+    return out;
+  }
+
+  /* Links whose label shows up inside this section. Falls back to bare URLs
+     printed in the section itself, which is how the reports read once the
+     generators started writing addresses out. */
+  function linksIn(slice, pairs) {
+    const out = new Map();
+    pairs.forEach((p) => {
+      const label = p.name.replace(/\s*\(.*?\)\s*$/, '').trim();
+      if (!label || label.length < 3) return;
+      if (slice.includes(label) && !out.has(p.url)) out.set(p.url, { name: label, url: p.url });
+    });
+    (slice.match(/https?:\/\/\S+/g) || []).forEach((raw) => {
+      const url = raw.replace(/[),.]+$/, '');
+      if (!out.has(url)) out.set(url, { name: '', url });
+    });
+    return [...out.values()];
+  }
+
+  /* Bullet or line items under a heading, minus the report's own filler. */
+  function items(slice, max = 14) {
+    return String(slice || '')
+      .split(/\n+|(?:^|\s)[•·▪]\s*/)
+      .map((x) => x.replace(/\s+/g, ' ').trim())
+      .filter((x) => x.length > 8 && x.length < 300)
+      .filter((x) => !/^(no |none found|n\/a|not specified)/i.test(x))
+      .filter((x) => !/^LINKS ON THIS PAGE/i.test(x))
+      .slice(0, max);
+  }
 
   function personaTitles(text) {
     const t = String(text || '').replace(/\s+/g, ' ');
@@ -346,33 +447,107 @@
     'avp', 'vice', 'president', 'chief', 'principal', 'associate', 'assistant', 'staff', 'officer', 'executive', 'of', 'the', 'and', '&']);
   const onlyLevel = (t) => normTitle(t).split(' ').every((w) => LEVEL_WORDS.has(w));
 
-  const personaMemo = new Map();   // fileId -> { primary, secondaries } | null
+  const kindOf = (f, text) => {
+    if (f.moduleId === 'persona-builder' || /Primary Job Title:/i.test(text)) return 'persona';
+    if (f.moduleId === 'marketing-opportunities' || /Job Titles Provided/i.test(text)) return 'opportunities';
+    if (f.moduleId === 'find-my-customer' || /Competitors To Watch/i.test(text)) return 'customers';
+    return '';
+  };
 
-  async function titleFamily(title, exclude = []) {
+  const textMemo = new Map();      // fileId -> text, for one run
+
+  async function reportText(f) {
+    if (!textMemo.has(f.id)) {
+      try { textMemo.set(f.id, await Data().getFileText(f.id, { withLinks: true })); }
+      catch (err) { textMemo.set(f.id, ''); }
+    }
+    return textMemo.get(f.id);
+  }
+
+  /* Everything the account knows about one job title. `exclude` drops titles
+     that have a box of their own, so two boxes never chase the same posts. */
+  async function readReports(title, exclude = []) {
     const want = normTitle(title);
     const blocked = new Set(exclude.map(normTitle).filter(Boolean));
-    const out = new Map();         // normalized -> { title, from }
+    const out = {
+      secondaries: [], gather: [], platforms: [], work: [], development: [],
+      initiatives: [], competitors: [], used: []
+    };
     let files = [];
-    try { files = await Data().listFiles(); } catch (err) { return []; }
-    const personas = files.filter((f) => f.moduleId === 'persona-builder'
-      || (f.source === 'imported' && /persona/i.test(f.name)));
-    for (const f of personas.slice(0, 30)) {
-      if (!personaMemo.has(f.id)) {
-        try { personaMemo.set(f.id, personaTitles(await Data().getFileText(f.id))); }
-        catch (err) { personaMemo.set(f.id, null); }
-      }
-      const p = personaMemo.get(f.id);
-      if (!p) continue;
+    try { files = await Data().listFiles(); } catch (err) { return out; }
+
+    const read = [];
+    for (const f of files.slice(0, 40)) {
+      const text = await reportText(f);
+      if (!text) continue;
+      read.push({ f, text, kind: kindOf(f, text) });
+    }
+
+    /* Pass one: the personas, which decide what else counts as this title. */
+    const family = new Set([want]);
+    read.filter((r) => r.kind === 'persona').forEach((r) => {
+      const p = personaTitles(r.text);
+      if (!p) return;
       const all = [p.primary, ...p.secondaries];
-      if (!all.some((x) => normTitle(x) === want)) continue;
+      if (!all.some((x) => normTitle(x) === want)) return;
+      out.used.push(`${r.f.name}${r.f.ext || ''}`);
       all.forEach((x) => {
         const k = normTitle(x);
-        if (k && k !== want && !blocked.has(k) && !onlyLevel(x) && !out.has(k)) {
-          out.set(k, { title: x, from: `${f.name}${f.ext || ''}` });
+        if (k && k !== want && !blocked.has(k) && !onlyLevel(x)) {
+          family.add(k);
+          if (!out.secondaries.some((y) => normTitle(y) === k)) out.secondaries.push(x);
         }
       });
-    }
-    return [...out.values()].slice(0, 20);
+      const pairs = linkPairs(r.text);
+      const gather = section(r.text, 'Where They Gather', PERSONA_HEADINGS);
+      linksIn(gather, pairs).forEach((l) => {
+        if (!out.gather.some((g) => g.url === l.url)) out.gather.push({ ...l, from: r.f.name });
+      });
+      out.work.push(...items(section(r.text, 'Their Immediate Work Priorities', PERSONA_HEADINGS)));
+      out.development.push(...items(section(r.text, 'Their Development Priorities', PERSONA_HEADINGS)));
+    });
+
+    const mentionsFamily = (t) => [...family].some((k) => normTitle(t).includes(k) || k.includes(normTitle(t)));
+
+    /* Pass two: the reports that are only relevant once the family is known. */
+    read.forEach((r) => {
+      if (r.kind === 'opportunities') {
+        const provided = /Job Titles Provided\s*(.+?)\s*(?:Industry Provided|Generated)/i.exec(r.text.replace(/\s+/g, ' '));
+        const titles = (provided ? provided[1] : '').split(/\s*,\s*/).map((x) => x.trim()).filter(Boolean);
+        if (!titles.some(mentionsFamily)) return;
+        out.used.push(`${r.f.name}${r.f.ext || ''}`);
+        const pairs = linkPairs(r.text);
+        ['Publications', 'Other Syndication Platforms', 'Influencers', 'Social Media and Blogs'].forEach((name) => {
+          linksIn(section(r.text, name, MO_HEADINGS), pairs).forEach((l) => {
+            if (!out.platforms.some((p) => p.url === l.url)) {
+              out.platforms.push({ ...l, section: name, from: r.f.name });
+            }
+          });
+        });
+      } else if (r.kind === 'customers') {
+        const pairs = linkPairs(r.text);
+        const comps = section(r.text, 'Competitors To Watch', FMC_HEADINGS);
+        linksIn(comps, pairs).forEach((l) => {
+          if (!out.competitors.some((c) => c.url === l.url)) out.competitors.push({ ...l, from: r.f.name });
+        });
+        const titles = section(r.text, 'Job Titles', FMC_HEADINGS);
+        if (mentionsFamily(titles) || !titles) {
+          out.used.push(`${r.f.name}${r.f.ext || ''}`);
+          out.initiatives.push(...items(section(r.text, 'Pain Points / Initiatives', FMC_HEADINGS)));
+        }
+      }
+    });
+
+    const trim = (list, n) => [...new Set(list.map((x) => String(x).trim()).filter(Boolean))].slice(0, n);
+    out.secondaries = trim(out.secondaries, 12);
+    out.work = trim(out.work, 16);
+    out.development = trim(out.development, 16);
+    out.initiatives = trim(out.initiatives, 16);
+    out.gather = out.gather.slice(0, 25);
+    out.platforms = out.platforms.slice(0, 40);
+    out.competitors = out.competitors.slice(0, 15);
+    out.used = trim(out.used, 12);
+    return out;
   }
 
   /* ---------- merging a competitor report into the box ----------
@@ -382,12 +557,12 @@
      drops off. A row that comes back again (the homepage, when its copy
      changed again) replaces the carried copy. */
 
-  function mergeRows(box, fresh) {
+  function mergeRows(box, fresh, window = CARRY_MS) {
     const now = Date.now();
     const stamped = fresh.map((r) => ({ ...r, firstSurfaced: now }));
     const seen = new Set(stamped.map((r) => r.url).filter(Boolean));
     const carried = (box.rows || [])
-      .filter((r) => Number(r.firstSurfaced) && now - Number(r.firstSurfaced) < CARRY_MS)
+      .filter((r) => Number(r.firstSurfaced) && now - Number(r.firstSurfaced) < window)
       .filter((r) => !r.url || !seen.has(r.url));
     return stamped.concat(carried).slice(0, 50);
   }
@@ -446,7 +621,19 @@
         };
       } else {
         const others = otherTrackedTitles(box);
-        const family = await titleFamily(box.title, others).catch(() => []);
+        box.progress = 'Reading your personas, opportunity lists and customer research…';
+        paintBox(box);
+        const reports = await readReports(box.title, others).catch((err) => {
+          console.warn('[Market Tracker] continuing without the account reports', err);
+          return null;
+        });
+        if (controller.signal.aborted) throw abortError();
+        box.progress = 'Checking what you’ve already been shown…';
+        paintBox(box);
+        ledger = await Data().getTitleLedger(box.title).catch((err) => {
+          console.warn('[Market Tracker] starting without the title history', err);
+          return null;
+        });
         if (controller.signal.aborted) throw abortError();
         body = {
           mode: 'jobTitle',
@@ -455,8 +642,10 @@
           companyName: profile.companyName || '',
           competitorUrls: profile.competitors || [],
           context,
-          titleFamily: family,
+          reports,
           otherTitles: others,
+          ledger,
+          firstRun: !box.runs,
           today: localDay()
         };
       }
@@ -491,7 +680,7 @@
       if (box.removed) return;
       const rows = Array.isArray(result.rows) ? result.rows : [];
       if (box.kind === 'competitor') {
-        box.rows = mergeRows(box, rows);
+        box.rows = mergeRows(box, rows, CARRY_MS);
         box.companyName = result.companyName || box.companyName || '';
         if (box.companyName) box.title = box.companyName;
         if (result.ledger) {
@@ -502,8 +691,15 @@
             });
         }
       } else {
-        box.rows = rows;
+        box.rows = mergeRows(box, rows, CARRY_TITLE_MS);
         box.companyName = result.companyName || '';
+        if (result.ledger) {
+          Data().saveTitleLedger(box.title, result.ledger)
+            .catch((err) => {
+              console.error('[Market Tracker] could not save the title history', err);
+              notify(`Couldn’t save what’s been shown for “${displayName(box)}”, so the next refresh may repeat itself.`, 'error');
+            });
+        }
       }
       box.note = result.note || '';
       box.stats = result.stats || null;
@@ -535,6 +731,12 @@
     e.name = 'AbortError';
     return e;
   }
+
+  const dayOf = (ms) => {
+    const d = new Date(ms);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  };
 
   function localDay() {
     const d = new Date();
@@ -576,7 +778,8 @@
       <p class="mtrk__eyebrow">${MODULE_NAME}</p>
       <h1 class="mtrk__title">Hear what buyers and competitors are saying</h1>
       <p class="mtrk__dek">Track what potential buyers and competitors are saying about the challenges you
-        can solve, your company and products, and other market news.</p>
+        can solve, your company and products, and other market news. Each refresh reports what’s
+        turned up in the last 30 days that you haven’t already been shown.</p>
     </header>
 
     <section class="mtrk__card" aria-label="Track a job title or a competitor">
@@ -700,8 +903,10 @@
       return `<td class="mtrk__c-date"${approx ? ' title="Approximate date"' : ''}>${esc(fmtDay(r.date, r.approx))}</td>`;
     }
     if (r.firstSurfaced) {
+      /* The reader's own day, not UTC's. toISOString() here put an evening in
+         California a day into the future. */
       return `<td class="mtrk__c-date is-found" title="This page doesn’t show a publish date. This is when Market Tracker first surfaced it to you.">${
-        esc(fmtDay(new Date(Number(r.firstSurfaced)).toISOString().slice(0, 10)))}<span class="mtrk__found">first seen</span></td>`;
+        esc(fmtDay(dayOf(Number(r.firstSurfaced))))}<span class="mtrk__found">first seen</span></td>`;
     }
     return `<td class="mtrk__c-date is-undated" title="No publish date could be found">Undated</td>`;
   }
@@ -714,28 +919,26 @@
     const n = (v) => Number(v) || 0;
     const plural = (k, one, many) => `${k} ${k === 1 ? one : many}`;
     const parts = [];
+    /* Each of these is a different reason, and they used to share one
+       counter — which had a first run reporting that things had been
+       "shown before" when the box had never run. */
+    if (n(d.date)) parts.push(`${n(d.date)} older than 30 days`);
+    if (n(d.seen)) parts.push(`${n(d.seen)} already shown to you before`);
+    if (n(d.unverified)) parts.push(`${n(d.unverified)} whose publish date couldn’t be confirmed`);
     if (box.kind === 'competitor') {
-      /* Each of these is a different reason, and they used to share one
-         counter — which had a first run reporting that things had been
-         "shown before" when the box had never run. */
-      if (n(d.date)) parts.push(`${n(d.date)} older than 30 days`);
       if (n(d.baseline)) parts.push(`${n(d.baseline)} recorded as a baseline for next time`);
       if (n(d.unchanged)) parts.push(`${n(d.unchanged)} already on the site last time`);
-      if (n(d.seen)) parts.push(`${n(d.seen)} already shown to you before`);
-      if (n(d.unverified)) parts.push(`${n(d.unverified)} whose publish date couldn’t be confirmed`);
       if (n(d.budget)) parts.push(`${n(d.budget)} found but not opened — the run hit its page limit`);
       if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} not about this competitor`);
-      if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
     } else {
-      if (n(d.date)) parts.push(`${n(d.date)} older than 90 days`);
       if (n(d.match)) parts.push(`${n(d.match)} not tied to this job title`);
-      if (n(d.perspective)) parts.push(`${n(d.perspective)} reporting or explainers rather than first-hand experience`);
-      if (n(d.paper)) parts.push(`${n(d.paper)} research papers`);
+      if (n(d.reviewer)) parts.push(`${n(d.reviewer)} reviews whose reviewer isn’t one of these titles`);
+      if (n(d.perspective)) parts.push(`${n(d.perspective)} articles explaining a challenge rather than living it`);
+      if (n(d.owned)) parts.push(`${n(d.owned)} published by you or by a competitor`);
+      if (n(d.vendor)) parts.push(`${n(d.vendor)} on the site of a vendor selling into the same market`);
       if (n(d.notRelevant)) parts.push(`${n(d.notRelevant)} off-topic`);
-      if (n(d.owned)) parts.push(`${n(d.owned)} on your or a competitor’s own site`);
-      if (n(d.vendor)) parts.push(`${n(d.vendor)} on the site of a vendor selling into the same industry`);
-      if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
     }
+    if (n(d.other)) parts.push(`${n(d.other)} unusable (bad link or no text)`);
     const head = `${plural(n(stats.searched), 'search', 'searches')} · ${plural(n(stats.found), 'item', 'items')} found`
       + `${n(stats.threadsRead) ? ` · ${plural(n(stats.threadsRead), 'thread', 'threads')} read for comments` : ''}`
       + `${n(stats.datesRead) ? ` · ${plural(n(stats.datesRead), 'date', 'dates')} read from the pages` : ''} · ${n(stats.kept)} shown`;
@@ -823,7 +1026,6 @@
      answer. If the homepage moved but nothing else did, say so beside it
      rather than contradicting the row above. */
   function quietNote(box) {
-    if (box.kind !== 'competitor') return '';
     const others = box.rows.filter((r) => groupOf(r) !== 'messaging');
     if (others.length) return '';
     return box.rows.length
@@ -852,8 +1054,7 @@
 
     if (!box.rows.length) {
       parts.push(`<div class="mtrk__state">
-          <p>${esc(competitor ? quietNote(box)
-            : 'No posts or articles from the last 90 days matched this job title.')}</p>
+          <p>${esc(quietNote(box))}</p>
           ${baseline}
           ${stats ? `<p class="mtrk__stats">${esc(stats)}</p>` : ''}
         </div>`);
@@ -863,9 +1064,9 @@
     if (!competitor) {
       parts.push(`
         <div class="mtrk__legend" aria-hidden="true">
-          <span><i class="is-green"></i>Opportunity — unhappy with a competitor, or happy with you</span>
-          <span><i class="is-red"></i>Risk — unhappy with you, or left you</span>
-          <span><i></i>Neutral</span>
+          <span><i class="is-green"></i>Positive about you</span>
+          <span><i class="is-red"></i>Negative about you</span>
+          <span><i></i>Everything else — including competitor mentions</span>
         </div>`);
     }
     parts.push(tableHtml(box));
