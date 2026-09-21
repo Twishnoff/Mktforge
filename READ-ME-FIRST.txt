@@ -1,51 +1,63 @@
-Mktforge — Market Tracker: crawl coverage + ledger cleanup (site files)
-=======================================================================
+Mktforge — Market Tracker: new job-title agent rules
+====================================================
 
-Supersedes the previous zip. Both a site upload AND a Worker deploy.
+Site upload AND a Worker deploy.
 
 1. COPY over the repo, keeping the paths:
 
-       modules/market-tracker/market-tracker.js
-       README.md
-
-   If you never uploaded the zip before this one, also take its
-   market-tracker.css and assets/js/data.js — this zip doesn't carry them.
+       assets/js/extract.js                            reads PDF link annotations
+       assets/js/data.js                               title ledgers, links-aware text
+       modules/market-tracker/market-tracker.js        report parsing, ledger, copy
+       modules/marketing-opportunities/opportunities-pdf.js   prints URLs
+       modules/persona-builder/persona-pdf.js                 prints URLs
 
 2. DEPLOY THE WORKER:
 
        cd C:\Users\Tyler\customer-tracker
        npx wrangler deploy
 
-3. WHAT CHANGED
+3. WHAT CHANGED — job-title boxes
 
-   a) CRAWL COVERAGE. A recent blog post could be found on the site and
-      never opened, so it never got a date and never appeared. Two causes:
+   SOURCES  Reddit, Hacker News, Medium, Substack, G2, Capterra, TrustRadius,
+            plus every site named in the Where They Gather section of a
+            persona for this title and in the Publications, Other Syndication
+            Platforms, Influencers and Social Media and Blogs lists of a
+            Marketing Opportunities report for this title or a secondary one.
+            A persona naming r/dataengineering is passed through as that
+            subreddit, not flattened to "reddit.com".
 
-      - The section index pages to expand were taken in the order the links
-        appeared on the homepage, capped at 8. A site with a long nav
-        (products, solutions, use cases, customers, platform, features,
-        news, blog...) could push /blog past the cap, so the blog index was
-        never expanded at all.
-      - Pages were then opened in discovery order against a 40-page budget.
-        Homepage links come first, so dozens of product and solution pages
-        were opened before any blog post was reached.
+   REVIEWS  A G2/Capterra/TrustRadius review is only surfaced when the
+            reviewer's own listed job title is the tracked title or one of
+            its secondaries. Never inferred.
 
-      Now: one index per section is picked before the cap is filled, pages
-      are opened section by section in turn (blog, news, stories, product),
-      the budget is 80 pages read five at a time, and anything the budget
-      cuts off is COUNTED and reported, so this can't fail silently again.
+   WINDOW   30 days, down from 90.
 
-   b) LEDGER CLEANUP (from the previous zip, if you haven't applied it):
-      deleting a competitor from My Company now clears its history whether
-      or not a box still exists.
+   LEDGER   Each title now has one. A refresh reports what you haven't been
+            shown, with a 24-hour carry-over. Kept by Stop Tracking, deleted
+            when the title leaves My Company. An empty box is now a normal
+            result and says "No new activity found since your last refresh."
 
-4. AFTER DEPLOYING, hit Refresh Data on the ClickHouse box. The run will be
-   slower than before — it is opening a lot more pages.
+   COLOUR   Only about your company. Positive green, negative red, everything
+            else uncoloured. Competitor complaints are no longer green.
 
-   The blog posts it finds this time will be new to the ledger, so they
-   should appear. If a recent post still doesn't, look at the line under
-   the box: "N found but not opened" means the page limit is still the
-   constraint, and "N whose publish date couldn't be confirmed" means the
-   post was opened but showed no date the agent could read.
+   VOICE    First person is required for challenges content only. A neutral
+            article naming your company or a competitor now qualifies.
 
-5. No Firestore change.
+   BLOCKED  Your own and competitors' domains, content authored by them
+            anywhere (a competitor's Medium post is still the competitor),
+            and vendor blogs about their own market.
+
+4. WHAT CHANGED — PDF links (this is why extract.js and the two PDF files
+   are in here)
+
+   The Marketing Opportunities report printed "Visit Site" and attached the
+   address as a click target; Persona Builder printed "Name (type)" the same
+   way. Text extraction never saw either, so the site lists the new rules
+   depend on were invisible. Extraction now reads link annotations, and both
+   generators print the address as text.
+
+   Reports already in your account are re-read automatically the first time
+   Market Tracker needs one. That run is slower.
+
+5. No Firestore change. Title ledgers live in the existing competitorLedger
+   collection under t- ids, so the published rules already cover them.
