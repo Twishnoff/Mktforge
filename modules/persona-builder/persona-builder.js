@@ -87,19 +87,26 @@
   let el = null;              // { form, jobTitle, ... } scoped element map
   let boxes = null;
   let cfg = {};
-  let abortController = null;
   let mounted = false;
 
   /* Everything worth keeping when the user navigates to another module and
-     comes back. This closure outlives mount/unmount, so it survives for the
-     life of the page — but not a reload. */
-  const state = {
-    form:    { jobTitle: '', companySize: '', industry: '' },
-    persona: null,
-    status:  '',
-    error:   '',
-    running: false
-  };
+     comes back — one per company (MktforgeKit.perCompany). Outlives
+     mount/unmount for the life of the page; typed input survives a refresh. */
+  const pc = window.MktforgeKit.perCompany('persona-builder', {
+    create: () => ({
+      form:    { jobTitle: '', companySize: '', industry: '' },
+      persona: null,
+      status:  '',
+      error:   '',
+      note:    '',
+      running: false
+    }),
+    held: ['form'],
+    snapshot: ['persona', 'status']
+  });
+  let state = pc.state;
+  pc.bind((st) => { state = st; });
+  const onScreen = (st) => mounted && st === state;
 
   /* ---------- helpers ---------- */
 
@@ -252,9 +259,7 @@
 
   /* ---------- SSE over fetch (EventSource can't POST a body) ---------- */
 
-  async function streamGenerate(payload, { onStatus, onResult, onError }) {
-    abortController = new AbortController();
-
+  async function streamGenerate(payload, { onStatus, onResult, onError }, signal) {
     // Prove which account is calling. The Worker verifies this signature
     // against Google's public keys, and a valid one is what lets it skip the
     // Turnstile check the standalone site needs. The email in the body is
@@ -273,7 +278,7 @@
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
-      signal: abortController.signal
+      signal
     });
 
     if (!resp.ok) {
@@ -317,6 +322,7 @@
   /* ---------- submit ---------- */
 
   async function handleSubmit(e) {
+    const st = state;
     e.preventDefault();
     clearFormError();
 
@@ -328,19 +334,18 @@
     const noAccess = window.MktforgeKit.accessProblem();
     if (noAccess) { showFormError(noAccess); return; }
 
-    if (abortController) abortController.abort();   // supersede any earlier run
-
     captureForm();
+    const runId = pc.begin(st);                      // also stops an earlier run
     el.generate.disabled = true;
     el.pdf.disabled = true;
-    state.persona = null;
-    state.error = '';
-    state.running = true;
+    st.persona = null;
+    st.error = '';
+    st.running = true;
     Mktforge.reportActivity('persona-builder', 'running');
     updateGenerateEnabled();
-    state.status = 'Conducting Research…';
+    st.status = 'Conducting Research…';
     setAllBoxesLoading();
-    el.status.textContent = state.status;
+    el.status.textContent = st.status;
 
     const payload = {
       email: window.MktforgeKit.accountEmail(),
@@ -351,54 +356,59 @@
 
     try {
       const context = await window.MktforgeKit.savedMaterials(cfg, { jobTitles: [payload.jobTitle] },
-        (t) => { state.status = t; if (mounted) el.status.textContent = t; });
+        (t) => { st.status = t; if (onScreen(st)) el.status.textContent = t; });
+      if (!pc.live(st, runId)) return;
       if (context) payload.context = context;
-      state.status = 'Conducting Research…';
-      if (mounted) el.status.textContent = state.status;
+      st.status = 'Conducting Research…';
+      if (onScreen(st)) el.status.textContent = st.status;
       await streamGenerate(payload, {
         onStatus: (message) => {
-          state.status = message || 'Conducting Research…';
-          if (mounted) el.status.textContent = state.status;
+          if (!pc.live(st, runId)) return;
+          st.status = message || 'Conducting Research…';
+          if (onScreen(st)) el.status.textContent = st.status;
         },
         onResult: (data) => {
+          if (!pc.live(st, runId)) return;
           // Recorded whether or not this module is on screen — a run started
           // before navigating away finishes into state and is painted on the
           // way back in.
-          state.persona = data.persona;
-          state.status = data.partial
+          st.persona = data.persona;
+          st.status = data.partial
             ? 'Done — research budget ran out before every box was fully filled in.'
             : 'Research complete.';
-          if (mounted) {
+          if (onScreen(st)) {
             renderPersona(data.persona);
-            el.status.textContent = state.status;
+            el.status.textContent = st.status;
             el.pdf.disabled = false;
           }
         },
         onError: (message) => {
-          state.error = message || 'Something went wrong. Please try again.';
-          state.status = '';
-          state.persona = null;
-          if (mounted) {
+          if (!pc.live(st, runId)) return;
+          st.error = message || 'Something went wrong. Please try again.';
+          st.status = '';
+          st.persona = null;
+          if (onScreen(st)) {
             setAllBoxesPlaceholder();
-            showFormError(state.error);
+            showFormError(st.error);
             el.status.textContent = '';
           }
         }
-      });
+      }, st.controller.signal);
     } catch (err) {
-      if (err && err.name === 'AbortError') return;   // superseded by a new run
+      if (!pc.live(st, runId)) return;                 // superseded or cancelled
+      if (err && err.name === 'AbortError') return;
       console.error(err);
-      state.error = 'Network error — please try again.';
-      state.status = '';
-      if (mounted) {
+      st.error = 'Network error — please try again.';
+      st.status = '';
+      if (onScreen(st)) {
         setAllBoxesPlaceholder();
-        showFormError(state.error);
+        showFormError(st.error);
         el.status.textContent = '';
       }
     } finally {
-      state.running = false;
-      Mktforge.reportActivity('persona-builder', state.error ? 'error' : 'idle');
-      abortController = null;
+      if (!pc.end(st, runId)) return;     // superseded, or cancelled by a company switch
+      st.running = false;
+      Mktforge.reportActivity('persona-builder', st.error ? 'error' : 'idle');
       updateGenerateEnabled();
     }
   }
@@ -453,6 +463,7 @@
     }
 
     if (state.error) showFormError(state.error);
+    else if (state.note) showFormError(state.note);
   }
 
   /* My Company values as drop-down choices (assets/js/module-kit.js). */
@@ -468,6 +479,7 @@
     id:     'persona-builder',
     label:  'Persona Builder',
     icon:   'persona',
+    companyAware: true,
     styles: 'modules/persona-builder/persona-builder.css',
 
     mount(container) {
@@ -492,6 +504,11 @@
       el.form.addEventListener('submit', handleSubmit);
       el.pdf.addEventListener('click', handlePdf);
 
+      // Only the person's own typing clears a "Run stopped" note, not autofill.
+      const hold = (e) => { captureForm(); pc.hold(e && e.isTrusted ? undefined : state); };
+      container.addEventListener('input', hold);
+      container.addEventListener('change', hold);
+
       restore();
       updateGenerateEnabled();
       autofill();
@@ -499,6 +516,7 @@
 
     unmount() {
       captureForm();
+      pc.hold(state);                   // keeps any "Run stopped" note
       mounted = false;
 
       // A run in flight is deliberately NOT aborted. Leaving mid-research and

@@ -1,46 +1,46 @@
-Mktforge — Multi-company, Session 2: company dropdown and switching
-===================================================================
+Mktforge — Multi-company, Session 3: delete a company; four modules per company
+===============================================================================
 
 UPLOAD (keep the folders as they are in the zip)
 
-  index.html                             (repo root)
-  READ-ME-FIRST.txt                      (repo root)
-  assets/css/app.css
+  READ-ME-FIRST.txt                                       (repo root)
   assets/js/app.js
   assets/js/data.js
+  assets/js/module-kit.js
   modules/my-company/my-company.js
+  modules/my-company/my-company.css
+  modules/persona-builder/persona-builder.js
+  modules/battle-card-generator/battle-card-generator.js
+  modules/find-my-customer/find-my-customer.js
+  modules/marketing-opportunities/marketing-opportunities.js
+  modules/account-profile/account-profile.js
 
 No rules change, no Worker deploy. Hard-refresh (Ctrl+Shift+R) after uploading.
 
 WHAT'S NEW
 
-  Company dropdown in the management bar, left of your account menu, with a
-  thin grey line between them.
-    - Shows the active company's name; long names cut off at 26 characters
-      with "...", full name on hover.
-    - Lists your companies: named ones A-Z, then unnamed "Company X" ones.
-    - Bottom row: green + Add New Company. It makes a new empty company,
-      switches to it and opens My Company. At 10 companies the row turns red:
-      "10 Company Limit Reached".
-    - Updates as soon as you save a new Company Name — in any open tab.
+  Delete This Company (My Company, right of the title; only when you have
+  more than one company). The warning modal from the spec, with
+  "No, Don't Delete" and a red "Yes, Delete". Yes stops anything running,
+  deletes the company and moves you to your oldest one. If the tab closes
+  part-way, the clean-up finishes at your next sign-in.
 
-  Switching (or adding) while a module is running asks first:
-    "Switching companies will stop Find My Customer. Switch anyway?"
-  Cancel changes nothing. Nothing else on the page works while it's open.
+  Typed text is kept per company and survives a refresh (Persona Builder,
+  Battle Card Generator, Find My Customer, Marketing Opportunities, and
+  unsaved edits on My Company). Company URL fills in from THAT company's
+  My Company.
 
-  My Company: saving a name another of your companies uses is blocked with
-  "A company with this name already exists in your account. Choose a
-  different name." (ignores capitals and extra spaces).
+  Runs:
+    - Switching company mid-run stops it; back on that company the module
+      shows how it looked before the run, with "Run stopped when you
+      switched companies. Run it again." (goes away once you type or run)
+    - A refresh, closed tab or sign-out mid-run: on return, a red light and
+      "This run was interrupted. Run it again." Red clears on click/scroll.
+    - Files you import finish into the company you dropped them into.
 
-  If another tab deletes the company this tab is on, this tab moves to your
-  oldest company and says why.
+STILL TO COME (Session 4)
 
-FOR NOW (until Sessions 3-4 update each module)
-
-  Switching reloads the page into the other company. That stops any run
-  cleanly, but results on screen and unsaved typing are cleared by a switch
-  rather than kept for when you come back. Saved data (My Company, files,
-  Build Positioning answers, Market Tracker) is always kept per company.
-
-  There's no Delete This Company button yet (Session 3), so a company you add
-  now stays until then.
+  Build Positioning, Draft Messaging and Market Tracker get the same
+  treatment. Until they do, switching still reloads the page, so results on
+  screen are cleared by a switch (typed text now comes back). After Session
+  4 the switch happens in place and results stay when you switch back.

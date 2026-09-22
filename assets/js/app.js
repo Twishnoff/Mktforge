@@ -40,6 +40,9 @@
    new company: the simple, safe way to stop runs and clear every module's
    screen. Once all modules are company-aware, the switch happens in place.
 
+   Mktforge.deleteActiveCompany() -> Promise<boolean>; moves to the oldest
+     company and deletes this one. My Company asks first.
+
    Mktforge.confirm({ message, confirmLabel, cancelLabel, danger })
      -> Promise<boolean>. A modal; nothing else on the page works while it's
         open. For modules too (e.g. My Company's Delete This Company).
@@ -510,6 +513,33 @@ window.Mktforge = (() => {
 
   /* Moves this tab to another company (or a new one). Until every module
      keeps its own screen per company, that means reloading into it. */
+  /* In-place switching (once every module is company-aware). The module on
+     screen is taken down BEFORE the company changes, so what it saves on the
+     way out (typed text) lands in the company it belongs to. */
+  const allAware = () => modules.length > 0 && modules.every(m => m.companyAware);
+
+  function takeDown() {
+    const here = activeId;
+    const mountEl = document.getElementById('display-mount');
+    const current = modules.find(m => m.id === here);
+    if (current && typeof current.unmount === 'function') {
+      try { current.unmount(mountEl); } catch (e) { console.error(`[Mktforge] ${here} unmount failed`, e); }
+    }
+    activeId = null;                          // the next show() mounts fresh
+    mountEl.innerHTML = '';
+    return here;
+  }
+
+  function bringUp(id) {
+    activity.clear();                         // lights are per company
+    renderLights();
+    const target = modules.find(m => m.id === id) ? id : (modules.find(m => !m.hidden) || modules[0]).id;
+    history.replaceState(null, '', `#/${target}`);
+    restoreScroll = false;
+    show(target);
+    document.dispatchEvent(new CustomEvent('mktforge:company-ready', { detail: { id: Data().activeCompanyId } }));
+  }
+
   async function changeCompany(target) {
     if (switching) return;
     closeCompanyMenu();
@@ -528,40 +558,89 @@ window.Mktforge = (() => {
 
     switching = true;
     document.body.dataset.switching = 'true';
+    const inPlace = allAware();
+    const here = inPlace ? takeDown() : null;
     try {
       let id = target;
       if (target === 'new') id = await Data().createCompany();
       if (!(await Data().settle())) console.warn('[Mktforge] a save was still running when the company changed');
       await Data().switchCompany(id);
-
-      if (modules.length && modules.every(m => m.companyAware)) {
-        activity.clear();
-        renderLights();
-        const here = activeId;
-        const mountEl = document.getElementById('display-mount');
-        const current = modules.find(m => m.id === here);
-        if (current && typeof current.unmount === 'function') {
-          try { current.unmount(mountEl); } catch (e) { console.error(`[Mktforge] ${here} unmount failed`, e); }
-        }
-        activeId = null;                       // force a fresh mount
-        mountEl.innerHTML = '';
-        if (target === 'new') goTo('my-company'); else show(here);
-        switching = false;
-        delete document.body.dataset.switching;
-        return;
-      }
-      if (target === 'new') history.replaceState(null, '', '#/my-company');
-      location.reload();
     } catch (err) {
       console.error('[Mktforge] could not change company', err);
       switching = false;
       delete document.body.dataset.switching;
+      if (inPlace && here) show(here);        // still on the old company: put it back
       const msg = err && err.code === 'company-limit' ? `${Data().MAX_COMPANIES} Company Limit Reached.`
         : err && err.code === 'company-gone' ? 'That company no longer exists.'
         : 'Couldn’t change company. Check your connection and try again.';
       document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message: msg, tone: 'error' } }));
+      return;
     }
+    if (inPlace) {
+      switching = false;
+      delete document.body.dataset.switching;
+      bringUp(target === 'new' ? 'my-company' : here);
+      return;
+    }
+    if (target === 'new') history.replaceState(null, '', '#/my-company');
+    location.reload();
   }
+
+
+  /* My Company's Delete This Company, after its own warning. The company is
+     marked "deleting" (which hides it and refuses any further saves into
+     it), this tab moves to the oldest remaining company — which stops
+     anything running — and the data is removed in the background. If the
+     tab closes first, the removal finishes at the next sign-in. */
+  async function deleteActiveCompany() {
+    if (switching) return false;
+    switching = true;                          // before any wait: no switch can start meanwhile
+    document.body.dataset.switching = 'true';
+    const stop = (message) => {
+      switching = false;
+      delete document.body.dataset.switching;
+      if (message) document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message, tone: 'error' } }));
+      return false;
+    };
+    const id = Data().activeCompanyId;
+    let next;
+    try { next = await Data().oldestCompanyId(id); }
+    catch (err) { return stop('Couldn’t delete the company. Check your connection and try again.'); }
+    if (!next) return stop('This is your only company, so it can’t be deleted.');
+    const inPlace = allAware();
+    try {
+      await Data().settle();
+      await Data().retireCompany(id);
+    } catch (err) {
+      if (!(err && err.code === 'company-gone')) {
+        console.error('[Mktforge] could not delete the company', err);
+        return stop(err && err.code === 'last-company' ? err.message
+          : 'Couldn’t delete the company. Check your connection and try again.');
+      }
+      // Already deleted (another tab got there first): just move on.
+    }
+    // From here the company is gone for good; only the move remains.
+    try { sessionStorage.setItem(NOTICE_KEY, 'Company deleted.'); } catch (e) { /* no notice */ }
+    const here = inPlace ? takeDown() : null;
+    try {
+      await Data().switchCompany(next);
+    } catch (err) {
+      console.error('[Mktforge] could not move off the deleted company', err);
+      location.reload();                       // start() picks a company that exists
+      return true;
+    }
+    if (inPlace) {
+      switching = false;
+      delete document.body.dataset.switching;
+      bringUp(here);
+      showPendingNotice();
+      Data().purgeDeleted();
+      return true;
+    }
+    location.reload();                         // the removal resumes on the way back in
+    return true;
+  }
+
 
   function initCompanyMenu() {
     const button = document.getElementById('company-button');
@@ -786,6 +865,10 @@ window.Mktforge = (() => {
     window.addEventListener('hashchange', route);
     route();
     booted = true;
+    // After the first module is on screen, so a red "interrupted" light on
+    // that very module stays until the next click or scroll, like any other.
+    document.dispatchEvent(new CustomEvent('mktforge:company-ready',
+      { detail: { id: window.MktforgeData.activeCompanyId } }));
     showPendingNotice();
 
     if (!modules.length) {
@@ -808,6 +891,7 @@ window.Mktforge = (() => {
     loadScript,
     reportActivity,
     confirm: confirmModal,
+    deleteActiveCompany,
     get modules() { return modules.slice(); },
     get activeId() { return activeId; },
     go(id) { goTo(id); }         // modules' links always land at the top

@@ -11,6 +11,7 @@
      attachPicker(input, pick)      drop-down of My Company values under a text field
      savedMaterials(cfg, opts, say) the account's Imported + Generated Materials for a
                                     Worker request, or null (see assets/js/research.js)
+     perCompany(moduleId, opts)     one screen state per company (see below)
 
    Everything here only reads My Company data (through MktforgeData) and
    only touches the elements a module passes in.
@@ -207,5 +208,213 @@ window.MktforgeKit = (() => {
     }
   }
 
-  return { NO_ACCESS, accountEmail, accessProblem, accessError, seedCompanyUrl, attachPicker, savedMaterials };
+  /* ---------- one screen per company ----------
+     const pc = MktforgeKit.perCompany('persona-builder', {
+       create:   () => ({ form: {...}, persona: null, status: '', error: '', running: false }),
+       held:     ['form'],               // typed-but-unsaved input, kept per tab
+       snapshot: ['persona', 'status']   // what a cancelled run puts back
+     });
+     let state = pc.state;  pc.bind((st) => { state = st; });
+
+     A run:
+       const st = state;  const runId = pc.begin(st);   // st.controller.signal for fetch
+       ... after every await:  if (!pc.live(st, runId)) return;
+       ... finally:            if (!pc.end(st, runId)) return;
+
+     Switching company cancels the old company's run: its request is aborted,
+     its screen goes back to what it showed before the run, and it says
+     "Run stopped when you switched companies. Run it again." A run cut off
+     by a refresh, a closed tab or signing out shows, on return, the red
+     light and "This run was interrupted. Run it again." */
+
+  const STOPPED = 'Run stopped when you switched companies. Run it again.';
+  const INTERRUPTED = 'This run was interrupted. Run it again.';
+  const STALE_MS = 3 * 60 * 1000;     // a run flag not refreshed for this long is dead
+  const BEAT_MS = 30 * 1000;
+  const instances = [];
+  const owned = new Set();            // run flags this tab is keeping alive
+
+  /* A refresh or a closed tab aborts the run's request, and the run's own
+     error handling fires on the way out. It must not tidy away the flag
+     that says "this run was interrupted". */
+  let leaving = false;
+  window.addEventListener('beforeunload', () => { leaving = true; });
+  window.addEventListener('pagehide', () => { leaving = true; });
+  window.addEventListener('pageshow', () => { leaving = false; });   // back from the cache, or unload cancelled
+
+  /* A flag written by this tab counts as interrupted only when this page
+     load IS a refresh of that tab. A duplicated tab copies the tab id but
+     arrives by navigation, so it waits for the flag to go stale instead. */
+  const refreshed = (() => {
+    try {
+      const nav = performance.getEntriesByType('navigation')[0];
+      return !!nav && nav.type === 'reload';
+    } catch (e) { return false; }
+  })();
+
+  function tabId() {
+    try {
+      let t = sessionStorage.getItem('mktforge.tab');
+      if (!t) { t = Math.random().toString(36).slice(2, 10); sessionStorage.setItem('mktforge.tab', t); }
+      return t;
+    } catch (e) { return 'notab'; }
+  }
+  function uid() {
+    const a = window.MktforgeAuth;
+    const u = a && a.getUser && a.getUser();
+    return (u && u.uid) || 'anon';
+  }
+  const pack = (v) => (v instanceof Set ? { __set: [...v] } : v);
+  const unpack = (v) => (v && typeof v === 'object' && Array.isArray(v.__set) ? new Set(v.__set) : v);
+  const plain = (v) => v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Set);
+
+  setInterval(() => {
+    owned.forEach((key) => {
+      try {
+        const f = JSON.parse(localStorage.getItem(key) || 'null');
+        if (f && f.tab === tabId()) localStorage.setItem(key, JSON.stringify({ ...f, beat: Date.now() }));
+        else owned.delete(key);
+      } catch (e) { /* storage unavailable */ }
+    });
+  }, BEAT_MS);
+
+  function perCompany(moduleId, { create, held = [], snapshot = [] }) {
+    const states = new Map();
+    const binders = [];
+    let currentId = null;
+    let current = null;
+    let placeholder = null;
+
+    const heldKey = (cid) => `mktforge.held.${cid}.${moduleId}`;
+    const runKey = (cid) => `mktforge.run.${uid()}.${cid}.${moduleId}`;
+
+    function saveHeld(st) {
+      if (!st || !st._cid) return;
+      const out = {};
+      held.forEach((k) => { out[k] = pack(st[k]); });
+      if (st.note) out.note = st.note;
+      try { sessionStorage.setItem(heldKey(st._cid), JSON.stringify(out)); } catch (e) { /* full or blocked */ }
+    }
+
+    function load(cid) {
+      if (states.has(cid)) return states.get(cid);
+      const st = create();
+      st._cid = cid;
+      st._run = 0;
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(heldKey(cid)) || 'null');
+        if (saved) {
+          held.forEach((k) => {
+            if (saved[k] === undefined) return;
+            const v = unpack(saved[k]);
+            st[k] = plain(st[k]) && plain(v) ? { ...st[k], ...v } : v;
+          });
+          if (saved.note) st.note = saved.note;
+        }
+      } catch (e) { /* nothing held */ }
+      try {
+        const f = JSON.parse(localStorage.getItem(runKey(cid)) || 'null');
+        if (f && ((refreshed && f.tab === tabId()) || Date.now() - (f.beat || 0) > STALE_MS)) {
+          localStorage.removeItem(runKey(cid));
+          st.error = INTERRUPTED;
+          st._interrupted = true;
+        }
+      } catch (e) { /* no flag */ }
+      states.set(cid, st);
+      return st;
+    }
+
+    function clearFlag(cid) {
+      try { localStorage.removeItem(runKey(cid)); } catch (e) { /* none */ }
+      owned.delete(runKey(cid));
+    }
+
+    function cancel(st) {
+      if (!st || !st.running) return;
+      st._run += 1;                                   // any late answer is ignored
+      if (st.controller) { try { st.controller.abort(); } catch (e) { /* already done */ } }
+      st.controller = null;
+      if (st.prev) Object.assign(st, st.prev);
+      st.prev = null;
+      st.running = false;
+      st.error = '';
+      st.note = STOPPED;
+      clearFlag(st._cid);
+      saveHeld(st);                                    // so the note outlives a reload
+    }
+
+    document.addEventListener('mktforge:company-switched', (e) => {
+      const { from, to } = e.detail || {};
+      if (from && states.has(from)) cancel(states.get(from));
+      if (!to) return;
+      currentId = to;
+      current = load(to);
+      binders.forEach((fn) => { try { fn(current); } catch (err) { console.error(err); } });
+    });
+
+    const api = {
+      get state() {
+        if (current) return current;
+        if (!placeholder) { placeholder = create(); placeholder._run = 0; }
+        return placeholder;
+      },
+      get companyId() { return currentId; },
+      bind(fn) { binders.push(fn); if (current) fn(current); },
+      /* Called with no argument from the module's typing handlers: the
+         person has moved on, so a "Run stopped…" note is dropped too. */
+      hold(st) {
+        const t = st || current;
+        if (!t) return;
+        if (!st) t.note = '';
+        saveHeld(t);
+      },
+
+      begin(st) {
+        if (st.controller) { try { st.controller.abort(); } catch (e) { /* superseded */ } }
+        st._run += 1;
+        st.prev = {};
+        snapshot.forEach((k) => { st.prev[k] = st[k]; });
+        st.controller = new AbortController();
+        st.note = '';
+        st._interrupted = false;
+        if (st._cid) {
+          try {
+            localStorage.setItem(runKey(st._cid), JSON.stringify({ tab: tabId(), beat: Date.now() }));
+            owned.add(runKey(st._cid));
+          } catch (e) { /* storage unavailable: no interrupted notice */ }
+          saveHeld(st);
+        }
+        return st._run;
+      },
+      live(st, id) { return st._run === id; },
+      end(st, id) {
+        if (st._run !== id) return false;
+        st.prev = null;
+        st.controller = null;
+        // While the page is unloading, the flag stays: it's what says "this
+        // run was interrupted" when the person comes back.
+        if (st._cid && !leaving) clearFlag(st._cid);
+        return true;
+      },
+
+      // The shell has settled the company and cleared the lights: show red
+      // for a run this company lost to a refresh or a closed tab.
+      _ready() {
+        if (current && current._interrupted) {
+          current._interrupted = false;
+          if (window.Mktforge) {
+            window.Mktforge.reportActivity(moduleId, 'running');
+            window.Mktforge.reportActivity(moduleId, 'error');
+          }
+        }
+      }
+    };
+    instances.push(api);
+    return api;
+  }
+
+  document.addEventListener('mktforge:company-ready', () => instances.forEach((i) => i._ready()));
+
+  return { NO_ACCESS, accountEmail, accessProblem, accessError, seedCompanyUrl, attachPicker, savedMaterials,
+           perCompany, STOPPED, INTERRUPTED };
 })();

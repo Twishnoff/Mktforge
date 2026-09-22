@@ -193,16 +193,25 @@ window.MktforgeBattleCardText = (function () {
   let cfg = {};
   let mounted = false;
 
-  /* Kept across navigation for the life of the page, not across a reload.
-     A run takes 30–90 seconds, so surviving a module switch matters here. */
-  const state = {
-    form:    { companyUrl: '', competitorUrl: '', jobTitle: '', industry: '' },
-    urlSeed: { seeded: false },   // My Company URL default, once per sign-in
-    run:     null,     // everything the page and the PDF need from the last success
-    status:  '',
-    error:   '',
-    running: false
-  };
+  /* One per company (MktforgeKit.perCompany), kept across navigation for the
+     life of the page; typed input also survives a refresh. A run takes 30–90
+     seconds, so surviving a module switch matters here. */
+  const pc = window.MktforgeKit.perCompany('battle-card-generator', {
+    create: () => ({
+      form:    { companyUrl: '', competitorUrl: '', jobTitle: '', industry: '' },
+      urlSeed: { seeded: false },   // My Company URL default, once per company
+      run:     null,     // everything the page and the PDF need from the last success
+      status:  '',
+      error:   '',
+      note:    '',
+      running: false
+    }),
+    held: ['form'],
+    snapshot: ['run', 'status']
+  });
+  let state = pc.state;
+  pc.bind((st) => { state = st; });
+  const onScreen = (st) => mounted && st === state;
 
   /* ---------- helpers ---------- */
 
@@ -369,7 +378,7 @@ window.MktforgeBattleCardText = (function () {
 
   /* ---------- request ---------- */
 
-  async function requestBattleCard(body) {
+  async function requestBattleCard(body, signal) {
     const headers = { 'Content-Type': 'application/json' };
 
     // Off by default: the Worker's CORS only allows Content-Type, so an
@@ -379,7 +388,7 @@ window.MktforgeBattleCardText = (function () {
       if (token) headers.Authorization = `Bearer ${token}`;
     }
 
-    const res = await fetch(cfg.API_URL, { method: 'POST', headers, body: JSON.stringify(body) });
+    const res = await fetch(cfg.API_URL, { method: 'POST', headers, body: JSON.stringify(body), signal });
     const payload = await res.json().catch(() => null);
     return { res, payload };
   }
@@ -387,10 +396,11 @@ window.MktforgeBattleCardText = (function () {
   /* ---------- submit ---------- */
 
   async function handleSubmit(e) {
+    const st = state;
     e.preventDefault();
-    if (state.running) return;
+    if (st.running) return;
     clearError();
-    state.error = '';
+    st.error = '';
 
     const f = readForm();
     const problem = validate(f);
@@ -405,19 +415,21 @@ window.MktforgeBattleCardText = (function () {
     }
 
     captureForm();
-    state.running = true;
+    const runId = pc.begin(st);
+    st.running = true;
     Mktforge.reportActivity('battle-card-generator', 'running');
-    state.run = null;
-    state.status = 'Researching both companies… this usually takes 30–90 seconds.';
+    st.run = null;
+    st.status = 'Researching both companies… this usually takes 30–90 seconds.';
     setPdfEnabled(false);
     setAllBoxesLoading();
-    el.status.textContent = state.status;
+    el.status.textContent = st.status;
     updateGenerateEnabled();
 
     const fail = (message) => {
-      state.error = message;
-      state.status = '';
-      if (mounted) {
+      if (!pc.live(st, runId)) return;
+      st.error = message;
+      st.status = '';
+      if (onScreen(st)) {
         setAllBoxesPlaceholder();
         showError(message);
         el.status.textContent = '';
@@ -425,12 +437,13 @@ window.MktforgeBattleCardText = (function () {
     };
 
     try {
-      const runningStatus = state.status;
+      const runningStatus = st.status;
       const context = await window.MktforgeKit.savedMaterials(cfg,
         { jobTitles: [f.jobTitle], competitorUrl: f.competitorUrl },
-        (t) => { state.status = t; if (mounted) el.status.textContent = t; });
-      state.status = runningStatus;
-      if (mounted) el.status.textContent = runningStatus;
+        (t) => { st.status = t; if (onScreen(st)) el.status.textContent = t; });
+      if (!pc.live(st, runId)) return;
+      st.status = runningStatus;
+      if (onScreen(st)) el.status.textContent = runningStatus;
 
       const { res, payload } = await requestBattleCard({
         ...(context ? { context } : {}),
@@ -440,7 +453,8 @@ window.MktforgeBattleCardText = (function () {
         jobTitle: f.jobTitle,
         industry: f.industry || null,
         today: new Date().toISOString().slice(0, 10)
-      });
+      }, st.controller.signal);
+      if (!pc.live(st, runId)) return;
 
       if (!res.ok || !payload || payload.status === 'error') {
         const message = payload && payload.message;
@@ -449,7 +463,7 @@ window.MktforgeBattleCardText = (function () {
       }
 
       // Recorded whether or not the module is on screen.
-      state.run = {
+      st.run = {
         companyUrl:    f.companyUrl,
         competitorUrl: f.competitorUrl,
         companyName:    payload.companyName || f.companyUrl,
@@ -461,19 +475,21 @@ window.MktforgeBattleCardText = (function () {
         brandColor:  payload.brandColor || FALLBACK_BRAND,
         boxes:       payload.boxes || {}
       };
-      state.status = 'Battle card ready.';
+      st.status = 'Battle card ready.';
 
-      if (mounted) {
-        renderResults(state.run);
-        el.status.textContent = state.status;
+      if (onScreen(st)) {
+        renderResults(st.run);
+        el.status.textContent = st.status;
         setPdfEnabled(true);
       }
     } catch (err) {
+      if (!pc.live(st, runId)) return;
       console.error('[Battle Card Generator]', err);
       fail('Could not reach the backend. Please try again.');
     } finally {
-      state.running = false;
-      Mktforge.reportActivity('battle-card-generator', state.error ? 'error' : 'idle');
+      if (!pc.end(st, runId)) return;     // cancelled by a company switch
+      st.running = false;
+      Mktforge.reportActivity('battle-card-generator', st.error ? 'error' : 'idle');
       updateGenerateEnabled();
     }
   }
@@ -525,6 +541,7 @@ window.MktforgeBattleCardText = (function () {
     }
 
     if (state.error) showError(state.error);
+    else if (state.note) showError(state.note);
   }
 
   /* My Company defaults and drop-down choices (assets/js/module-kit.js). */
@@ -542,6 +559,7 @@ window.MktforgeBattleCardText = (function () {
     id:     'battle-card-generator',
     label:  'Battle Card Generator',
     icon:   'swords',
+    companyAware: true,
     styles: 'modules/battle-card-generator/battle-card-generator.css',
 
     mount(container) {
@@ -566,6 +584,11 @@ window.MktforgeBattleCardText = (function () {
       el.form.addEventListener('submit', handleSubmit);
       el.pdf.addEventListener('click', handlePdf);
 
+      // Only the person's own typing clears a "Run stopped" note, not autofill.
+      const hold = (e) => { captureForm(); pc.hold(e && e.isTrusted ? undefined : state); };
+      container.addEventListener('input', hold);
+      container.addEventListener('change', hold);
+
       restore();
       updateGenerateEnabled();
       autofill();
@@ -573,6 +596,7 @@ window.MktforgeBattleCardText = (function () {
 
     unmount() {
       captureForm();
+      pc.hold(state);                   // keeps any "Run stopped" note
       mounted = false;
       // A run in flight is deliberately NOT aborted; it finishes into state.
       el = null;

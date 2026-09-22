@@ -109,16 +109,25 @@
   let cfg = {};
   let mounted = false;
 
-  /* Kept across navigation for the life of the page, not across a reload. */
-  const state = {
-    form:    { companyUrl: '', jobTitle1: '', jobTitle2: '', jobTitle3: '', industry: '' },
-    urlSeed: { seeded: false },   // My Company URL default, once per sign-in
-    run:     null,    // inputs + results of the last success (page and PDF)
-    lastKey: null,    // normalized inputs of `run`, for the duplicate guard
-    status:  '',
-    error:   '',
-    running: false
-  };
+  /* One per company (MktforgeKit.perCompany), kept across navigation for the
+     life of the page; typed input also survives a refresh. */
+  const pc = window.MktforgeKit.perCompany('marketing-opportunities', {
+    create: () => ({
+      form:    { companyUrl: '', jobTitle1: '', jobTitle2: '', jobTitle3: '', industry: '' },
+      urlSeed: { seeded: false },   // My Company URL default, once per company
+      run:     null,    // inputs + results of the last success (page and PDF)
+      lastKey: null,    // normalized inputs of `run`, for the duplicate guard
+      status:  '',
+      error:   '',
+      note:    '',
+      running: false
+    }),
+    held: ['form'],
+    snapshot: ['run', 'lastKey', 'status']
+  });
+  let state = pc.state;
+  pc.bind((st) => { state = st; });
+  const onScreen = (st) => mounted && st === state;
 
   /* ---------- helpers ---------- */
 
@@ -258,7 +267,7 @@
 
   /* ---------- request ---------- */
 
-  async function requestOpportunities(body) {
+  async function requestOpportunities(body, signal) {
     const headers = { 'Content-Type': 'application/json' };
 
     // Off by default: the Worker's CORS only allows Content-Type, so an
@@ -268,7 +277,7 @@
       if (token) headers.Authorization = `Bearer ${token}`;
     }
 
-    const res = await fetch(cfg.API_URL, { method: 'POST', headers, body: JSON.stringify(body) });
+    const res = await fetch(cfg.API_URL, { method: 'POST', headers, body: JSON.stringify(body), signal });
     const payload = await res.json().catch(() => null);
     return { res, payload };
   }
@@ -276,10 +285,11 @@
   /* ---------- submit ---------- */
 
   async function handleSubmit(e) {
+    const st = state;
     e.preventDefault();
-    if (state.running) return;
+    if (st.running) return;
     clearError();
-    state.error = '';
+    st.error = '';
 
     const f = readForm();
     const problem = validate(f);
@@ -292,7 +302,7 @@
     const jobTitles = [f.jobTitle1, f.jobTitle2, f.jobTitle3].filter(Boolean);
     const key = normalizeKey({ email, companyUrl: f.companyUrl, jobTitles, industry: f.industry });
 
-    if (state.lastKey && key === state.lastKey) {
+    if (st.lastKey && key === st.lastKey) {
       showError('Results for these inputs are already collected and shown below.');
       return;
     }
@@ -303,20 +313,22 @@
     }
 
     captureForm();
-    state.running = true;
+    const runId = pc.begin(st);
+    st.running = true;
     Mktforge.reportActivity('marketing-opportunities', 'running');
-    state.run = null;
-    state.lastKey = null;
-    state.status = 'Searching for channels… this can take a minute or two.';
+    st.run = null;
+    st.lastKey = null;
+    st.status = 'Searching for channels… this can take a minute or two.';
     setPdfEnabled(false);
     setAllBoxesLoading();
-    el.status.textContent = state.status;
+    el.status.textContent = st.status;
     updateSubmitEnabled();
 
     const fail = (message) => {
-      state.error = message;
-      state.status = '';
-      if (mounted) {
+      if (!pc.live(st, runId)) return;
+      st.error = message;
+      st.status = '';
+      if (onScreen(st)) {
         setAllBoxesPlaceholder();
         showError(message);
         el.status.textContent = '';
@@ -324,11 +336,12 @@
     };
 
     try {
-      const runningStatus = state.status;
+      const runningStatus = st.status;
       const context = await window.MktforgeKit.savedMaterials(cfg, { jobTitles },
-        (t) => { state.status = t; if (mounted) el.status.textContent = t; });
-      state.status = runningStatus;
-      if (mounted) el.status.textContent = runningStatus;
+        (t) => { st.status = t; if (onScreen(st)) el.status.textContent = t; });
+      if (!pc.live(st, runId)) return;
+      st.status = runningStatus;
+      if (onScreen(st)) el.status.textContent = runningStatus;
 
       const { res, payload } = await requestOpportunities({
         ...(context ? { context } : {}),
@@ -337,7 +350,8 @@
         jobTitles,
         industry: f.industry || null,
         today: new Date().toISOString().slice(0, 10)
-      });
+      }, st.controller.signal);
+      if (!pc.live(st, runId)) return;
 
       if (!res.ok || !payload || payload.status === 'error') {
         const message = payload && payload.message;
@@ -351,7 +365,7 @@
         : buildAllResultsFallback(results);
 
       // Recorded whether or not the module is on screen.
-      state.run = {
+      st.run = {
         companyUrl:  f.companyUrl,
         companyName: payload.companyName || null,
         jobTitles,
@@ -359,20 +373,22 @@
         results,
         allResults
       };
-      state.lastKey = key;
-      state.status = 'Search complete.';
+      st.lastKey = key;
+      st.status = 'Search complete.';
 
-      if (mounted) {
-        renderResults(state.run);
-        el.status.textContent = state.status;
+      if (onScreen(st)) {
+        renderResults(st.run);
+        el.status.textContent = st.status;
         setPdfEnabled(true);
       }
     } catch (err) {
+      if (!pc.live(st, runId)) return;
       console.error('[Marketing Opportunities]', err);
       fail('Could not reach the backend. Please try again.');
     } finally {
-      state.running = false;
-      Mktforge.reportActivity('marketing-opportunities', state.error ? 'error' : 'idle');
+      if (!pc.end(st, runId)) return;     // cancelled by a company switch
+      st.running = false;
+      Mktforge.reportActivity('marketing-opportunities', st.error ? 'error' : 'idle');
       updateSubmitEnabled();
     }
   }
@@ -427,6 +443,7 @@
     }
 
     if (state.error) showError(state.error);
+    else if (state.note) showError(state.note);
   }
 
   /* My Company defaults and drop-down choices (assets/js/module-kit.js). */
@@ -445,6 +462,7 @@
     id:     'marketing-opportunities',
     label:  'Marketing Opportunities',
     icon:   'megaphone',
+    companyAware: true,
     styles: 'modules/marketing-opportunities/marketing-opportunities.css',
 
     mount(container) {
@@ -468,6 +486,11 @@
       el.form.addEventListener('submit', handleSubmit);
       el.pdf.addEventListener('click', handlePdf);
 
+      // Only the person's own typing clears a "Run stopped" note, not autofill.
+      const hold = (e) => { captureForm(); pc.hold(e && e.isTrusted ? undefined : state); };
+      container.addEventListener('input', hold);
+      container.addEventListener('change', hold);
+
       restore();
       updateSubmitEnabled();
       autofill();
@@ -475,6 +498,7 @@
 
     unmount() {
       captureForm();
+      pc.hold(state);                   // keeps any "Run stopped" note
       mounted = false;
       // A run in flight is deliberately NOT aborted; it finishes into state.
       el = null;

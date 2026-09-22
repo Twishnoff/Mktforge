@@ -62,7 +62,9 @@
        onCompanies(fn)                 -> unsubscribe; fn(list) now and on every change, any tab
        createCompany()                 -> Promise<companyId>; rejects code 'company-limit'
        switchCompany(id)               -> Promise; makes it active in this tab
-       deleteCompany(id)               -> Promise; marks it deleting, then removes its data.
+       retireCompany(id)               -> Promise; marks it deleting (hidden, no more saves)
+       purgeDeleted()                  -> Promise; removes the data of companies marked deleting
+       deleteCompany(id)               -> Promise; retireCompany, then removes its data.
                                           Rejects code 'last-company'. Does NOT switch away:
                                           the caller moves the tab first (see oldestCompanyId).
        oldestCompanyId(exceptId)       -> Promise<companyId|null>
@@ -1472,6 +1474,14 @@ window.MktforgeData = (() => {
      company first. If the tab closes part-way, start() finishes the job at
      the next sign-in. */
   async function deleteCompany(id) {
+    await retireCompany(id);
+    await company(id)._purge();
+    handles.delete(id);
+  }
+
+  /* Step one of a delete, the only part that must finish before the tab
+     moves on: hidden, off the account's lists, and closed to further saves. */
+  async function retireCompany(id) {
     if (isLocal()) {
       const r = rootRead();
       const ids = r.companyIds || {};
@@ -1504,9 +1514,9 @@ window.MktforgeData = (() => {
     }
     handles.delete(id);
     notifyCompanies();
-    await company(id)._purge();
-    handles.delete(id);
   }
+
+  function purgeDeleted() { return resumeDeletes(); }
 
   async function resumeDeletes() {
     try {
@@ -1616,6 +1626,15 @@ window.MktforgeData = (() => {
   /* Held text and anything else a tab keeps per company must not outlive a
      sign-out on a shared computer. auth.js calls this before leaving. */
   function clearTabState() {
+    // Runs this tab had going are cut off by signing out: mark them so the
+    // module says "This run was interrupted" on the way back in.
+    try {
+      const tab = sessionStorage.getItem('mktforge.tab');
+      Object.keys(localStorage).filter((k) => k.startsWith('mktforge.run.')).forEach((k) => {
+        const f = JSON.parse(localStorage.getItem(k) || 'null');
+        if (f && tab && f.tab === tab) localStorage.setItem(k, JSON.stringify({ ...f, beat: 0 }));
+      });
+    } catch (e) { /* nothing to mark */ }
     try {
       Object.keys(sessionStorage).filter((k) => k.startsWith('mktforge.')).forEach((k) => sessionStorage.removeItem(k));
     } catch (e) { /* nothing to clear */ }
@@ -1624,7 +1643,7 @@ window.MktforgeData = (() => {
   return {
     // companies
     start, scope, company, listCompanies, onCompanies, createCompany, switchCompany,
-    deleteCompany, oldestCompanyId, companyDisplayName, clearTabState, settle,
+    deleteCompany, retireCompany, purgeDeleted, oldestCompanyId, companyDisplayName, clearTabState, settle,
     get busy() { return busy(); },
     get activeCompanyId() { return activeId; },
     MAX_COMPANIES,

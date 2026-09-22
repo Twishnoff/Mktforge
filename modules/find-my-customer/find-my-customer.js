@@ -87,17 +87,26 @@
   let unsubProfile = null;
 
   /* Everything worth keeping when the user navigates to another module and
-     comes back. Lives for the life of the page, not across a reload. */
-  const state = {
-    form:     { url: '' },
-    urlSeed:  { seeded: false },   // My Company URL default, once per sign-in
-    data:     null,     // last successful payload, as rendered
-    runUrl:   '',       // the URL exactly as submitted for `data` (PDF header)
-    lastUrl:  null,     // normalized URL of `data`, for the duplicate guard
-    status:   '',
-    error:    '',
-    running:  false
-  };
+     comes back — one per company (MktforgeKit.perCompany). Lives for the life
+     of the page; typed input also survives a refresh. */
+  const pc = window.MktforgeKit.perCompany('find-my-customer', {
+    create: () => ({
+      form:     { url: '' },
+      urlSeed:  { seeded: false },   // My Company URL default, once per company
+      data:     null,     // last successful payload, as rendered
+      runUrl:   '',       // the URL exactly as submitted for `data` (PDF header)
+      lastUrl:  null,     // normalized URL of `data`, for the duplicate guard
+      status:   '',
+      error:    '',
+      note:     '',
+      running:  false
+    }),
+    held: ['form'],
+    snapshot: ['data', 'runUrl', 'lastUrl', 'status']
+  });
+  let state = pc.state;
+  pc.bind((st) => { state = st; });
+  const onScreen = (st) => mounted && st === state;
 
   /* ---------- helpers ---------- */
 
@@ -261,13 +270,14 @@
     trackBusy = true;
     boxes.jobTitles.querySelectorAll('[data-track]').forEach((b) => { b.disabled = true; });
     try {
-      const profile = await window.MktforgeData.getProfile();
+      const D = await window.MktforgeData.scope();      // the company on screen now
+      const profile = await D.getProfile();
       const list = profile.targetTitles || [];
       const tracked = list.some((t) => sameTitle(t, title));
       profile.targetTitles = tracked
         ? list.filter((t) => !sameTitle(t, title))
         : [...list, String(title).trim()];
-      const saved = await window.MktforgeData.saveProfile(profile);
+      const saved = await D.saveProfile(profile);
       trackBusy = false;
       paintTrackButtons(saved.targetTitles);
     } catch (err) {
@@ -359,13 +369,14 @@
     compBusy = true;
     boxes.competitorsToWatch.querySelectorAll('[data-comp]').forEach((b) => { b.disabled = true; });
     try {
-      const profile = await window.MktforgeData.getProfile();
+      const D = await window.MktforgeData.scope();      // the company on screen now
+      const profile = await D.getProfile();
       const list = profile.competitors || [];
       const tracked = list.some((t) => sameCompetitor(t, row.url));
       profile.competitors = tracked
         ? list.filter((t) => !sameCompetitor(t, row.url))
         : [...list, hostOf(row.url) || String(row.url).trim()];
-      const saved = await window.MktforgeData.saveProfile(profile);
+      const saved = await D.saveProfile(profile);
       compBusy = false;
       paintCompetitorButtons(saved.competitors);
     } catch (err) {
@@ -390,7 +401,7 @@
 
   /* ---------- request ---------- */
 
-  async function requestDashboard(payload) {
+  async function requestDashboard(payload, signal) {
     const headers = { 'Content-Type': 'application/json' };
 
     // Off by default: the Customer Intelligence Worker predates Mktforge's
@@ -405,7 +416,8 @@
     const res = await fetch(cfg.API_URL, {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal
     });
     const body = await res.json().catch(() => null);
     return { res, body };
@@ -414,10 +426,11 @@
   /* ---------- submit ---------- */
 
   async function handleSubmit(e) {
+    const st = state;
     e.preventDefault();
-    if (state.running) return;
+    if (st.running) return;
     clearError();
-    state.error = '';
+    st.error = '';
 
     const email  = window.MktforgeKit.accountEmail();
     const rawUrl = el.url.value.trim();
@@ -431,7 +444,7 @@
     }
 
     const normalized = normalizeUrl(rawUrl);
-    if (state.lastUrl && normalized === state.lastUrl) {
+    if (st.lastUrl && normalized === st.lastUrl) {
       showError('Customer data for this company is already collected and shown below.');
       return;
     }
@@ -442,20 +455,22 @@
     }
 
     captureForm();
-    state.running = true;
+    const runId = pc.begin(st);
+    st.running = true;
     Mktforge.reportActivity('find-my-customer', 'running');
-    state.data = null;
-    state.lastUrl = null;
-    state.status = 'Collecting data… this can take a minute.';
+    st.data = null;
+    st.lastUrl = null;
+    st.status = 'Collecting data… this can take a minute.';
     el.submit.disabled = true;
     setPdfEnabled(false);
     setAllBoxesLoading();
-    el.status.textContent = state.status;
+    el.status.textContent = st.status;
 
     const fail = (message) => {
-      state.error = message;
-      state.status = '';
-      if (mounted) {
+      if (!pc.live(st, runId)) return;
+      st.error = message;
+      st.status = '';
+      if (onScreen(st)) {
         setAllBoxesPlaceholder();
         showError(message);
         el.status.textContent = '';
@@ -463,14 +478,14 @@
     };
 
     try {
-      const runningStatus = state.status;
+      const runningStatus = st.status;
 
       // My Company's Target Job Titles steer which saved materials are sent
       // in full, and its Competitors go with the request so the agent can
       // check them for relevance too. Neither is required to run.
       let profile = null;
       try {
-        profile = window.MktforgeData ? await window.MktforgeData.getProfile() : null;
+        profile = window.MktforgeData ? await window.MktforgeData.company(st._cid).getProfile() : null;
       } catch (err) {
         console.warn('[Find My Customer] profile unavailable for the request', err);
       }
@@ -478,16 +493,18 @@
 
       const context = await window.MktforgeKit.savedMaterials(cfg,
         { jobTitles: (profile && profile.targetTitles) || [] },
-        (t) => { state.status = t; if (mounted) el.status.textContent = t; });
-      state.status = runningStatus;
-      if (mounted) el.status.textContent = runningStatus;
+        (t) => { st.status = t; if (onScreen(st)) el.status.textContent = t; });
+      if (!pc.live(st, runId)) return;
+      st.status = runningStatus;
+      if (onScreen(st)) el.status.textContent = runningStatus;
 
       const { res, body } = await requestDashboard({
         companyUrl: rawUrl,
         email,
         ...(competitorUrls.length ? { competitorUrls } : {}),
         ...(context ? { context } : {})
-      });
+      }, st.controller.signal);
+      if (!pc.live(st, runId)) return;
 
       if (!res.ok || !body || body.status === 'error') {
         const message = body && body.message;
@@ -497,29 +514,31 @@
 
       // Recorded whether or not this module is on screen — a run started
       // before navigating away is painted on the way back in.
-      state.data = {
+      st.data = {
         customerList: body.customerList || null,
         jobTitles:    body.jobTitles || [],
         painPoints:   body.painPoints || [],
         topNeeds:     body.topNeeds || [],
         competitorsToWatch: readCompetitors(body.competitorsToWatch, rawUrl)
       };
-      state.runUrl  = rawUrl;
-      state.lastUrl = normalized;
-      state.status  = 'Research complete.';
+      st.runUrl  = rawUrl;
+      st.lastUrl = normalized;
+      st.status  = 'Research complete.';
 
-      if (mounted) {
-        renderDashboard(state.data);
-        el.status.textContent = state.status;
+      if (onScreen(st)) {
+        renderDashboard(st.data);
+        el.status.textContent = st.status;
         setPdfEnabled(true);
       }
     } catch (err) {
+      if (!pc.live(st, runId)) return;
       console.error('[Find My Customer]', err);
       fail('Could not reach the customer research service. Please try again.');
     } finally {
-      state.running = false;
-      Mktforge.reportActivity('find-my-customer', state.error ? 'error' : 'idle');
-      if (mounted) el.submit.disabled = false;
+      if (!pc.end(st, runId)) return;     // cancelled by a company switch
+      st.running = false;
+      Mktforge.reportActivity('find-my-customer', st.error ? 'error' : 'idle');
+      if (onScreen(st)) el.submit.disabled = false;
     }
   }
 
@@ -569,6 +588,7 @@
     }
 
     if (state.error) showError(state.error);
+    else if (state.note) showError(state.note);
   }
 
   /* Company URL defaults to My Company's (assets/js/module-kit.js). */
@@ -583,6 +603,7 @@
     id:     'find-my-customer',
     label:  'Find My Customer',
     icon:   'crosshair',
+    companyAware: true,
     styles: 'modules/find-my-customer/find-my-customer.css',
 
     mount(container) {
@@ -610,12 +631,18 @@
         });
       }
 
+      // Only the person's own typing clears a "Run stopped" note, not autofill.
+      const hold = (e) => { captureForm(); pc.hold(e && e.isTrusted ? undefined : state); };
+      container.addEventListener('input', hold);
+      container.addEventListener('change', hold);
+
       restore();
       autofill();
     },
 
     unmount() {
       captureForm();
+      pc.hold(state);                   // keeps any "Run stopped" note
       mounted = false;
       if (unsubProfile) { unsubProfile(); unsubProfile = null; }
       // A run in flight is deliberately NOT aborted; see Persona Builder.

@@ -29,6 +29,22 @@
 
 .mc__dek { margin: 0; max-width: 64ch; color: var(--ink-soft); }
 
+.mc__title-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin: 0 0 10px; }
+.mc__title-row .mc__title { margin: 0; }
+
+.mc__delete-company {
+  padding: 7px 14px;
+  border: 1px solid var(--mc-crit);
+  border-radius: var(--radius);
+  background: var(--mc-crit);
+  color: #fff;
+  font: 500 13px var(--font-body);
+  cursor: pointer;
+}
+.mc__delete-company:hover { background: #8F2E19; border-color: #8F2E19; }
+.mc__delete-company:disabled { opacity: .6; cursor: progress; }
+.mc__delete-company[hidden] { display: none; }
+
 .mc__h2 {
   margin: 0 0 14px;
   font-family: var(--font-display);

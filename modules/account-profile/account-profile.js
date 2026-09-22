@@ -255,6 +255,7 @@
     icon:   'user',
     styles: 'modules/account-profile/account-profile.css',
     hidden: true,              // reached from the management bar's account menu
+    companyAware: true,        // the account's own picture: the same in every company
 
     mount(container) {
       container.innerHTML = shell();

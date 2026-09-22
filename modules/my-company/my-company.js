@@ -93,17 +93,30 @@
 
   /* ---------- state that outlives mount/unmount ---------- */
 
-  const state = {
-    loaded: false,
-    loadError: '',
-    profile: null,         // last saved profile
-    editing: new Set(),    // keys a person opened with Edit
-    drafts: {},            // unsaved input per key, kept across navigation
-    files: null,
-    filesError: '',
-    renaming: null,        // { id, value, error, saving } while a file name is being edited
-    uploads: []            // import status lines
-  };
+  /* One per company (MktforgeKit.perCompany). Unsaved edits (drafts and
+     which rows are open) also survive a refresh. */
+  const pc = window.MktforgeKit.perCompany('my-company', {
+    create: () => ({
+      loaded: false,
+      loadError: '',
+      profile: null,         // last saved profile
+      editing: new Set(),    // keys a person opened with Edit
+      drafts: {},            // unsaved input per key, kept across navigation
+      files: null,
+      filesError: '',
+      renaming: null,        // { id, value, error, saving } while a file name is being edited
+      uploads: [],           // import status lines
+      pumping: false
+    }),
+    held: ['drafts', 'editing']
+  });
+  let state = pc.state;
+  pc.bind((st) => { state = st; });
+  const onScreen = (st) => mounted && st === state;
+  const here = () => Data().company(state._cid);   // the company on screen now
+
+  const DELETE_WARNING = 'WARNING: Deleting this company cannot be undone. By deleting this company you will lose all data and files created or uploaded while using this company. Are you sure you wish to do this?';
+  let unsubCompanies = null;
 
   let root = null;
   let mounted = false;
@@ -117,7 +130,10 @@
     return `
       <div class="mc">
         <header class="mc__head">
-          <h1 class="mc__title">My Company</h1>
+          <div class="mc__title-row">
+            <h1 class="mc__title">My Company</h1>
+            <button type="button" class="mc__delete-company" data-el="delete-company" hidden>Delete This Company</button>
+          </div>
           <p class="mc__dek">Provide what information you have about your business below. It’s ok if you don’t have much, your profile will get fleshed out as time goes on.</p>
         </header>
 
@@ -349,7 +365,6 @@
      problems stay until dismissed. */
 
   let uploadSeq = 0;
-  let pumping = false;
 
   function renderUploads() {
     if (!mounted) return;
@@ -378,27 +393,31 @@
       state.uploads.push(u);
     });
     renderUploads();
-    pump();
+    pump(state);
   }
 
-  async function pump() {
-    if (pumping) return;
-    pumping = true;
+  /* Imports belong to the company they were dropped into, and keep going
+     into it even if the person switches company part-way (plan D3). */
+  async function pump(st) {
+    if (st.pumping) return;
+    st.pumping = true;
+    const D = Data().company(st._cid);
+    const paint = () => { if (onScreen(st)) renderUploads(); };
     try {
       for (;;) {
-        const u = state.uploads.find((x) => x.status === 'queued');
+        const u = st.uploads.find((x) => x.status === 'queued');
         if (!u) break;
         try {
-          const res = await Data().importFile(u.file, {
-            onStage: (stage) => { u.status = stage; renderUploads(); }
+          const res = await D.importFile(u.file, {
+            onStage: (stage) => { u.status = stage; paint(); }
           });
           u.status = 'done';
           u.note = res.empty ? 'Imported — no readable text found' : res.truncated ? 'Imported — only the first part could be read' : 'Imported';
           if (res.name !== u.name.replace(/\.[^.]+$/, '')) u.note += ` as “${res.name}${res.ext}”`;
           const id = u.id;
           setTimeout(() => {
-            state.uploads = state.uploads.filter((x) => x.id !== id);
-            renderUploads();
+            st.uploads = st.uploads.filter((x) => x.id !== id);
+            paint();
           }, 5000);
         } catch (err) {
           console.error('[My Company] import failed', err);
@@ -406,10 +425,10 @@
           u.message = err && err.code ? err.message : 'Couldn’t import this file. Check your connection and try again.';
         }
         u.file = null;
-        renderUploads();
+        paint();
       }
     } finally {
-      pumping = false;
+      st.pumping = false;
     }
   }
 
@@ -518,17 +537,19 @@
 
     r.saving = true;
     renderFiles();
+    const st = state;
     try {
-      await Data().renameFile(r.id, name);
+      await Data().company(st._cid).renameFile(r.id, name);
       if (f) f.name = name;
-      if (state.renaming === r) state.renaming = null;
+      r.saving = false;
+      if (st.renaming === r) st.renaming = null;
     } catch (ex) {
       console.error('[My Company] rename failed', ex);
       r.saving = false;
       r.error = ex && ex.code === 'duplicate' ? RENAME_DUPLICATE
               : (ex && ex.code ? ex.message : 'Couldn’t rename that file. Please try again.');
     }
-    if (mounted) renderFiles();
+    if (onScreen(st)) renderFiles();
   }
 
   function handleFilesInput(e) {
@@ -758,14 +779,16 @@
     const btn = q('[data-el="save"]');
     btn.disabled = true;
     btn.textContent = 'Saving…';
+    const st = state;
     try {
-      state.profile = await Data().saveProfile(next);
-      state.editing.clear();
-      state.drafts = {};
-      if (mounted) renderRows({ flash: true });
+      st.profile = await Data().company(st._cid).saveProfile(next);
+      st.editing.clear();
+      st.drafts = {};
+      pc.hold(st);
+      if (onScreen(st)) renderRows({ flash: true });
     } catch (ex) {
       console.error('[My Company] save failed', ex);
-      if (mounted) {
+      if (onScreen(st)) {
         // A duplicate company name, or a company deleted in another tab,
         // says so; anything else is most likely the connection.
         err.textContent = ex && (ex.code === 'duplicate-company' || ex.code === 'company-gone')
@@ -785,15 +808,16 @@
   const pendingDelete = new Map();
 
   async function loadFiles() {
-    state.filesError = '';
-    if (mounted && state.files === null) renderFiles();
+    const st = state;
+    st.filesError = '';
+    if (onScreen(st) && st.files === null) renderFiles();
     try {
-      state.files = await Data().listFiles();
+      st.files = await Data().company(st._cid).listFiles();
     } catch (ex) {
       console.error('[My Company] could not list files', ex);
-      state.filesError = 'Couldn’t load your saved resources.';
+      st.filesError = 'Couldn’t load your saved resources.';
     }
-    if (mounted) renderFiles();
+    if (onScreen(st)) renderFiles();
   }
 
   async function handleFilesClick(e) {
@@ -807,7 +831,7 @@
       open.disabled = true;
       try {
         const f = (state.files || []).find((x) => x.id === open.dataset.open);
-        await Data().openFile(open.dataset.open, { viewable: !f || Data().isViewable(f.mimeType) });
+        await here().openFile(open.dataset.open, { viewable: !f || Data().isViewable(f.mimeType) });
       } catch (ex) {
         console.error('[My Company] open failed', ex);
         document.dispatchEvent(new CustomEvent('mktforge:notify',
@@ -838,7 +862,7 @@
     del.disabled = true;
     del.textContent = 'Deleting…';
     try {
-      await Data().deleteFile(id);          // onFiles listener refreshes the table
+      await here().deleteFile(id);          // onFiles listener refreshes the table
     } catch (ex) {
       console.error('[My Company] delete failed', ex);
       document.dispatchEvent(new CustomEvent('mktforge:notify',
@@ -850,16 +874,33 @@
   /* ---------- load ---------- */
 
   async function load() {
-    state.loadError = '';
-    if (mounted) renderRows();
+    const st = state;
+    st.loadError = '';
+    if (onScreen(st)) renderRows();
     try {
-      state.profile = await Data().getProfile();
-      state.loaded = true;
+      st.profile = await Data().company(st._cid).getProfile();
+      st.loaded = true;
     } catch (ex) {
       console.error('[My Company] could not load profile', ex);
-      state.loadError = 'Couldn’t load your profile.';
+      st.loadError = 'Couldn’t load your profile.';
     }
-    if (mounted) renderRows();
+    if (onScreen(st)) renderRows();
+  }
+
+  /* ---------- Delete This Company ---------- */
+
+  async function handleDeleteCompany() {
+    const ok = await Mktforge.confirm({
+      message: DELETE_WARNING,
+      cancelLabel: 'No, Don’t Delete',
+      confirmLabel: 'Yes, Delete',
+      danger: true
+    });
+    if (!ok) return;
+    const btn = q('[data-el="delete-company"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+    const done = await Mktforge.deleteActiveCompany();
+    if (!done && btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Delete This Company'; }
   }
 
   /* ---------- module ---------- */
@@ -869,6 +910,7 @@
     label:  'My Company',
     icon:   'factory',
     styles: 'modules/my-company/my-company.css',
+    companyAware: true,
 
     mount(container) {
       mounted = true;
@@ -876,6 +918,12 @@
       root = container.firstElementChild;
 
       q('[data-el="form"]').addEventListener('submit', handleSave);
+      q('[data-el="form"]').addEventListener('input', () => pc.hold());
+      q('[data-el="rows"]').addEventListener('click', () => setTimeout(() => pc.hold(), 0));
+      const delBtn = q('[data-el="delete-company"]');
+      delBtn.addEventListener('click', handleDeleteCompany);
+      // Only when the account has another company to move to.
+      unsubCompanies = Data().onCompanies((list) => { delBtn.hidden = list.length <= 1; });
       q('[data-el="rows"]').addEventListener('click', (e) => {
         const btn = e.target.closest('[data-edit]');
         if (!btn) return;
@@ -896,10 +944,11 @@
       if (state.loaded) {
         // Another module may have changed the profile (e.g. Find My Customer
         // tracking a title); the data layer's copy is the current one.
-        Data().getProfile().then((p) => {
-          state.profile = p;
-          if (mounted) renderRows();
-        }).catch(() => { if (mounted) renderRows(); });
+        const st = state;
+        Data().company(st._cid).getProfile().then((p) => {
+          st.profile = p;
+          if (onScreen(st)) renderRows();
+        }).catch(() => { if (onScreen(st)) renderRows(); });
         renderRows();
       } else {
         load();
@@ -918,6 +967,8 @@
       pendingDelete.clear();
       if (unsubFiles) { unsubFiles(); unsubFiles = null; }
       if (unsubProfile) { unsubProfile(); unsubProfile = null; }
+      if (unsubCompanies) { unsubCompanies(); unsubCompanies = null; }
+      pc.hold(state);
       root = null;
     }
   });
