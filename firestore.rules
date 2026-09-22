@@ -1,76 +1,136 @@
 rules_version = '2';
 
-// Mktforge — Cloud Firestore security rules
+// Mktforge — Cloud Firestore security rules (multi-company)
 // Paste into: Firebase console → Firestore Database → Rules → Publish.
 //
 // Every record lives under users/{uid}. Only the signed-in owner of that uid,
 // with a verified email address, can read or write it. Everything else is
 // denied by default.
+//
+// The account record (users/{uid}) holds account-level things: email, profile
+// picture, last company, and the lists used for the 10-company limit and the
+// unique-name check. Each company's data lives in its own container under
+// users/{uid}/companies/{companyId}.
+//
+// A company being deleted is marked status 'deleting' first. From then on
+// nothing can be created or changed inside it — only deleted — so a second
+// tab still working on it cannot quietly bring it back.
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    match /users/{uid} {
-      allow read, write: if isOwner(uid);
-
-      match /files/{fileId} {
-        allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid)
-          && request.resource.data.name is string
-          && request.resource.data.name.size() <= 200
-          && request.resource.data.chunks is int
-          && request.resource.data.chunks <= 25
-          && (!('textChunks' in request.resource.data)
-              || (request.resource.data.textChunks is int && request.resource.data.textChunks <= 5))
-          && (!('digest' in request.resource.data)
-              || (request.resource.data.digest is string
-                  && request.resource.data.digest.size() <= 20000));
-
-        // Text pulled out of the file for Mktforge's agents.
-        match /text/{partId} {
-          allow read, delete: if isOwner(uid);
-          allow create, update: if isOwner(uid)
-            && request.resource.data.data is string
-            && request.resource.data.data.size() <= 950 * 1024;
-        }
-
-        match /chunks/{chunkId} {
-          allow read, delete: if isOwner(uid);
-          allow create, update: if isOwner(uid)
-            && request.resource.data.data is bytes
-            && request.resource.data.data.size() <= 750 * 1024;
-        }
-      }
-    }
-
-    // Market Tracker: one document per tracked job title or competitor.
-    match /users/{uid}/tracker/{boxId} {
-      allow read, delete: if isOwner(uid);
-      allow create, update: if isOwner(uid)
-        && request.resource.data.title is string
-        && request.resource.data.title.size() <= 200
-        && request.resource.data.rows is list
-        && request.resource.data.rows.size() <= 50;
-    }
-
-    // Market Tracker: what the agent has already seen on a competitor's site
-    // and already reported, so a refresh only shows what is new. Outlives the
-    // box; removed when the URL leaves My Company.
-    match /users/{uid}/competitorLedger/{ledgerId} {
-      allow read, delete: if isOwner(uid);
-      allow create, update: if isOwner(uid)
-        && request.resource.data.url is string
-        && request.resource.data.url.size() <= 500
-        && request.resource.data.inventory is list
-        && request.resource.data.inventory.size() <= 2000
-        && request.resource.data.surfaced is list
-        && request.resource.data.surfaced.size() <= 2000;
-    }
 
     function isOwner(uid) {
       return request.auth != null
         && request.auth.uid == uid
         && request.auth.token.email_verified == true;
+    }
+
+    function companyPath(uid, cid) {
+      return /databases/$(database)/documents/users/$(uid)/companies/$(cid);
+    }
+
+    // True only while the company exists and is not being deleted.
+    function companyActive(uid, cid) {
+      return exists(companyPath(uid, cid))
+        && get(companyPath(uid, cid)).data.status == 'active';
+    }
+
+    // ---------- the account ----------
+
+    // Company data that used to sit on the account record. It now lives in
+    // each company; a tab still running the old app must not write it here,
+    // where it would be silently lost.
+    function legacyFields() { return ['profile', 'pdfCounters', 'buildPositioning']; }
+
+    match /users/{uid} {
+      allow read, delete: if isOwner(uid);
+      allow create: if isOwner(uid)
+        && !request.resource.data.keys().hasAny(legacyFields());
+      allow update: if isOwner(uid)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(legacyFields());
+
+      // Pre-companies data. The one-time migration copies it into the first
+      // company and then removes it (with admin access, not through these
+      // rules). Until then the app can read it (to check it's there) but
+      // nothing can change it, so it stays exactly what was copied.
+      match /files/{fileId} {
+        allow read: if isOwner(uid);
+        match /text/{partId}   { allow read: if isOwner(uid); }
+        match /chunks/{chunkId} { allow read: if isOwner(uid); }
+      }
+      match /tracker/{boxId}           { allow read: if isOwner(uid); }
+      match /competitorLedger/{id}     { allow read: if isOwner(uid); }
+
+      // ---------- one company ----------
+
+      match /companies/{cid} {
+        allow read, delete: if isOwner(uid);
+
+        // Created in the same transaction that lists it on the account, and
+        // only while the account holds 10 or fewer.
+        allow create: if isOwner(uid)
+          && request.resource.data.status == 'active'
+          && getAfter(/databases/$(database)/documents/users/$(uid)).data.companyIds.keys().hasAll([cid])
+          && getAfter(/databases/$(database)/documents/users/$(uid)).data.companyIds.size() <= 10;
+
+        // Changes only while active; the one allowed change of status is to 'deleting'.
+        allow update: if isOwner(uid)
+          && resource.data.status == 'active'
+          && request.resource.data.status in ['active', 'deleting'];
+
+        match /files/{fileId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid) && companyActive(uid, cid)
+            && request.resource.data.name is string
+            && request.resource.data.name.size() <= 200
+            && request.resource.data.chunks is int
+            && request.resource.data.chunks <= 25
+            && (!('textChunks' in request.resource.data)
+                || (request.resource.data.textChunks is int && request.resource.data.textChunks <= 5))
+            && (!('digest' in request.resource.data)
+                || (request.resource.data.digest is string
+                    && request.resource.data.digest.size() <= 20000));
+
+          // Text pulled out of the file for Mktforge's agents.
+          match /text/{partId} {
+            allow read, delete: if isOwner(uid);
+            allow create, update: if isOwner(uid) && companyActive(uid, cid)
+              && request.resource.data.data is string
+              && request.resource.data.data.size() <= 950 * 1024;
+          }
+
+          match /chunks/{chunkId} {
+            allow read, delete: if isOwner(uid);
+            allow create, update: if isOwner(uid) && companyActive(uid, cid)
+              && request.resource.data.data is bytes
+              && request.resource.data.data.size() <= 750 * 1024;
+          }
+        }
+
+        // Market Tracker: one document per tracked job title or competitor.
+        match /tracker/{boxId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid) && companyActive(uid, cid)
+            && request.resource.data.title is string
+            && request.resource.data.title.size() <= 200
+            && request.resource.data.rows is list
+            && request.resource.data.rows.size() <= 50;
+        }
+
+        // Market Tracker: what the agent has already seen and reported, so a
+        // refresh only shows what is new. Removed when the URL or title leaves
+        // that company's My Company.
+        match /competitorLedger/{ledgerId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid) && companyActive(uid, cid)
+            && request.resource.data.url is string
+            && request.resource.data.url.size() <= 500
+            && request.resource.data.inventory is list
+            && request.resource.data.inventory.size() <= 2000
+            && request.resource.data.surfaced is list
+            && request.resource.data.surfaced.size() <= 2000;
+        }
+      }
     }
   }
 }

@@ -1,21 +1,69 @@
-Mktforge — Links into a module land at its top
-==============================================
+Mktforge — Multi-company, Session 1: data layer, rules, migration
+==================================================================
 
-UPLOAD ONLY  assets/js/app.js
-             (open the assets/js folder first, then upload)
+DON'T UPLOAD YET unless you've decided to go live with this step on its own
+(see "Going live" below). Nothing here shows on screen: there is no company
+dropdown until Session 2.
 
-No Worker deploy. After uploading, hard-refresh (Ctrl+Shift+R) before checking.
+FILES IN THIS UPDATE
+
+  assets/js/data.js                      rewritten: every company has its own container
+  assets/js/auth.js                      one change: Sign Out clears the tab's held text
+  firestore.rules                        new rules for company containers
+  tools/migrate-companies/migrate.js     one-time move of existing data (run on your PC)
+  tools/migrate-companies/package.json
+  tools/migrate-companies/README.md      how to run it, step by step
+
+No Worker deploy. The Workers never read or write Firestore.
 
 WHAT CHANGED
 
-  Nav-bar buttons — unchanged: they take you back to where you left off in
-  that module. Clicking the button for the module you're already on leaves
-  you where you are.
+  Data now lives in users/{uid}/companies/{companyId}/... instead of directly
+  on the account. The account keeps only account things: email, profile
+  picture, the company to open next time, and the lists behind the 10-company
+  limit and the unique-name check.
 
-  Everything else now lands at the TOP of the module:
-    - the Mktforge logo (also when you're already on My Company)
-    - Manage Profile in the account menu
-    - links inside a module (e.g. Draft Messaging's "go to Build Positioning")
-    - a typed or shared URL, and the browser's back/forward buttons
+  The rest of the app keeps working unchanged on top of this, with one company
+  per account. The first time a tab touches data, it picks its company: the
+  one it was on (refresh), else the account's last company, else the oldest.
+  A brand-new account gets its first company automatically.
 
-  Before, all of these put you back wherever you'd last scrolled to.
+  Built in for later sessions: add / switch / delete company, the unique-name
+  and 10-company checks (both in transactions, so two tabs can't beat them),
+  last-company tracking, and a "company switched" signal that is separate
+  from a profile change. That separation is the Market Tracker fix: switching
+  can no longer look like competitors being removed.
+
+  The rules refuse any write into a company that's being deleted, and make
+  the old pre-company data read-only, so nothing can change it between the
+  copy and the cleanup.
+
+TESTED HERE
+
+  - The data layer, in the real app (preview mode), 21 checks: old data became
+    the first company, switching, handles keeping their company after a
+    switch, duplicate names, ordering, the 10 limit, delete, refresh, two tabs,
+    sign-out then sign-in, and My Company still rendering.
+  - The migration script, 40 checks, including: a repeat copy after go-live
+    never overwrites or deletes work done in the new app; a half-finished
+    cleanup can't be undone by copy; a company deleted in the app isn't
+    brought back.
+  - An independent review of all three files; every finding is fixed.
+
+NOT TESTED HERE
+
+  The rules. The Firestore emulator couldn't be downloaded in my workspace.
+  Before publishing, check them in the Firebase console's Rules Playground
+  (Firestore → Rules → Rules Playground), signed in as a test uid with
+  email_verified = true:
+    1. get    users/<uid>/companies/c1                     → allowed
+    2. get    users/<other uid>/companies/c1               → denied
+    3. update users/<uid> with field lastCompanyId         → allowed
+    4. update users/<uid> with field profile               → denied
+    5. create users/<uid>/files/x                          → denied (old path)
+
+GOING LIVE (when you decide)
+
+  Follow tools/migrate-companies/README.md: plan → copy → verify → publish
+  rules + upload app files together → cleanup days later. Until cleanup, going
+  back is just re-publishing the old rules and files.

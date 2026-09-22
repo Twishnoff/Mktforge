@@ -204,6 +204,9 @@ window.MktforgeAuth = (() => {
     },
 
     async signOut() {
+      // Held text and this tab's company must not outlive the session on a
+      // shared computer. The next sign-in opens the account's last company.
+      if (window.MktforgeData && window.MktforgeData.clearTabState) window.MktforgeData.clearTabState();
       await init();
       if (auth) await auth.signOut();
       window.location.href = authCfg.loginPage;
