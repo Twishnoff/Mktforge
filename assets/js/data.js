@@ -1298,6 +1298,16 @@ window.MktforgeData = (() => {
     try { sessionStorage.setItem(ACTIVE_KEY, id); } catch (e) { /* private mode; refresh falls back */ }
   }
 
+  /* Reads from the server, not the local cache. While the dropdown's live
+     listener is running, a plain get() answers from that listener's view,
+     and a company just made in a transaction isn't in it until the server
+     echoes it back — so the new company would look like it doesn't exist.
+     Falls back to a normal read if the server can't be reached. */
+  async function serverGet(ref, label) {
+    try { return await withTimeout(ref.get({ source: 'server' }), TIMEOUT_MS, label); }
+    catch (err) { return withTimeout(ref.get(), TIMEOUT_MS, label); }
+  }
+
   /* Every company, active and deleting. */
   async function readCompanies() {
     if (isLocal()) {
@@ -1305,8 +1315,19 @@ window.MktforgeData = (() => {
       return Object.entries(r.companies || {}).map(([id, c]) => shapeCompany(id, c));
     }
     const d = await getDb();
-    const snap = await withTimeout(companiesRef(d).get(), TIMEOUT_MS, 'Loading your companies');
+    const snap = await serverGet(companiesRef(d), 'Loading your companies');
     return snap.docs.map((doc) => shapeCompany(doc.id, doc.data({ serverTimestamps: 'estimate' })));
+  }
+
+  /* One company's record, straight from the server. */
+  async function companyIsActive(id) {
+    if (isLocal()) {
+      const c = (rootRead().companies || {})[id];
+      return !!c && c.status !== 'deleting';
+    }
+    const d = await getDb();
+    const snap = await serverGet(companiesRef(d).doc(id), 'Opening the company');
+    return snap.exists && snap.data().status === 'active';
   }
 
   async function listCompanies() {
@@ -1322,8 +1343,14 @@ window.MktforgeData = (() => {
   function publishCompanies(list) {
     lastList = list;
     companyListeners.forEach((fn) => { try { fn(list.slice()); } catch (e) { console.error(e); } });
-    // Deleted somewhere else while this tab was on it.
-    if (activeId && !list.some((c) => c.id === activeId)) emit('mktforge:company-gone', { id: activeId });
+    // Deleted somewhere else while this tab was on it. The live list can lag
+    // behind a change this tab just made, so ask the server before acting.
+    const id = activeId;
+    if (id && !list.some((c) => c.id === id)) {
+      companyIsActive(id).then((alive) => {
+        if (!alive && activeId === id) emit('mktforge:company-gone', { id });
+      }).catch(() => {});
+    }
   }
 
   /* Local saves (a rename here) repaint the dropdown straight away; in
@@ -1436,8 +1463,7 @@ window.MktforgeData = (() => {
   async function switchCompany(id) {
     await start();
     if (id === activeId) return;
-    const list = await listCompanies();
-    if (!list.some((c) => c.id === id)) throw fail('company-gone', MESSAGES.gone);
+    if (!(await companyIsActive(id))) throw fail('company-gone', MESSAGES.gone);
     await setActive(id);
   }
 
