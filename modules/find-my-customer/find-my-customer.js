@@ -492,7 +492,7 @@
       const competitorUrls = (profile && profile.competitors) || [];
 
       const context = await window.MktforgeKit.savedMaterials(cfg,
-        { jobTitles: (profile && profile.targetTitles) || [] },
+        { jobTitles: (profile && profile.targetTitles) || [], data: window.MktforgeData.company(st._cid) },
         (t) => { st.status = t; if (onScreen(st)) el.status.textContent = t; });
       if (!pc.live(st, runId)) return;
       st.status = runningStatus;
@@ -545,6 +545,7 @@
   /* ---------- PDF export (jsPDF + autoTable load on first click) ---------- */
 
   async function handlePdf() {
+    const pdfCid = state._cid;   // the PDF is saved to this company, or not at all
     if (!state.data) return;
 
     el.pdf.disabled = true;
@@ -555,6 +556,8 @@
       await Mktforge.loadScript(JSPDF_SRC);
       await Mktforge.loadScript(AUTOTABLE_SRC);
       await Mktforge.loadScript(PDF_SRC);
+      // Switched company while the PDF tools loaded: don't save it into the other one.
+      if (state._cid !== pdfCid) return;
       await window.MktforgeCustomerPdf.build({ companyUrl: state.runUrl, ...state.data });
     } catch (err) {
       console.error('[Find My Customer] PDF export failed', err);

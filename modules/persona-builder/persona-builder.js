@@ -355,7 +355,7 @@
     };
 
     try {
-      const context = await window.MktforgeKit.savedMaterials(cfg, { jobTitles: [payload.jobTitle] },
+      const context = await window.MktforgeKit.savedMaterials(cfg, { jobTitles: [payload.jobTitle], data: window.MktforgeData.company(st._cid) },
         (t) => { st.status = t; if (onScreen(st)) el.status.textContent = t; });
       if (!pc.live(st, runId)) return;
       if (context) payload.context = context;
@@ -416,6 +416,7 @@
   /* ---------- PDF export (jsPDF loads on first click) ---------- */
 
   async function handlePdf() {
+    const pdfCid = state._cid;   // the PDF is saved to this company, or not at all
     if (!state.persona) return;
 
     const original = el.pdf.textContent;
@@ -425,6 +426,8 @@
     try {
       await Mktforge.loadScript(JSPDF_SRC);
       await Mktforge.loadScript('modules/persona-builder/persona-pdf.js');
+      // Switched company while the PDF tools loaded: don't save it into the other one.
+      if (state._cid !== pdfCid) return;
       await window.MktforgePersonaPdf.build(state.persona);
     } catch (err) {
       console.error('PDF export failed:', err);

@@ -102,7 +102,10 @@
 
   /* ---------- state that outlives mount/unmount ---------- */
 
-  const state = {
+  /* One per company (MktforgeKit.perCompany). The chosen documents are held
+     per company too, and survive a refresh. */
+  const pc = window.MktforgeKit.perCompany(MODULE_ID, {
+    create: () => ({
     files: null,             // every saved file, newest first
     filesError: '',
     positioningId: '',       // the chosen positioning document
@@ -114,8 +117,19 @@
     status: '',
     error: '',
     collapsed: new Set(),    // boxes minimized (both start open)
-    innerOpen: new Set()     // nested boxes the user opened this run
-  };
+    innerOpen: new Set(),    // nested boxes the user opened this run
+    note: '',
+    pumping: false,
+    activity: { busy: false, failed: false }
+    }),
+    held: ['positioningId', 'picked'],
+    snapshot: ['run', 'status', 'error', 'collapsed', 'innerOpen'],
+    onLeave(st) { st.activity = { busy: false, failed: false }; st.menu = ''; }
+  });
+  let state = pc.state;
+  pc.bind((st) => { state = st; });
+  const onScreen = (st) => mounted && st === state;
+  const dataOf = (st) => Data().company(st._cid);
 
   let root = null;
   let mounted = false;
@@ -371,7 +385,6 @@
      added to this run straight away. */
 
   let uploadSeq = 0;
-  let pumping = false;
 
   function renderUploads() {
     if (!mounted) return;
@@ -400,29 +413,34 @@
       state.uploads.push(u);
     });
     renderUploads();
-    pump();
+    pump(state);
   }
 
-  async function pump() {
-    if (pumping) return;
-    pumping = true;
+  /* Imports finish into the company they were dropped into, even if the
+     person switches part-way. */
+  async function pump(st) {
+    if (st.pumping) return;
+    st.pumping = true;
+    const D = dataOf(st);
+    const paint = () => { if (onScreen(st)) renderUploads(); };
     try {
       for (;;) {
-        const u = state.uploads.find((x) => x.status === 'queued');
+        const u = st.uploads.find((x) => x.status === 'queued');
         if (!u) break;
         try {
-          const res = await Data().importFile(u.file, {
-            onStage: (stage) => { u.status = stage; renderUploads(); }
+          const res = await D.importFile(u.file, {
+            onStage: (stage) => { u.status = stage; paint(); }
           });
           u.status = 'done';
           u.note = res.empty ? 'Imported — no readable text found'
             : res.truncated ? 'Imported — only the first part could be read' : 'Imported — added below';
           if (res.name !== u.name.replace(/\.[^.]+$/, '')) u.note += ` as “${res.name}${res.ext}”`;
-          if (!state.picked.includes(res.id)) state.picked.push(res.id);
+          if (!st.picked.includes(res.id)) st.picked.push(res.id);
+          pc.hold(st);
           const id = u.id;
           setTimeout(() => {
-            state.uploads = state.uploads.filter((x) => x.id !== id);
-            renderUploads();
+            st.uploads = st.uploads.filter((x) => x.id !== id);
+            paint();
           }, 5000);
         } catch (err) {
           console.error('[Draft Messaging] import failed', err);
@@ -430,10 +448,10 @@
           u.message = err && err.code ? err.message : 'Couldn’t import this file. Check your connection and try again.';
         }
         u.file = null;
-        renderUploads();
+        paint();
       }
     } finally {
-      pumping = false;
+      st.pumping = false;
     }
   }
 
@@ -477,16 +495,16 @@
 
   /* ---------- nav light ---------- */
 
-  const activity = { busy: false, failed: false };
-
-  function syncActivity(failed = false) {
-    if (state.running && !activity.busy) {
+  function syncActivity(failed = false, st = state) {
+    if (st !== state) return;              // a company left behind never reports
+    const activity = st.activity;
+    if (st.running && !activity.busy) {
       activity.busy = true;
       activity.failed = false;
       Mktforge.reportActivity(MODULE_ID, 'running');
     }
     if (failed) activity.failed = true;
-    if (!state.running && activity.busy) {
+    if (!st.running && activity.busy) {
       activity.busy = false;
       Mktforge.reportActivity(MODULE_ID, activity.failed ? 'error' : 'idle');
       activity.failed = false;
@@ -495,11 +513,11 @@
 
   /* ---------- gathering the run's inputs ---------- */
 
-  async function readPositioning(setStatus) {
-    const file = byId(state.positioningId);
+  async function readPositioning(st, setStatus) {
+    const file = (st.files || []).find((f) => f.id === st.positioningId) || null;
     if (!file) throw new Error('That positioning document is no longer in your account. Choose another.');
     setStatus(`Reading ${fullName(file)}…`);
-    const text = await Data().getFileText(file.id);
+    const text = await dataOf(st).getFileText(file.id);
     if (!String(text || '').trim()) {
       throw new Error('That positioning document has no readable text. Create it again in Build Positioning, then try once more.');
     }
@@ -510,19 +528,20 @@
      A file too long to send whole goes as the summary research.js stored for
      it when another module last read it, and only falls back to its opening
      pages when there is no summary. */
-  async function readPicked(setStatus) {
-    const files = pickedFiles();
+  async function readPicked(st, setStatus) {
+    const D = dataOf(st);
+    const files = st.picked.map((id) => (st.files || []).find((f) => f.id === id)).filter(Boolean);
     if (!files.length) return { imported: [], generated: [] };
     let done = 0;
     const say = () => setStatus(`Reading your research (${done} of ${files.length})…`);
     say();
     const rows = await pool(files, 3, async (f) => {
       let text = '';
-      try { text = await Data().getFileText(f.id); } catch (err) { console.warn('[Draft Messaging] could not read', f.name, err); }
+      try { text = await D.getFileText(f.id); } catch (err) { console.warn('[Draft Messaging] could not read', f.name, err); }
       let digest = '';
       if (text.length > FILE_CHARS) {
         try {
-          const stored = await Data().getFileDigest(f.id);
+          const stored = await D.getFileDigest(f.id);
           digest = (stored && stored.digestText) || '';
         } catch (e) { digest = ''; }
       }
@@ -556,7 +575,7 @@
 
   /* ---------- Worker ---------- */
 
-  async function api(path, body) {
+  async function api(path, body, signal) {
     if (!cfg.API_BASE_URL) throw new Error('Draft Messaging isn’t configured — set draftMessaging.API_BASE_URL in assets/js/config.js.');
     const noAccess = Kit().accessProblem();
     if (noAccess) throw new Error(noAccess);
@@ -566,7 +585,8 @@
     return fetch(`${cfg.API_BASE_URL}${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal
     });
   }
 
@@ -638,8 +658,8 @@
     });
     el('status').textContent = state.status;
     const err = el('error');
-    err.textContent = state.error;
-    err.hidden = !state.error;
+    err.textContent = state.error || state.note;
+    err.hidden = !(state.error || state.note);
     paintPdfButtons();
   }
 
@@ -655,28 +675,35 @@
   }
 
   async function handleGenerate() {
-    if (state.running || !byId(state.positioningId)) return;
+    const st = state;
+    if (st.running || !byId(st.positioningId)) return;
 
-    state.running = true;
-    state.error = '';
-    state.status = 'Getting ready…';
-    state.run = { stages: {}, complete: false, input: {}, sources: {} };
-    state.collapsed = new Set();
-    state.innerOpen = new Set();
+    const runId = pc.begin(st);
+    const live = () => pc.live(st, runId);
+    st.running = true;
+    st.error = '';
+    st.status = 'Getting ready…';
+    st.run = { stages: {}, complete: false, input: {}, sources: {} };
+    const run = st.run;
+    st.collapsed = new Set();
+    st.innerOpen = new Set();
     closeMenu();
-    syncActivity();
+    syncActivity(false, st);
     setBoxesLoading();
     paintRun();
     updateGenerate();
 
-    const setStatus = (t) => { state.status = t; if (mounted) el('status').textContent = t; };
+    const setStatus = (t) => { if (!live()) return; st.status = t; if (onScreen(st)) el('status').textContent = t; };
 
     try {
-      const positioning = await readPositioning(setStatus);
-      const context = await readPicked(setStatus);
-      state.run.sources = {
+      const pickedNames = st.picked.map((id) => (st.files || []).find((f) => f.id === id)).filter(Boolean).map(fullName);
+      const positioning = await readPositioning(st, setStatus);
+      if (!live()) return;
+      const context = await readPicked(st, setStatus);
+      if (!live()) return;
+      run.sources = {
         positioning: positioning.name,
-        files: pickedFiles().map(fullName),
+        files: pickedNames,
         unread: context.unread || []
       };
       if ((context.unread || []).length) {
@@ -688,7 +715,8 @@
         positioning,
         context: { imported: context.imported, generated: context.generated },
         today: new Date().toISOString().slice(0, 10)
-      });
+      }, st.controller.signal);
+      if (!live()) return;
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
         const message = payload && payload.message;
@@ -698,44 +726,48 @@
       await readStream(res, {
         status: (d) => setStatus(d.message || ''),
         stage: (d) => {
-          if (!d || !BOXES.some((b) => b.key === d.key)) return;
-          state.run.stages[d.key] = d.data;
-          paintRun();
+          if (!live() || !d || !BOXES.some((b) => b.key === d.key)) return;
+          run.stages[d.key] = d.data;
+          if (onScreen(st)) paintRun();
         },
         result: (d) => {
-          state.run.stages = { ...state.run.stages, ...(d.stages || {}) };
-          state.run.input = {
+          if (!live()) return;
+          run.stages = { ...run.stages, ...(d.stages || {}) };
+          run.input = {
             companyName: d.companyName || '',
             champion: d.champion || '',
             competitorName: d.competitorName || '',
             category: d.category || ''
           };
-          state.run.internal = d.internal || null;
-          state.run.attempts = d.attempts || 1;
-          state.run.passed = d.passed !== false;
-          state.run.checked = d.checked !== false;
-          state.run.generatedAt = d.generatedAt || new Date().toISOString();
-          state.run.complete = true;
+          run.internal = d.internal || null;
+          run.attempts = d.attempts || 1;
+          run.passed = d.passed !== false;
+          run.checked = d.checked !== false;
+          run.generatedAt = d.generatedAt || new Date().toISOString();
+          run.complete = true;
         },
         error: (d) => { throw new Error(Kit().accessError(null, d.message) || d.message || 'Something went wrong.'); }
       });
+      if (!live()) return;
 
-      if (!state.run.complete) throw new Error('The connection closed before the run finished. Please try again.');
-      state.status = state.run.passed
+      if (!run.complete) throw new Error('The connection closed before the run finished. Please try again.');
+      st.status = run.passed
         ? 'Messaging drafted and checked against the stage 9 quality rules. Review it, then create the PDF.'
-        : state.run.checked === false
+        : run.checked === false
           ? 'Messaging drafted, but the quality check didn’t finish, so it hasn’t been checked. Read it closely, or run again for a checked version.'
           : 'Messaging drafted. The quality check still had notes after three passes — read it closely before you use it.';
     } catch (err) {
+      if (!live()) return;
       console.error('[Draft Messaging] run failed', err);
-      state.error = err && err.message && !/Failed to fetch|NetworkError/i.test(err.message)
+      st.error = err && err.message && !/Failed to fetch|NetworkError/i.test(err.message)
         ? err.message : 'Could not reach the backend. Please try again.';
-      state.status = '';
+      st.status = '';
     } finally {
-      state.running = false;
-      syncActivity(!!state.error);
-      paintRun();
-      updateGenerate();
+      if (pc.end(st, runId)) {            // false: cancelled by a company switch
+        st.running = false;
+        syncActivity(!!st.error, st);
+        if (onScreen(st)) { paintRun(); updateGenerate(); }
+      }
     }
   }
 
@@ -931,6 +963,7 @@
   /* ---------- PDF ---------- */
 
   async function handlePdf() {
+    const pdfCid = state._cid;   // the PDF is saved to this company, or not at all
     const run = state.run;
     if (!run || !run.complete) return;
     const btns = [el('pdf'), el('pdf-top')];
@@ -938,6 +971,8 @@
     try {
       await Mktforge.loadScript(JSPDF_SRC);
       await Mktforge.loadScript(PDF_SRC);
+      // Switched company while the PDF tools loaded: don't save it into the other one.
+      if (state._cid !== pdfCid) return;
       await window.MktforgeMessagingPdf.build(run, { boxes: BOXES });
     } catch (err) {
       console.error('[Draft Messaging] PDF failed', err);
@@ -953,18 +988,21 @@
   /* ---------- loading ---------- */
 
   async function loadFiles() {
-    state.filesError = '';
-    if (!state.files) { renderDocSelect(); renderFilesSelect(); }
+    const st = state;
+    st.filesError = '';
+    if (!st.files) { renderDocSelect(); renderFilesSelect(); }
     try {
-      state.files = await Data().listFiles();
+      st.files = await dataOf(st).listFiles();
     } catch (err) {
       console.error('[Draft Messaging] could not load files', err);
-      state.filesError = 'Couldn’t load your saved files.';
-      state.files = state.files || [];
+      st.filesError = 'Couldn’t load your saved files.';
+      st.files = st.files || [];
     }
+    if (st !== state) return;              // a different company by now
     // A document deleted elsewhere shouldn't leave a stale selection behind.
     if (state.positioningId && !byId(state.positioningId)) state.positioningId = '';
     state.picked = state.picked.filter((id) => byId(id));
+    if (!mounted) return;
     renderDocSelect();
     renderFilesSelect();
     renderPicked();
@@ -977,6 +1015,7 @@
     id:     MODULE_ID,
     label:  MODULE_NAME,
     icon:   'doc',
+    companyAware: true,
     styles: 'modules/draft-messaging/draft-messaging.css',
 
     mount(container) {
@@ -995,6 +1034,8 @@
       el('results').addEventListener('click', handleResultsClick);
       document.addEventListener('click', onDocumentClick, true);
       document.addEventListener('keydown', onKeydown);
+      // Chosen documents are held per company (survive a refresh).
+      root.addEventListener('click', () => setTimeout(() => pc.hold(state), 0));
 
       renderUploads();
       renderDocSelect();
@@ -1007,6 +1048,7 @@
     },
 
     unmount() {
+      pc.hold(state);
       mounted = false;
       state.menu = '';
       document.removeEventListener('click', onDocumentClick, true);

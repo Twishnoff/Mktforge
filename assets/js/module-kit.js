@@ -191,7 +191,7 @@ window.MktforgeKit = (() => {
      (USE_SAVED_MATERIALS). Never blocks a run: if anything goes wrong the
      request goes out without them. */
 
-  async function savedMaterials(cfg, { jobTitles = [], competitorUrl = '' } = {}, say = () => {}) {
+  async function savedMaterials(cfg, { jobTitles = [], competitorUrl = '', data = null } = {}, say = () => {}) {
     if (!cfg || !cfg.USE_SAVED_MATERIALS || !window.MktforgeResearch) return null;
     let host = '';
     try {
@@ -200,7 +200,7 @@ window.MktforgeKit = (() => {
     } catch (e) { host = ''; }
     try {
       const { context, meta } = await window.MktforgeResearch.build(
-        { jobTitles, competitorHost: host }, { onProgress: say });
+        { jobTitles, competitorHost: host, data }, { onProgress: say });
       return meta.imported || meta.generated ? context : null;
     } catch (err) {
       console.warn('[Mktforge] continuing without saved materials', err);
@@ -238,7 +238,10 @@ window.MktforgeKit = (() => {
      error handling fires on the way out. It must not tidy away the flag
      that says "this run was interrupted". */
   let leaving = false;
-  window.addEventListener('beforeunload', () => { leaving = true; });
+  window.addEventListener('beforeunload', () => {
+    leaving = true;
+    setTimeout(() => { leaving = false; }, 2000);   // only runs if the page stayed (unload cancelled)
+  });
   window.addEventListener('pagehide', () => { leaving = true; });
   window.addEventListener('pageshow', () => { leaving = false; });   // back from the cache, or unload cancelled
 
@@ -278,7 +281,11 @@ window.MktforgeKit = (() => {
     });
   }, BEAT_MS);
 
-  function perCompany(moduleId, { create, held = [], snapshot = [] }) {
+  /* onLeave(st): for modules whose work doesn't fit one run at a time
+     (several boxes, or Draft Answer rows) — called with the old company's
+     state on every switch, to stop whatever it has going. Use flagOn/flagOff
+     around each piece of work so a refresh mid-way is reported. */
+  function perCompany(moduleId, { create, held = [], snapshot = [], onLeave = null }) {
     const states = new Map();
     const binders = [];
     let currentId = null;
@@ -301,6 +308,7 @@ window.MktforgeKit = (() => {
       const st = create();
       st._cid = cid;
       st._run = 0;
+      st._flags = 0;
       try {
         const saved = JSON.parse(sessionStorage.getItem(heldKey(cid)) || 'null');
         if (saved) {
@@ -329,6 +337,23 @@ window.MktforgeKit = (() => {
       owned.delete(runKey(cid));
     }
 
+    /* The "a run is going" flag is on while ANY work in this module is going
+       for this company; it comes off when the last piece finishes. */
+    function flagOn(st) {
+      if (!st || !st._cid) return;
+      st._flags = (st._flags || 0) + 1;
+      if (st._flags > 1) return;
+      try {
+        localStorage.setItem(runKey(st._cid), JSON.stringify({ tab: tabId(), beat: Date.now() }));
+        owned.add(runKey(st._cid));
+      } catch (e) { /* storage unavailable: no interrupted notice */ }
+    }
+    function flagOff(st) {
+      if (!st || !st._cid) return;
+      st._flags = Math.max(0, (st._flags || 0) - 1);
+      if (!st._flags && !leaving) clearFlag(st._cid);   // while unloading it stays: that's the notice
+    }
+
     function cancel(st) {
       if (!st || !st.running) return;
       st._run += 1;                                   // any late answer is ignored
@@ -339,13 +364,19 @@ window.MktforgeKit = (() => {
       st.running = false;
       st.error = '';
       st.note = STOPPED;
-      clearFlag(st._cid);
+      st._flags = Math.max(0, (st._flags || 0) - 1);
+      if (!st._flags) clearFlag(st._cid);
       saveHeld(st);                                    // so the note outlives a reload
     }
 
     document.addEventListener('mktforge:company-switched', (e) => {
       const { from, to } = e.detail || {};
-      if (from && states.has(from)) cancel(states.get(from));
+      if (from && states.has(from)) {
+        const old = states.get(from);
+        cancel(old);
+        if (onLeave) { try { onLeave(old); } catch (err) { console.error(err); } }
+        if (!old._flags) clearFlag(from);
+      }
       if (!to) return;
       currentId = to;
       current = load(to);
@@ -359,6 +390,8 @@ window.MktforgeKit = (() => {
         return placeholder;
       },
       get companyId() { return currentId; },
+      of(cid) { return cid ? load(cid) : null; },
+      flagOn, flagOff,
       bind(fn) { binders.push(fn); if (current) fn(current); },
       /* Called with no argument from the module's typing handlers: the
          person has moved on, so a "Run stopped…" note is dropped too. */
@@ -374,16 +407,12 @@ window.MktforgeKit = (() => {
         st._run += 1;
         st.prev = {};
         snapshot.forEach((k) => { st.prev[k] = st[k]; });
+        const again = !!st.controller;                  // superseding its own earlier run
         st.controller = new AbortController();
         st.note = '';
         st._interrupted = false;
-        if (st._cid) {
-          try {
-            localStorage.setItem(runKey(st._cid), JSON.stringify({ tab: tabId(), beat: Date.now() }));
-            owned.add(runKey(st._cid));
-          } catch (e) { /* storage unavailable: no interrupted notice */ }
-          saveHeld(st);
-        }
+        if (!again || !st.running) flagOn(st);
+        if (st._cid) saveHeld(st);
         return st._run;
       },
       live(st, id) { return st._run === id; },
@@ -391,9 +420,7 @@ window.MktforgeKit = (() => {
         if (st._run !== id) return false;
         st.prev = null;
         st.controller = null;
-        // While the page is unloading, the flag stays: it's what says "this
-        // run was interrupted" when the person comes back.
-        if (st._cid && !leaving) clearFlag(st._cid);
+        flagOff(st);          // (kept while the page unloads: that's the "interrupted" notice)
         return true;
       },
 

@@ -89,15 +89,40 @@
 
   /* ---------- state (outlives mount/unmount) ---------- */
 
-  const state = {
-    loaded: false,
-    loading: null,          // Promise while the first load is in flight
-    loadError: '',
-    profile: null,          // My Company profile
-    boxes: new Map(),       // key -> box
-    selectedTitle: '',
-    selectedCompetitor: ''
-  };
+  /* One per company (MktforgeKit.perCompany). A switch stops every box still
+     running for the company being left. */
+  const BOX_STOPPED = 'Run stopped when you switched companies. Refresh Data to run it again.';
+  const pc = window.MktforgeKit.perCompany(MODULE_ID, {
+    create: () => ({
+      loaded: false,
+      loading: null,          // Promise while the first load is in flight
+      loadError: '',
+      error: '',              // "This run was interrupted…" after a refresh mid-run
+      profile: null,          // My Company profile
+      boxes: new Map(),       // key -> box
+      selectedTitle: '',
+      selectedCompetitor: '',
+      known: { competitors: null, titles: null },   // for ledger clean-up, see syncLedgers
+      activity: { busy: false, failed: false }
+    }),
+    onLeave(st) {
+      st.boxes.forEach((box) => {
+        clearTimeout(box.confirmTimer);
+        box.confirmStop = false;
+        if (!box.running) return;
+        box._run = (box._run || 0) + 1;              // its late answer is ignored
+        if (box.controller) { try { box.controller.abort(); } catch (e) { /* done */ } }
+        box.controller = null;
+        box.running = false;
+        box.progress = '';
+        box.error = BOX_STOPPED;
+      });
+      st.activity = { busy: false, failed: false };
+    }
+  });
+  let state = pc.state;
+  pc.bind((st) => { state = st; });
+  const dataOf = (cid) => Data().company(cid);
 
   /* box: { id, key, kind, title, competitorUrl, rows, lastRefreshed, status,
             note, companyName, stats, runs, createdAt,
@@ -108,10 +133,10 @@
 
   /* ---------- nav light ---------- */
 
-  const activity = { busy: false, failed: false };
-
-  function syncActivity(failed = false) {
-    const running = [...state.boxes.values()].some((b) => b.running);
+  function syncActivity(failed = false, st = state) {
+    if (st !== state) return;              // a company left behind never reports
+    const activity = st.activity;
+    const running = [...st.boxes.values()].some((b) => b.running);
     if (running && !activity.busy) {
       activity.busy = true;
       activity.failed = false;
@@ -136,29 +161,31 @@
   }
 
   function load() {
-    if (state.loaded) return Promise.resolve();
-    if (state.loading) return state.loading;
-    state.loading = (async () => {
+    const st = state;
+    if (st.loaded) return Promise.resolve();
+    if (st.loading) return st.loading;
+    const D = dataOf(st._cid);
+    st.loading = (async () => {
       try {
-        const [profile, boxes] = await Promise.all([Data().getProfile(), Data().listTrackerBoxes()]);
-        state.profile = profile;
-        syncLedgers(profile);
+        const [profile, boxes] = await Promise.all([D.getProfile(), D.listTrackerBoxes()]);
+        st.profile = profile;
+        syncLedgers(st, profile);
         boxes.forEach((b) => {
           const key = keyOfBox(b);
-          if (!state.boxes.has(key)) state.boxes.set(key, { ...b, key, running: false, progress: '', error: '' });
+          if (!st.boxes.has(key)) st.boxes.set(key, { ...b, key, _cid: st._cid, running: false, progress: '', error: '' });
         });
-        state.loaded = true;
-        state.loadError = '';
-        reconcile();
+        st.loaded = true;
+        st.loadError = '';
+        if (st === state) reconcile();
       } catch (err) {
         console.error('[Market Tracker] could not load', err);
-        state.loadError = 'Couldn’t load what you’re tracking. Check your connection and reopen this module.';
+        st.loadError = 'Couldn’t load what you’re tracking. Check your connection and reopen this module.';
       } finally {
-        state.loading = null;
-        paint();
+        st.loading = null;
+        if (st === state) paint();
       }
     })();
-    return state.loading;
+    return st.loading;
   }
 
   /* A title or competitor URL removed (or edited) in My Company takes its box
@@ -191,22 +218,24 @@
      This runs off the profile itself, from a listener registered when the
      module's script loads rather than when the module is opened, so it works
      whichever module the user is looking at when they edit My Company. */
-  let knownCompetitors = null;          // key -> url, as of the last profile seen
-  let knownTitles = null;               // key -> title
-
-  function syncLedgers(profile) {
+  /* st.known.competitors / .titles: key -> url or title, as of the last
+     profile seen for THAT company. Each company's lists are compared only
+     with its own, so switching companies never looks like a removal. */
+  function syncLedgers(st, profile) {
+    const D = dataOf(st._cid);
+    const known = st.known;
     const comps = new Map();
     ((profile && profile.competitors) || []).forEach((u) => {
       if (hostOf(u)) comps.set(compKey(u), u);
     });
-    if (knownCompetitors) {
-      knownCompetitors.forEach((url, key) => {
+    if (known.competitors) {
+      known.competitors.forEach((url, key) => {
         if (comps.has(key)) return;
-        Data().deleteCompetitorLedger(url)
+        D.deleteCompetitorLedger(url)
           .catch((err) => console.warn('[Market Tracker] could not clear competitor history', err));
       });
     }
-    knownCompetitors = comps;
+    known.competitors = comps;
 
     /* Job titles follow the same rule: a renamed title is a remove plus an
        add as far as My Company is concerned, so its history goes with it. */
@@ -214,22 +243,27 @@
     ((profile && profile.targetTitles) || []).forEach((t) => {
       if (String(t || '').trim()) titles.set(titleKey(t), t);
     });
-    if (knownTitles) {
-      knownTitles.forEach((title, key) => {
+    if (known.titles) {
+      known.titles.forEach((title, key) => {
         if (titles.has(key)) return;
-        Data().deleteTitleLedger(title)
+        D.deleteTitleLedger(title)
           .catch((err) => console.warn('[Market Tracker] could not clear title history', err));
       });
     }
-    knownTitles = titles;
+    known.titles = titles;
   }
 
   if (window.MktforgeData) {
-    window.MktforgeData.onProfile((p) => {
-      state.profile = p;
-      syncLedgers(p);
-      if (state.loaded) reconcile();
-      paint();
+    // Fires only for the company on screen (see data.js), with its id.
+    window.MktforgeData.onProfile((p, cid) => {
+      const st = pc.of(cid);
+      if (!st) return;
+      st.profile = p;
+      syncLedgers(st, p);
+      if (st === state) {
+        if (st.loaded) reconcile();
+        paint();
+      }
     });
   }
 
@@ -251,7 +285,7 @@
       stats: box.stats || null, guide: box.guide || null,
       runs: box.runs || 0, createdAt: box.createdAt || Date.now()
     };
-    return Data().saveTrackerBox(rec).catch((err) => {
+    return dataOf(box._cid).saveTrackerBox(rec).catch((err) => {
       console.error('[Market Tracker] could not save', err);
       notify(`Couldn’t save the results for “${displayName(box)}” to your account.`, 'error');
     });
@@ -262,9 +296,10 @@
     if (box.controller) box.controller.abort();
     box.running = false;
     box.removed = true;
-    state.boxes.delete(box.key);
-    syncActivity();
-    Data().deleteTrackerBox(box.id).catch((err) => {
+    const st = pc.of(box._cid) || state;
+    st.boxes.delete(box.key);
+    syncActivity(false, st);
+    dataOf(box._cid).deleteTrackerBox(box.id).catch((err) => {
       console.error('[Market Tracker] could not delete', err);
       if (!quiet) notify(`Couldn’t remove “${displayName(box)}” from your account. Try again.`, 'error');
     });
@@ -276,7 +311,7 @@
     const box = {
       id: Data().trackerId(title), key, kind: 'title', title, competitorUrl: '',
       rows: [], lastRefreshed: 0, status: 'pending', note: '', companyName: '', runs: 0,
-      createdAt: Date.now(), running: false, progress: '', error: ''
+      createdAt: Date.now(), running: false, progress: '', error: '', _cid: state._cid
     };
     state.boxes.set(key, box);
     state.selectedTitle = '';
@@ -293,7 +328,7 @@
       title: host,                      // until the agent works out whose site it is
       competitorUrl: url,
       rows: [], lastRefreshed: 0, status: 'pending', note: '', companyName: '', runs: 0,
-      createdAt: Date.now(), running: false, progress: '', error: ''
+      createdAt: Date.now(), running: false, progress: '', error: '', _cid: state._cid
     };
     state.boxes.set(key, box);
     state.selectedCompetitor = '';
@@ -308,17 +343,17 @@
 
   let contextQueue = Promise.resolve();
 
-  function contextFor(box) {
+  function contextFor(box, D, live = () => true) {
     const job = contextQueue.then(async () => {
-      if (!window.MktforgeResearch) return null;
+      if (!window.MktforgeResearch || !live()) return null;   // stopped while it waited its turn
       try {
         if (box.kind === 'competitor') {
           const { context } = await window.MktforgeResearch.build(
-            { competitorHost: hostOf(box.competitorUrl), budget: window.MktforgeResearch.BUDGETS.small });
+            { competitorHost: hostOf(box.competitorUrl), budget: window.MktforgeResearch.BUDGETS.small, data: D });
           return context.imported.length || context.generated.length ? context : null;
         }
         const { context } = await window.MktforgeResearch.build(
-          { jobTitles: [box.title], budget: window.MktforgeResearch.BUDGETS.small });
+          { jobTitles: [box.title], budget: window.MktforgeResearch.BUDGETS.small, data: D });
         const aboutTitle = (e) => /job title/.test(e.match || '');
         const imported = context.imported.filter(aboutTitle);
         const generated = context.generated.filter(aboutTitle);
@@ -457,9 +492,9 @@
 
   const textMemo = new Map();      // fileId -> text, for one run
 
-  async function reportText(f) {
+  async function reportText(f, D) {
     if (!textMemo.has(f.id)) {
-      try { textMemo.set(f.id, await Data().getFileText(f.id, { withLinks: true })); }
+      try { textMemo.set(f.id, await D.getFileText(f.id, { withLinks: true })); }
       catch (err) { textMemo.set(f.id, ''); }
     }
     return textMemo.get(f.id);
@@ -467,7 +502,7 @@
 
   /* Everything the account knows about one job title. `exclude` drops titles
      that have a box of their own, so two boxes never chase the same posts. */
-  async function readReports(title, exclude = []) {
+  async function readReports(title, exclude = [], D = Data()) {
     const want = normTitle(title);
     const blocked = new Set(exclude.map(normTitle).filter(Boolean));
     const out = {
@@ -475,11 +510,11 @@
       initiatives: [], competitors: [], used: []
     };
     let files = [];
-    try { files = await Data().listFiles(); } catch (err) { return out; }
+    try { files = await D.listFiles(); } catch (err) { return out; }
 
     const read = [];
     for (const f of files.slice(0, 40)) {
-      const text = await reportText(f);
+      const text = await reportText(f, D);
       if (!text) continue;
       read.push({ f, text, kind: kindOf(f, text) });
     }
@@ -573,6 +608,13 @@
   async function run(box) {
     if (box.running) return;
     const cfg = config();
+    const st = pc.of(box._cid) || state;
+    const D = dataOf(box._cid);
+    box._run = (box._run || 0) + 1;
+    const myRun = box._run;
+    const live = () => box._run === myRun && !box.removed;   // false once a switch stopped it
+    st.error = '';
+    pc.flagOn(st);
     box.running = true;
     box.error = '';
     box.progress = 'Starting…';
@@ -580,7 +622,7 @@
     const controller = box.controller;
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, RUN_TIMEOUT_MS);
-    syncActivity();
+    syncActivity(false, st);
     paint();
 
     let failed = false;
@@ -589,14 +631,14 @@
       const noAccess = Kit().accessProblem();
       if (noAccess) throw new Error(noAccess);
 
-      const profile = await Data().getProfile();
+      const profile = await D.getProfile();
       if (!profile.companyUrl) throw new Error('Company URL required. Please add a URL in your My Company module');
 
       box.progress = box.kind === 'competitor'
         ? 'Reading your saved research about this competitor…'
         : 'Reading your saved research about this title…';
       paintBox(box);
-      const context = await contextFor(box);
+      const context = await contextFor(box, D, live);
       if (controller.signal.aborted) throw abortError();
 
       let body;
@@ -604,7 +646,7 @@
       if (box.kind === 'competitor') {
         box.progress = 'Checking what you’ve already been shown…';
         paintBox(box);
-        ledger = await Data().getCompetitorLedger(box.competitorUrl).catch((err) => {
+        ledger = await D.getCompetitorLedger(box.competitorUrl).catch((err) => {
           console.warn('[Market Tracker] starting without competitor history', err);
           return null;
         });
@@ -624,14 +666,14 @@
         const others = otherTrackedTitles(box);
         box.progress = 'Reading your personas, opportunity lists and customer research…';
         paintBox(box);
-        const reports = await readReports(box.title, others).catch((err) => {
+        const reports = await readReports(box.title, others, D).catch((err) => {
           console.warn('[Market Tracker] continuing without the account reports', err);
           return null;
         });
         if (controller.signal.aborted) throw abortError();
         box.progress = 'Checking what you’ve already been shown…';
         paintBox(box);
-        ledger = await Data().getTitleLedger(box.title).catch((err) => {
+        ledger = await D.getTitleLedger(box.title).catch((err) => {
           console.warn('[Market Tracker] starting without the title history', err);
           return null;
         });
@@ -678,14 +720,14 @@
       });
       if (!result) throw new Error('The connection closed before the research finished. Try Refresh Data.');
 
-      if (box.removed) return;
+      if (!live()) return;
       const rows = Array.isArray(result.rows) ? result.rows : [];
       if (box.kind === 'competitor') {
         box.rows = mergeRows(box, rows, CARRY_MS);
         box.companyName = result.companyName || box.companyName || '';
         if (box.companyName) box.title = box.companyName;
         if (result.ledger) {
-          Data().saveCompetitorLedger(box.competitorUrl, result.ledger)
+          D.saveCompetitorLedger(box.competitorUrl, result.ledger)
             .catch((err) => {
               console.error('[Market Tracker] could not save competitor history', err);
               notify(`Couldn’t save what’s been shown for “${displayName(box)}”, so the next refresh may repeat itself.`, 'error');
@@ -695,7 +737,7 @@
         box.rows = mergeRows(box, rows, CARRY_TITLE_MS);
         box.companyName = result.companyName || '';
         if (result.ledger) {
-          Data().saveTitleLedger(box.title, result.ledger)
+          D.saveTitleLedger(box.title, result.ledger)
             .catch((err) => {
               console.error('[Market Tracker] could not save the title history', err);
               notify(`Couldn’t save what’s been shown for “${displayName(box)}”, so the next refresh may repeat itself.`, 'error');
@@ -714,7 +756,7 @@
       box.status = 'done';
       persist(box);
     } catch (err) {
-      if (box.removed) return;                       // Stop Tracking, or the title went away
+      if (!live()) return;                           // Stop Tracking, a removed title, or a switch
       if (err && err.name === 'AbortError' && !timedOut) return;
       failed = true;
       console.error('[Market Tracker] run failed', err);
@@ -724,11 +766,14 @@
           ? err.message : 'Could not reach the research service. Try Refresh Data.');
     } finally {
       clearTimeout(timer);
-      if (box.controller === controller) box.controller = null;
-      box.running = false;
-      box.progress = '';
-      syncActivity(failed);
-      if (!box.removed) paintBox(box);
+      pc.flagOff(st);
+      if (box._run === myRun) {
+        if (box.controller === controller) box.controller = null;
+        box.running = false;
+        box.progress = '';
+        syncActivity(failed, st);
+        if (!box.removed) paintBox(box);
+      }
     }
   }
 
@@ -848,6 +893,7 @@
 
     const msgs = [];
     if (state.loadError) msgs.push(['error', state.loadError]);
+    else if (state.error) msgs.push(['error', state.error]);
     else if (!state.loaded) msgs.push(['muted', 'Loading your job titles and competitors…']);
     if (noUrl) msgs.push(['error', 'Company URL required. Please add a URL in your My Company module']);
     if (noTitles) {
@@ -882,6 +928,7 @@
 
   function paintBox(box) {
     if (!mounted || !root) return;
+    if (box._cid && box._cid !== state._cid) return;   // another company's box
     const node = root.querySelector(`[data-box="${cssKey(box.key)}"]`);
     if (!node) { paintBoxes(); return; }
     node.outerHTML = boxHtml(box);
@@ -1252,6 +1299,7 @@
     id:     MODULE_ID,
     label:  MODULE_NAME,
     icon:   'radar',
+    companyAware: true,
     styles: 'modules/market-tracker/market-tracker.css',
 
     mount(container) {
@@ -1263,7 +1311,12 @@
       paint();
       if (state.loaded) {
         // Pick up anything changed elsewhere (e.g. titles added from Find My Customer).
-        Data().getProfile().then((p) => { state.profile = p; syncLedgers(p); reconcile(); paint(); }).catch(() => {});
+        const st = state;
+        dataOf(st._cid).getProfile().then((p) => {
+          st.profile = p;
+          syncLedgers(st, p);
+          if (st === state) { reconcile(); paint(); }
+        }).catch(() => {});
       } else {
         load();
       }

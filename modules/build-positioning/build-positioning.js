@@ -275,7 +275,11 @@
 
   /* ---------- state that outlives mount/unmount ---------- */
 
-  const state = {
+  /* One per company (MktforgeKit.perCompany). Typed inputs and unsaved
+     answers also survive a refresh. */
+  const DRAFT_STOPPED = 'Draft stopped when you switched companies. Draft again.';
+  const pc = window.MktforgeKit.perCompany(MODULE_ID, {
+    create: () => ({
     form: { companyUrl: '', champion: '', competitor: '', industry: '' },
     urlSeed: { seeded: false },
     answers: null,          // saved answers { key: text }
@@ -298,8 +302,33 @@
     status: '',
     error: '',
     contextNote: '',
-    fileCount: null
-  };
+    fileCount: null,
+    note: '',
+    activity: { busy: false, failed: false },
+    draftCtl: new Map()               // key -> AbortController for each Draft Answer
+    }),
+    held: ['form', 'drafts', 'editing'],
+    snapshot: ['run', 'status', 'error', 'contextNote', 'collapsed', 'innerOpen', 'qaCollapsed'],
+    // Draft Answer rows still going for the company being left: stop them.
+    onLeave(st) {
+      st.draftCtl.forEach((ctl, key) => {
+        try { ctl.abort(); } catch (e) { /* done */ }
+        st.rowErrors[key] = DRAFT_STOPPED;
+      });
+      st.draftCtl.clear();
+      st.drafting.clear();
+      st.progress = {};
+      st.activity = { busy: false, failed: false };
+    }
+  });
+  let state = pc.state;
+  pc.bind((st) => {
+    state = st;
+    profileCache = null;          // the new company's My Company is read on mount
+    industryMemo.clear();
+  });
+  const onScreen = (st) => mounted && st === state;
+  const dataOf = (st) => Data().company(st._cid);
 
   let root = null;
   let mounted = false;
@@ -630,54 +659,57 @@
 
   /* ---------- saving ---------- */
 
-  async function saveKeys(keys) {
+  async function saveKeys(st, keys) {
     const changes = {};
-    keys.forEach((key) => { changes[key] = String(state.drafts[key] ?? state.answers[key] ?? '').trim() || null; });
-    state.answers = await Data().savePositioningAnswers(changes);
+    keys.forEach((key) => { changes[key] = String(st.drafts[key] ?? st.answers[key] ?? '').trim() || null; });
+    st.answers = await dataOf(st).savePositioningAnswers(changes);
     keys.forEach((key) => {
-      delete state.drafts[key];
-      delete state.rowErrors[key];
-      state.editing.delete(key);
-      state.expanded.delete(key);
-      if (changes[key]) state.flash.add(key);
+      delete st.drafts[key];
+      delete st.rowErrors[key];
+      st.editing.delete(key);
+      st.expanded.delete(key);
+      if (changes[key]) st.flash.add(key);
     });
+    pc.hold(st);
   }
 
   async function handleSaveAll() {
-    if (state.saving || !state.answers) return;
+    const st = state;
+    if (st.saving || !st.answers) return;
     const s = sel();
     const keys = openRowsWithText(s)
       .map((x) => rowState(x, s).key)
-      .filter((k) => k && !state.drafting.has(k));
-    state.saveError = '';
+      .filter((k) => k && !st.drafting.has(k));
+    st.saveError = '';
     if (!keys.length) { updateSaveAll(); return; }
-    state.saving = true;
+    st.saving = true;
     updateSaveAll();
     try {
-      await saveKeys(keys);
+      await saveKeys(st, keys);
     } catch (err) {
       console.error('[Build Positioning] save failed', err);
-      state.saveError = 'Couldn’t save — check your connection and try again.';
+      st.saveError = 'Couldn’t save — check your connection and try again.';
     } finally {
-      state.saving = false;
-      if (mounted) renderQa();
+      st.saving = false;
+      if (onScreen(st)) renderQa();
     }
   }
 
   async function handleSaveRow(qn) {
+    const st = state;
     const key = keyFor(qn);
-    if (!key || state.rowSaving.has(key)) return;
-    state.rowSaving.add(key);
-    delete state.rowErrors[key];
+    if (!key || st.rowSaving.has(key)) return;
+    st.rowSaving.add(key);
+    delete st.rowErrors[key];
     renderRow(qn);
     try {
-      await saveKeys([key]);
+      await saveKeys(st, [key]);
     } catch (err) {
       console.error('[Build Positioning] row save failed', err);
-      state.rowErrors[key] = 'Couldn’t save this answer. Please try again.';
+      st.rowErrors[key] = 'Couldn’t save this answer. Please try again.';
     } finally {
-      state.rowSaving.delete(key);
-      renderRow(qn);
+      st.rowSaving.delete(key);
+      if (onScreen(st)) renderRow(qn);
     }
   }
 
@@ -697,10 +729,12 @@
      failed, otherwise green. (The shell only shows it while you're on
      another module.) */
 
-  const activity = { busy: false, failed: false };
-
-  function syncActivity(failed = false) {
-    const active = state.running || state.drafting.size > 0;
+  // The light belongs to the company on screen; a company left behind has
+  // had its work stopped, so it never reports.
+  function syncActivity(failed = false, st = state) {
+    if (st !== state) return;
+    const activity = st.activity;
+    const active = st.running || st.drafting.size > 0;
     if (active && !activity.busy) {
       activity.busy = true;
       activity.failed = false;
@@ -744,8 +778,8 @@
     return res;
   }
 
-  async function apiJson(path, body) {
-    const res = await api(path, body);
+  async function apiJson(path, body, opts = {}) {
+    const res = await api(path, body, opts);
     const payload = await res.json().catch(() => null);
     if (!res.ok || !payload || payload.status === 'error') {
       const message = payload && payload.message;
@@ -758,11 +792,12 @@
      Shared with every module (assets/js/research.js). Imported Materials
      come first and are trusted most; the Worker applies the trust rules. */
 
-  async function buildContext(s, onProgress = () => {}) {
+  async function buildContext(s, st, onProgress = () => {}) {
     return window.MktforgeResearch.build({
       jobTitles: s.champion ? [s.champion] : [],
       competitorHost: s.competitorHost,
-      budget: window.MktforgeResearch.BUDGETS.large
+      budget: window.MktforgeResearch.BUDGETS.large,
+      data: dataOf(st)
     }, { onProgress });
   }
 
@@ -777,30 +812,37 @@
   /* ---------- Draft Answer ---------- */
 
   async function handleDraft(qn) {
+    const st = state;
     const s = sel();
     const key = keyFor(qn, s);
-    if (!key || state.drafting.has(key)) return;
-    delete state.rowErrors[key];
+    if (!key || st.drafting.has(key)) return;
+    delete st.rowErrors[key];
 
     if (!validUrl(s.companyUrl)) {
-      state.rowErrors[key] = 'Add a valid Company URL above first.';
+      st.rowErrors[key] = 'Add a valid Company URL above first.';
       renderRow(qn);
       return;
     }
 
-    state.drafting.add(key);
-    state.progress[key] = 'Drafting an answer…';
-    syncActivity();
+    const ctl = new AbortController();
+    st.draftCtl.set(key, ctl);
+    const live = () => st.draftCtl.get(key) === ctl;   // false once a switch stopped it
+    st.drafting.add(key);
+    st.progress[key] = 'Drafting an answer…';
+    pc.flagOn(st);
+    syncActivity(false, st);
     renderRow(qn);
 
     const setProgress = (text) => {
-      state.progress[key] = text;
-      const ta = mounted && q(`textarea[data-answer="${qn.id}"]`);
+      if (!live()) return;
+      st.progress[key] = text;
+      const ta = onScreen(st) && q(`textarea[data-answer="${qn.id}"]`);
       if (ta && keyFor(qn) === key) ta.placeholder = text;
     };
 
     try {
-      const context = await buildContext(s, setProgress);
+      const context = await buildContext(s, st, setProgress);
+      if (!live()) return;
       setProgress('Drafting an answer — this can take up to a minute…');
       const payload = await apiJson('/api/draft-answer', {
         questionId: qn.id,
@@ -811,20 +853,27 @@
         today: new Date().toISOString().slice(0, 10),
         answers: answersFor(s),
         context: context.context
-      });
+      }, { signal: ctl.signal });
+      if (!live()) return;
       const sources = (payload.sources || []).filter(Boolean);
-      state.drafts[key] = `${payload.answer}${sources.length ? `\n\nSources: ${sources.join('; ')}` : ''}`;
+      st.drafts[key] = `${payload.answer}${sources.length ? `\n\nSources: ${sources.join('; ')}` : ''}`;
+      pc.hold(st);
     } catch (err) {
+      if (!live()) return;
       console.error('[Build Positioning] draft failed', err);
-      state.rowErrors[key] = err && err.message && !/fetch/i.test(err.message)
+      st.rowErrors[key] = err && err.message && !/fetch/i.test(err.message)
         ? err.message : 'Couldn’t reach the drafting service. Please try again.';
     } finally {
-      state.drafting.delete(key);
-      delete state.progress[key];
-      syncActivity(!!state.rowErrors[key]);
-      // The row may now show a different champion/competitor; its own draft
-      // is kept under its key either way.
-      renderRow(qn);
+      pc.flagOff(st);
+      if (live()) {
+        st.draftCtl.delete(key);
+        st.drafting.delete(key);
+        delete st.progress[key];
+        syncActivity(!!st.rowErrors[key], st);
+        // The row may now show a different champion/competitor; its own draft
+        // is kept under its key either way.
+        if (onScreen(st)) renderRow(qn);
+      }
     }
   }
 
@@ -960,8 +1009,8 @@
     });
     el('status').textContent = state.status;
     const err = el('error');
-    err.textContent = state.error;
-    err.hidden = !state.error;
+    err.textContent = state.error || state.note;
+    err.hidden = !(state.error || state.note);
     paintPdfButtons();
   }
 
@@ -979,36 +1028,41 @@
   }
 
   async function handleGenerate() {
-    if (state.running) return;
+    const st = state;
+    if (st.running) return;
     const s = sel();
     const missing = missingForRun(s);
     if (missing.length) { updateGenerate(); return; }
 
-    state.running = true;
-    state.error = '';
-    state.status = 'Getting ready…';
-    state.qaCollapsed = true;
+    const runId = pc.begin(st);
+    const live = () => pc.live(st, runId);
+    st.running = true;
+    st.error = '';
+    st.status = 'Getting ready…';
+    st.qaCollapsed = true;
     paintQaCollapse();
-    state.collapsed = DEFAULT_COLLAPSED();
-    state.innerOpen = new Set();
-    state.run = {
+    st.collapsed = DEFAULT_COLLAPSED();
+    st.innerOpen = new Set();
+    st.run = {
       input: { ...s, companyName: '', competitorName: '' },
       answers: answersFor(s),
       stages: {},
       complete: false,
       contextNote: ''
     };
-    syncActivity();
+    const run = st.run;
+    syncActivity(false, st);
     paintRun();
     updateGenerate();
 
-    const setStatus = (t) => { state.status = t; if (mounted) el('status').textContent = t; };
+    const setStatus = (t) => { if (!live()) return; st.status = t; if (onScreen(st)) el('status').textContent = t; };
 
     try {
-      const context = await buildContext(s, setStatus);
-      state.run.contextNote = contextSummary(context, s);
-      state.contextNote = state.run.contextNote;
-      paintResources();
+      const context = await buildContext(s, st, setStatus);
+      if (!live()) return;
+      run.contextNote = contextSummary(context, s);
+      st.contextNote = run.contextNote;
+      if (onScreen(st)) paintResources();
 
       const res = await api('/api/positioning', {
         companyUrl: s.companyUrl,
@@ -1016,9 +1070,10 @@
         competitorUrl: s.competitorUrl,
         industry: s.industry,
         today: new Date().toISOString().slice(0, 10),
-        answers: state.run.answers,
+        answers: run.answers,
         context: context.context
-      });
+      }, { signal: st.controller.signal });
+      if (!live()) return;
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
         const message = payload && payload.message;
@@ -1028,36 +1083,40 @@
       await readStream(res, {
         status: (d) => setStatus(d.message || ''),
         stage: (d) => {
-          if (!d || !BOXES.some((b) => b.key === d.key)) return;
-          state.run.stages[d.key] = d.data;
+          if (!live() || !d || !BOXES.some((b) => b.key === d.key)) return;
+          run.stages[d.key] = d.data;
           if (d.key === 'audit') {
-            state.run.input.companyName = d.data.company_name || '';
-            state.run.input.competitorName = d.data.competitor_name || '';
+            run.input.companyName = d.data.company_name || '';
+            run.input.competitorName = d.data.competitor_name || '';
           }
-          paintRun();
+          if (onScreen(st)) paintRun();
         },
         result: (d) => {
-          state.run.stages = { ...state.run.stages, ...(d.stages || {}) };
-          state.run.input.companyName = d.companyName || state.run.input.companyName;
-          state.run.input.competitorName = d.competitorName || state.run.input.competitorName;
-          state.run.generatedAt = d.generatedAt || new Date().toISOString();
-          state.run.complete = true;
+          if (!live()) return;
+          run.stages = { ...run.stages, ...(d.stages || {}) };
+          run.input.companyName = d.companyName || run.input.companyName;
+          run.input.competitorName = d.competitorName || run.input.competitorName;
+          run.generatedAt = d.generatedAt || new Date().toISOString();
+          run.complete = true;
         },
         error: (d) => { throw new Error(Kit().accessError(null, d.message) || d.message || 'Something went wrong.'); }
       });
+      if (!live()) return;
 
-      if (!state.run.complete) throw new Error('The connection closed before the run finished. Please try again.');
-      state.status = 'Positioning drafted. Review it, then create the PDF to use it in the next module.';
+      if (!run.complete) throw new Error('The connection closed before the run finished. Please try again.');
+      st.status = 'Positioning drafted. Review it, then create the PDF to use it in the next module.';
     } catch (err) {
+      if (!live()) return;
       console.error('[Build Positioning] run failed', err);
-      state.error = err && err.message && !/Failed to fetch|NetworkError/i.test(err.message)
+      st.error = err && err.message && !/Failed to fetch|NetworkError/i.test(err.message)
         ? err.message : 'Could not reach the backend. Please try again.';
-      state.status = '';
+      st.status = '';
     } finally {
-      state.running = false;
-      syncActivity(!!state.error);
-      paintRun();
-      updateGenerate();
+      if (pc.end(st, runId)) {             // false: cancelled by a company switch
+        st.running = false;
+        syncActivity(!!st.error, st);
+        if (onScreen(st)) { paintRun(); updateGenerate(); }
+      }
     }
   }
 
@@ -1319,6 +1378,7 @@
   /* ---------- PDF ---------- */
 
   async function handlePdf() {
+    const pdfCid = state._cid;   // the PDF is saved to this company, or not at all
     const run = state.run;
     if (!run || !run.complete) return;
     const btns = [el('pdf'), el('pdf-top')];
@@ -1328,6 +1388,8 @@
       await Mktforge.loadScript(PDF_SRC);
       const questions = QUESTIONS.map((x) => ({ id: x.id, text: questionText(x, run.input) }));
       // BOXES, not DISPLAY_BOXES: the PDF keeps the original six-stage layout.
+      // Switched company while the PDF tools loaded: don't save it into the other one.
+      if (state._cid !== pdfCid) return;
       await window.MktforgePositioningPdf.build(run, { questions, boxes: BOXES, sourceLabels: SOURCE_LABELS });
     } catch (err) {
       console.error('[Build Positioning] PDF failed', err);
@@ -1440,24 +1502,26 @@
   /* ---------- loading ---------- */
 
   async function loadAnswers() {
-    state.answersError = '';
+    const st = state;
+    st.answersError = '';
     renderQa();
     try {
-      state.answers = await Data().getPositioningAnswers();
+      st.answers = await dataOf(st).getPositioningAnswers();
     } catch (err) {
       console.error('[Build Positioning] could not load answers', err);
-      state.answersError = 'Couldn’t load your saved answers.';
+      st.answersError = 'Couldn’t load your saved answers.';
     }
-    renderQa();
+    if (onScreen(st)) renderQa();
   }
 
   async function loadFileCount() {
+    const st = state;
     try {
-      state.fileCount = (await Data().listFiles()).length;
+      st.fileCount = (await dataOf(st).listFiles()).length;
     } catch (err) {
-      state.fileCount = null;
+      st.fileCount = null;
     }
-    paintResources();
+    if (onScreen(st)) paintResources();
   }
 
   /* ---------- module ---------- */
@@ -1466,6 +1530,7 @@
     id:     MODULE_ID,
     label:  MODULE_NAME,
     icon:   'crane',
+    companyAware: true,
     styles: 'modules/build-positioning/build-positioning.css',
 
     mount(container) {
@@ -1474,10 +1539,12 @@
       container.innerHTML = MARKUP;
       root = container.firstElementChild;
 
-      Data().getProfile().then((p) => {
+      const st = state;
+      dataOf(st).getProfile().then((p) => {
+        if (st !== state) return;              // a different company by now
         profileCache = p;
         industryMemo.clear();
-        if (mounted) { paintFieldNotes(); updateGenerate(); }
+        if (onScreen(st)) { paintFieldNotes(); updateGenerate(); }
       }).catch(() => {});
       unsubProfile = Data().onProfile((p) => { profileCache = p; industryMemo.clear(); });
 
@@ -1490,6 +1557,8 @@
       el('pdf').addEventListener('click', handlePdf);
       el('pdf-top').addEventListener('click', handlePdf);
       el('results').addEventListener('click', handleResultsClick);
+      // Typed inputs and unsaved answers are held per company (survive a refresh).
+      root.addEventListener('input', (e) => pc.hold(e.isTrusted ? undefined : state));
 
       if (state.answers) renderQa(); else loadAnswers();
       paintQaCollapse();
@@ -1504,6 +1573,7 @@
     },
 
     unmount() {
+      pc.hold(state);
       mounted = false;
       clearTimeout(scopeTimer);
       if (unsubFiles) { unsubFiles(); unsubFiles = null; }

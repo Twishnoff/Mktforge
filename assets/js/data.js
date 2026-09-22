@@ -1453,20 +1453,29 @@ window.MktforgeData = (() => {
 
   /* Returns the "last company" write, so a caller about to reload the page
      can wait for it; start() doesn't, so it never holds up opening the app. */
+  let lastWrite = Promise.resolve();
   function setActive(id) {
     const from = activeId;
     activeId = id;
     writeTabCompany(id);
-    const recorded = recordLastCompany(id);
+    lastWrite = recordLastCompany(id);
     if (from !== id) emit('mktforge:company-switched', { from, to: id });
-    return recorded;
+    return lastWrite;
+  }
+
+  /* The switch itself never waits on the "last company" write. A caller
+     about to reload the page waits for it here, so the next sign-in still
+     opens the right company (at most `ms`). */
+  function whenRecorded(ms = 3000) {
+    let t;
+    return Promise.race([lastWrite, new Promise((r) => { t = setTimeout(r, ms); })]).finally(() => clearTimeout(t));
   }
 
   async function switchCompany(id) {
     await start();
     if (id === activeId) return;
     if (!(await companyIsActive(id))) throw fail('company-gone', MESSAGES.gone);
-    await setActive(id);
+    setActive(id);
   }
 
   /* Marks the company deleting and takes it off the account's lists in one
@@ -1643,7 +1652,7 @@ window.MktforgeData = (() => {
   return {
     // companies
     start, scope, company, listCompanies, onCompanies, createCompany, switchCompany,
-    deleteCompany, retireCompany, purgeDeleted, oldestCompanyId, companyDisplayName, clearTabState, settle,
+    deleteCompany, retireCompany, purgeDeleted, oldestCompanyId, whenRecorded, companyDisplayName, clearTabState, settle,
     get busy() { return busy(); },
     get activeCompanyId() { return activeId; },
     MAX_COMPANIES,

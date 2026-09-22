@@ -337,7 +337,7 @@
 
     try {
       const runningStatus = st.status;
-      const context = await window.MktforgeKit.savedMaterials(cfg, { jobTitles },
+      const context = await window.MktforgeKit.savedMaterials(cfg, { jobTitles, data: window.MktforgeData.company(st._cid) },
         (t) => { st.status = t; if (onScreen(st)) el.status.textContent = t; });
       if (!pc.live(st, runId)) return;
       st.status = runningStatus;
@@ -396,6 +396,7 @@
   /* ---------- PDF export ---------- */
 
   async function handlePdf() {
+    const pdfCid = state._cid;   // the PDF is saved to this company, or not at all
     if (!state.run) return;
 
     el.pdf.disabled = true;
@@ -406,6 +407,8 @@
       await Mktforge.loadScript(JSPDF_SRC);
       await Mktforge.loadScript(AUTOTABLE_SRC);
       await Mktforge.loadScript(PDF_SRC);
+      // Switched company while the PDF tools loaded: don't save it into the other one.
+      if (state._cid !== pdfCid) return;
       await window.MktforgeOpportunitiesPdf.build(state.run, { CATEGORY_LABELS, CATEGORY_ORDER, safeUrl });
     } catch (err) {
       console.error('[Marketing Opportunities] PDF export failed', err);

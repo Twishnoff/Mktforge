@@ -533,6 +533,11 @@ window.Mktforge = (() => {
   function bringUp(id) {
     activity.clear();                         // lights are per company
     renderLights();
+    if (pendingRoute) {                       // the person picked a module mid-switch
+      pendingRoute = false;
+      const wanted = (location.hash || '').replace(/^#\/?/, '');
+      if (modules.find(m => m.id === wanted)) id = wanted;
+    }
     const target = modules.find(m => m.id === id) ? id : (modules.find(m => !m.hidden) || modules[0]).id;
     history.replaceState(null, '', `#/${target}`);
     restoreScroll = false;
@@ -569,7 +574,9 @@ window.Mktforge = (() => {
       console.error('[Mktforge] could not change company', err);
       switching = false;
       delete document.body.dataset.switching;
-      if (inPlace && here) show(here);        // still on the old company: put it back
+      if (inPlace && here) {                  // still on the old company: put it back
+        if (pendingRoute) { pendingRoute = false; route(); } else show(here);
+      }
       const msg = err && err.code === 'company-limit' ? `${Data().MAX_COMPANIES} Company Limit Reached.`
         : err && err.code === 'company-gone' ? 'That company no longer exists.'
         : 'Couldn’t change company. Check your connection and try again.';
@@ -583,6 +590,7 @@ window.Mktforge = (() => {
       return;
     }
     if (target === 'new') history.replaceState(null, '', '#/my-company');
+    await Data().whenRecorded();
     location.reload();
   }
 
@@ -599,6 +607,7 @@ window.Mktforge = (() => {
     const stop = (message) => {
       switching = false;
       delete document.body.dataset.switching;
+      if (pendingRoute) { pendingRoute = false; route(); }   // a nav click made meanwhile
       if (message) document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message, tone: 'error' } }));
       return false;
     };
@@ -637,6 +646,7 @@ window.Mktforge = (() => {
       Data().purgeDeleted();
       return true;
     }
+    await Data().whenRecorded();
     location.reload();                         // the removal resumes on the way back in
     return true;
   }
@@ -682,20 +692,27 @@ window.Mktforge = (() => {
 
     // Live: names, adds and deletes from this tab or any other.
     Data().onCompanies(list => { companies = list; renderCompanies(); });
+    // And the name on the button follows this tab's own switches.
+    document.addEventListener('mktforge:company-switched', renderCompanies);
 
     // This tab's company was deleted in another tab: move to the oldest one.
     document.addEventListener('mktforge:company-gone', async () => {
       if (switching) return;
       switching = true;
+      const release = () => {
+        switching = false;
+        if (pendingRoute) { pendingRoute = false; route(); }
+      };
       try {
         const next = await Data().oldestCompanyId();
-        if (!next) return;
+        if (!next) { release(); return; }
         try { sessionStorage.setItem(NOTICE_KEY, 'The company you were working on was deleted in another tab, so you’ve been moved to your oldest company.'); } catch (e) { /* no notice */ }
         await Data().switchCompany(next);
+        await Data().whenRecorded();
         location.reload();
       } catch (err) {
         console.error('[Mktforge] could not move off a deleted company', err);
-        switching = false;
+        release();
       }
     });
   }
@@ -815,7 +832,12 @@ window.Mktforge = (() => {
      Hash routing on purpose: GitHub Pages serves static files, so a real
      path like /my-company would 404 on refresh or on a shared link. */
 
+  let pendingRoute = false;       // a nav click made while a switch was in progress
+
   function route() {
+    // Mid-switch nothing mounts: the module would belong to whichever company
+    // happens to be active at that instant. bringUp() applies it afterwards.
+    if (switching) { pendingRoute = true; return; }
     const id = (location.hash || '').replace(/^#\/?/, '');
     // An unknown hash falls back to the first module someone can actually
     // navigate to, never to a hidden one like Manage Profile.

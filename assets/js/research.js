@@ -18,7 +18,9 @@
    first; everything else goes as a short summary made once per file by the
    Build Positioning Worker (/api/digest) and stored on the file.
 
-   MktforgeResearch.build({ jobTitles, competitorHost, budget }, { onProgress })
+   MktforgeResearch.build({ jobTitles, competitorHost, budget, data }, { onProgress })
+     data: the company to read (MktforgeData.company(id)); defaults to the
+     one active when build() is called, and stays that company throughout
      -> Promise<{ context, meta }>
    MktforgeResearch.summary(meta, { jobTitles })  -> one-line note for the page
    MktforgeResearch.BUDGETS.small | .large
@@ -114,14 +116,14 @@ window.MktforgeResearch = (() => {
     return { v: 1, digest: payload.digest || {}, digestText: payload.digestText || '' };
   }
 
-  async function digestFor(file, text) {
+  async function digestFor(D, file, text) {
     if (digestMem.has(file.id)) return digestMem.get(file.id);
     let stored = null;
-    try { stored = await Data().getFileDigest(file.id); } catch (e) { /* make one */ }
+    try { stored = await D.getFileDigest(file.id); } catch (e) { /* make one */ }
     if (stored && stored.digestText) { digestMem.set(file.id, stored); return stored; }
     const value = await makeDigest(file, text);
     digestMem.set(file.id, value);
-    Data().setFileDigest(file.id, value).catch((err) => console.warn('[Mktforge] could not store summary', err));
+    D.setFileDigest(file.id, value).catch((err) => console.warn('[Mktforge] could not store summary', err));
     return value;
   }
 
@@ -129,9 +131,9 @@ window.MktforgeResearch = (() => {
 
   const textMem = new Map();      // fileId -> text
 
-  async function textFor(file) {
+  async function textFor(D, file) {
     if (textMem.has(file.id)) return textMem.get(file.id);
-    const t = await Data().getFileText(file.id);
+    const t = await D.getFileText(file.id);
     textMem.set(file.id, t || '');
     return t || '';
   }
@@ -144,11 +146,12 @@ window.MktforgeResearch = (() => {
 
   let cache = null;               // { sig, value }
 
-  async function build({ jobTitles = [], competitorHost = '', budget = BUDGETS.small } = {}, { onProgress = () => {} } = {}) {
+  async function build({ jobTitles = [], competitorHost = '', budget = BUDGETS.small, data = null } = {}, { onProgress = () => {} } = {}) {
+    const D = data || await Data().scope();
     const titles = jobTitles.map(norm).filter(Boolean);
     const host = String(competitorHost || '').toLowerCase().replace(/^www\./, '');
-    const files = await Data().listFiles();
-    const sig = JSON.stringify([files.map((f) => `${f.id}:${f.name}`), titles, host, budget]);
+    const files = await D.listFiles();
+    const sig = JSON.stringify([D.companyId, files.map((f) => `${f.id}:${f.name}`), titles, host, budget]);
     if (cache && cache.sig === sig) return cache.value;
 
     if (!files.length) {
@@ -163,7 +166,7 @@ window.MktforgeResearch = (() => {
     const rows = await pool(files, 3, async (f) => {
       let text = '';
       let failed = false;
-      try { text = await textFor(f); } catch (err) { failed = true; console.warn('[Mktforge] could not read', f.name, err); }
+      try { text = await textFor(D, f); } catch (err) { failed = true; console.warn('[Mktforge] could not read', f.name, err); }
       done += 1;
       say('Reading your saved materials');
       return { f, text, failed,
@@ -203,7 +206,7 @@ window.MktforgeResearch = (() => {
     await pool(needDigest, 3, async (r) => {
       if (accessError) return;
       try {
-        r.digest = await digestFor(r.f, r.text);
+        r.digest = await digestFor(D, r.f, r.text);
         if (!r.title && !r.competitor) {
           const m = digestMentions(r.digest.digest, titles, host);
           r.title = m.title; r.competitor = m.competitor;
