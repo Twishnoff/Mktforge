@@ -1,20 +1,21 @@
-Mktforge — Market Tracker: clearer wording
-==========================================
+Mktforge — Links into a module land at its top
+==============================================
 
-UPLOAD ONLY  modules/market-tracker/market-tracker.js
-             (open the modules/market-tracker folder first, then upload)
+UPLOAD ONLY  assets/js/app.js
+             (open the assets/js folder first, then upload)
 
-No Worker deploy — the Worker is already sending everything this needs.
-After uploading, hard-refresh (Ctrl+Shift+R) before checking.
+No Worker deploy. After uploading, hard-refresh (Ctrl+Shift+R) before checking.
 
-WHAT CHANGED — wording only
+WHAT CHANGED
 
-  Before:  "None of the 10 sites your reports name is a Discourse forum
-            (2 more are on reddit.com, joereis.substack.com)."
-  After:   "None of the 12 sites your reports name is a Discourse forum —
-            10 were checked, and the ones on Reddit and Substack were
-            skipped, since those are never Discourse."
+  Nav-bar buttons — unchanged: they take you back to where you left off in
+  that module. Clicking the button for the module you're already on leaves
+  you where you are.
 
-  The guide line now says "15 places they name" rather than "15 sites":
-  r/dataengineering and r/datascience are two places but one site, which
-  is why the two numbers differed.
+  Everything else now lands at the TOP of the module:
+    - the Mktforge logo (also when you're already on My Company)
+    - Manage Profile in the account menu
+    - links inside a module (e.g. Draft Messaging's "go to Build Positioning")
+    - a typed or shared URL, and the browser's back/forward buttons
+
+  Before, all of these put you back wherever you'd last scrolled to.

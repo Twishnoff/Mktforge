@@ -42,7 +42,8 @@
 window.Mktforge = (() => {
 
   const modules = [];
-  const scrollMemory = new Map();
+  const scrollMemory = new Map();   // id -> where you left off, for nav-bar returns
+  let restoreScroll = false;        // set only by a nav-bar button click
   const activity = new Map();   // id -> { running, unseen, failed }
   let activeId = null;
   let booted = false;
@@ -114,7 +115,7 @@ window.Mktforge = (() => {
         `<span class="nav__label">${mod.label}</span>` +
         `<span class="nav__status" aria-hidden="true"></span>` +
         `<span class="nav__status-text"></span>`;
-      btn.addEventListener('click', () => { location.hash = `#/${mod.id}`; });
+      btn.addEventListener('click', () => goTo(mod.id, { restore: true }));
 
       li.appendChild(btn);
       list.appendChild(li);
@@ -341,7 +342,7 @@ window.Mktforge = (() => {
 
     document.getElementById('manage-profile').addEventListener('click', () => {
       close();
-      location.hash = '#/account-profile';
+      goTo('account-profile');
     });
 
     document.getElementById('sign-out').addEventListener('click', async () => {
@@ -427,10 +428,39 @@ window.Mktforge = (() => {
         Module "${next.id}" failed to load. See the console.</div>`;
     }
 
-    display.scrollTop = scrollMemory.get(next.id) || 0;
+    // A nav-bar button returns you to where you left off in that module;
+    // every other way in (logo, Manage Profile, in-module links, typed or
+    // shared URLs, back/forward) starts at the top.
+    display.scrollTop = restoreScroll ? (scrollMemory.get(next.id) || 0) : 0;
     const seen = activity.get(next.id);
     if (seen) seen.unseen = false;      // opening the module counts as checking it
     markActive();
+  }
+
+  /* Go to a module from any button or link in the app.
+     { restore: true } is for the nav-bar buttons only: they return you to
+     where you last were in that module, and clicking the one you're already
+     on leaves you where you are. Every other caller lands at the top — and
+     since asking for the module you're already on changes nothing in the URL
+     (so hashchange never fires), that case scrolls to the top here. */
+  function goTo(id, { restore = false } = {}) {
+    if (id === activeId) {
+      if (!restore) document.getElementById('display').scrollTop = 0;
+      return;
+    }
+    restoreScroll = restore;
+    location.hash = `#/${id}`;
+  }
+
+  function initLogo() {
+    const logo = document.querySelector('.nav__logo .logo');
+    if (!logo) return;
+    const id = (logo.getAttribute('href') || '').replace(/^#\/?/, '');
+    logo.addEventListener('click', e => {
+      if (!id) return;
+      e.preventDefault();
+      goTo(id);
+    });
   }
 
   /* ---------- Routing ----------
@@ -445,6 +475,7 @@ window.Mktforge = (() => {
     if (!target) return;
     if (!id || id !== target.id) history.replaceState(null, '', `#/${target.id}`);
     show(target.id);
+    restoreScroll = false;     // one navigation only
   }
 
   /* ---------- Boot ---------- */
@@ -464,6 +495,7 @@ window.Mktforge = (() => {
     initProfileMenu();
     initAvatar();
     renderNav();
+    initLogo();
     window.addEventListener('hashchange', route);
     route();
     booted = true;
@@ -489,6 +521,6 @@ window.Mktforge = (() => {
     reportActivity,
     get modules() { return modules.slice(); },
     get activeId() { return activeId; },
-    go(id) { location.hash = `#/${id}`; }
+    go(id) { goTo(id); }         // modules' links always land at the top
   };
 })();
