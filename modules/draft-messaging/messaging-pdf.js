@@ -114,7 +114,9 @@ window.MktforgeMessagingPdf = (function () {
       text(`Built from — ${from.join('   ·   ')}`, { size: 9, color: SOFT, gap: 2 });
     }
     if (run.passed === false) {
-      text('Note: the stage 9 quality check still had notes after three passes. Read this closely before using it.',
+      text(run.checked === false
+        ? 'Note: the stage 9 quality check did not finish on this run, so this draft has not been checked. Read it closely before using it.'
+        : 'Note: the stage 9 quality check still had notes after three passes. Read this closely before using it.',
         { size: 9, bold: true, color: SOFT, gap: 2 });
     }
 

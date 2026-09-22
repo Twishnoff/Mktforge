@@ -713,6 +713,7 @@
           state.run.internal = d.internal || null;
           state.run.attempts = d.attempts || 1;
           state.run.passed = d.passed !== false;
+          state.run.checked = d.checked !== false;
           state.run.generatedAt = d.generatedAt || new Date().toISOString();
           state.run.complete = true;
         },
@@ -722,7 +723,9 @@
       if (!state.run.complete) throw new Error('The connection closed before the run finished. Please try again.');
       state.status = state.run.passed
         ? 'Messaging drafted and checked against the stage 9 quality rules. Review it, then create the PDF.'
-        : 'Messaging drafted. The quality check still had notes after three passes — read it closely before you use it.';
+        : state.run.checked === false
+          ? 'Messaging drafted, but the quality check didn’t finish, so it hasn’t been checked. Read it closely, or run again for a checked version.'
+          : 'Messaging drafted. The quality check still had notes after three passes — read it closely before you use it.';
     } catch (err) {
       console.error('[Draft Messaging] run failed', err);
       state.error = err && err.message && !/Failed to fetch|NetworkError/i.test(err.message)
