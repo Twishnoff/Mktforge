@@ -1,69 +1,46 @@
-Mktforge — Multi-company, Session 1: data layer, rules, migration
-==================================================================
+Mktforge — Multi-company, Session 2: company dropdown and switching
+===================================================================
 
-DON'T UPLOAD YET unless you've decided to go live with this step on its own
-(see "Going live" below). Nothing here shows on screen: there is no company
-dropdown until Session 2.
+UPLOAD (keep the folders as they are in the zip)
 
-FILES IN THIS UPDATE
+  index.html                             (repo root)
+  READ-ME-FIRST.txt                      (repo root)
+  assets/css/app.css
+  assets/js/app.js
+  assets/js/data.js
+  modules/my-company/my-company.js
 
-  assets/js/data.js                      rewritten: every company has its own container
-  assets/js/auth.js                      one change: Sign Out clears the tab's held text
-  firestore.rules                        new rules for company containers
-  tools/migrate-companies/migrate.js     one-time move of existing data (run on your PC)
-  tools/migrate-companies/package.json
-  tools/migrate-companies/README.md      how to run it, step by step
+No rules change, no Worker deploy. Hard-refresh (Ctrl+Shift+R) after uploading.
 
-No Worker deploy. The Workers never read or write Firestore.
+WHAT'S NEW
 
-WHAT CHANGED
+  Company dropdown in the management bar, left of your account menu, with a
+  thin grey line between them.
+    - Shows the active company's name; long names cut off at 26 characters
+      with "...", full name on hover.
+    - Lists your companies: named ones A-Z, then unnamed "Company X" ones.
+    - Bottom row: green + Add New Company. It makes a new empty company,
+      switches to it and opens My Company. At 10 companies the row turns red:
+      "10 Company Limit Reached".
+    - Updates as soon as you save a new Company Name — in any open tab.
 
-  Data now lives in users/{uid}/companies/{companyId}/... instead of directly
-  on the account. The account keeps only account things: email, profile
-  picture, the company to open next time, and the lists behind the 10-company
-  limit and the unique-name check.
+  Switching (or adding) while a module is running asks first:
+    "Switching companies will stop Find My Customer. Switch anyway?"
+  Cancel changes nothing. Nothing else on the page works while it's open.
 
-  The rest of the app keeps working unchanged on top of this, with one company
-  per account. The first time a tab touches data, it picks its company: the
-  one it was on (refresh), else the account's last company, else the oldest.
-  A brand-new account gets its first company automatically.
+  My Company: saving a name another of your companies uses is blocked with
+  "A company with this name already exists in your account. Choose a
+  different name." (ignores capitals and extra spaces).
 
-  Built in for later sessions: add / switch / delete company, the unique-name
-  and 10-company checks (both in transactions, so two tabs can't beat them),
-  last-company tracking, and a "company switched" signal that is separate
-  from a profile change. That separation is the Market Tracker fix: switching
-  can no longer look like competitors being removed.
+  If another tab deletes the company this tab is on, this tab moves to your
+  oldest company and says why.
 
-  The rules refuse any write into a company that's being deleted, and make
-  the old pre-company data read-only, so nothing can change it between the
-  copy and the cleanup.
+FOR NOW (until Sessions 3-4 update each module)
 
-TESTED HERE
+  Switching reloads the page into the other company. That stops any run
+  cleanly, but results on screen and unsaved typing are cleared by a switch
+  rather than kept for when you come back. Saved data (My Company, files,
+  Build Positioning answers, Market Tracker) is always kept per company.
 
-  - The data layer, in the real app (preview mode), 21 checks: old data became
-    the first company, switching, handles keeping their company after a
-    switch, duplicate names, ordering, the 10 limit, delete, refresh, two tabs,
-    sign-out then sign-in, and My Company still rendering.
-  - The migration script, 40 checks, including: a repeat copy after go-live
-    never overwrites or deletes work done in the new app; a half-finished
-    cleanup can't be undone by copy; a company deleted in the app isn't
-    brought back.
-  - An independent review of all three files; every finding is fixed.
-
-NOT TESTED HERE
-
-  The rules. The Firestore emulator couldn't be downloaded in my workspace.
-  Before publishing, check them in the Firebase console's Rules Playground
-  (Firestore → Rules → Rules Playground), signed in as a test uid with
-  email_verified = true:
-    1. get    users/<uid>/companies/c1                     → allowed
-    2. get    users/<other uid>/companies/c1               → denied
-    3. update users/<uid> with field lastCompanyId         → allowed
-    4. update users/<uid> with field profile               → denied
-    5. create users/<uid>/files/x                          → denied (old path)
-
-GOING LIVE (when you decide)
-
-  Follow tools/migrate-companies/README.md: plan → copy → verify → publish
-  rules + upload app files together → cleanup days later. Until cleanup, going
-  back is just re-publishing the old rules and files.
+  There's no Delete This Company button yet (Session 3), so a company you add
+  now stays until then.

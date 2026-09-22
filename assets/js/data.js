@@ -66,6 +66,8 @@
                                           Rejects code 'last-company'. Does NOT switch away:
                                           the caller moves the tab first (see oldestCompanyId).
        oldestCompanyId(exceptId)       -> Promise<companyId|null>
+       settle(ms)                      -> Promise<boolean>; waits for saves already in flight
+       busy                            true while any save is in flight
        MAX_COMPANIES, companyDisplayName(c)
      Events on document
        mktforge:company-switched   { from, to }   this tab changed company. NOT a profile change.
@@ -422,7 +424,7 @@ window.MktforgeData = (() => {
     return n ? `n_${encodeURIComponent(n).replace(/\./g, '%2E').replace(/[*~!'()]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}` : '';
   };
 
-  const CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O or 1/I: easy to misread
   function newCode(taken) {
     for (let guard = 0; guard < 200; guard += 1) {
       let c = '';
@@ -461,9 +463,43 @@ window.MktforgeData = (() => {
 
   const handles = new Map();      // companyId -> handle
 
+  /* Saves still in flight, whichever company they belong to. The shell waits
+     for them before reloading the page on a company switch, so an import or
+     a save that has started always finishes into the company that started
+     it (plan D3) rather than being cut off half-written. */
+  const inflight = new Set();
+  const WRITES = ['saveProfile', 'savePdfDoc', 'importFile', 'deleteFile', 'renameFile', 'setFileDigest',
+    'savePositioningAnswers', 'saveTrackerBox', 'deleteTrackerBox', 'saveTitleLedger', 'deleteTitleLedger',
+    'saveCompetitorLedger', 'deleteCompetitorLedger'];
+  function tracked(fn) {
+    return (...args) => {
+      const p = fn(...args);
+      inflight.add(p);
+      const done = () => inflight.delete(p);
+      p.then(done, done);
+      return p;
+    };
+  }
+  /* Resolves once every save started before this call has finished (or
+     after `ms`, so a hung request can't trap the person on this company). */
+  function settle(ms = 60000) {
+    const pending = [...inflight];
+    if (!pending.length) return Promise.resolve(true);
+    let t;
+    return Promise.race([
+      Promise.allSettled(pending).then(() => true),
+      new Promise((r) => { t = setTimeout(() => r(false), ms); })
+    ]).finally(() => clearTimeout(t));
+  }
+  const busy = () => inflight.size > 0;
+
   function company(cid) {
     if (!cid || /\//.test(cid)) throw new Error('Unknown company.');
-    if (!handles.has(cid)) handles.set(cid, makeHandle(cid));
+    if (!handles.has(cid)) {
+      const h = makeHandle(cid);
+      WRITES.forEach((k) => { h[k] = tracked(h[k]); });
+      handles.set(cid, h);
+    }
     return handles.get(cid);
   }
 
@@ -1386,12 +1422,15 @@ window.MktforgeData = (() => {
     }
   }
 
-  async function setActive(id) {
+  /* Returns the "last company" write, so a caller about to reload the page
+     can wait for it; start() doesn't, so it never holds up opening the app. */
+  function setActive(id) {
     const from = activeId;
     activeId = id;
     writeTabCompany(id);
-    recordLastCompany(id);            // not awaited: never holds up a switch
+    const recorded = recordLastCompany(id);
     if (from !== id) emit('mktforge:company-switched', { from, to: id });
+    return recorded;
   }
 
   async function switchCompany(id) {
@@ -1518,7 +1557,7 @@ window.MktforgeData = (() => {
       let pick = readTabCompany();
       if (!ok(pick)) pick = await lastCompanyOnAccount().catch(() => '');
       if (!ok(pick)) pick = list.slice().sort((a, b) => a.createdAt - b.createdAt)[0].id;
-      await setActive(pick);
+      setActive(pick);
       resumeDeletes();                 // background: finishes any interrupted delete
       return pick;
     })().catch((err) => { startPromise = null; throw err; });
@@ -1559,7 +1598,8 @@ window.MktforgeData = (() => {
   return {
     // companies
     start, scope, company, listCompanies, onCompanies, createCompany, switchCompany,
-    deleteCompany, oldestCompanyId, companyDisplayName, clearTabState,
+    deleteCompany, oldestCompanyId, companyDisplayName, clearTabState, settle,
+    get busy() { return busy(); },
     get activeCompanyId() { return activeId; },
     MAX_COMPANIES,
     // active company

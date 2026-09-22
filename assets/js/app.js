@@ -33,6 +33,17 @@
    icon, summed over every module: yellow while anything is running, then green
    (red if something failed) until you've seen the results.
 
+   Companies (optional, per module):
+     companyAware: true   the module follows mktforge:company-switched itself
+                          (keeps its screen per company, cancels its runs).
+   Until EVERY module says so, switching companies reloads the page into the
+   new company: the simple, safe way to stop runs and clear every module's
+   screen. Once all modules are company-aware, the switch happens in place.
+
+   Mktforge.confirm({ message, confirmLabel, cancelLabel, danger })
+     -> Promise<boolean>. A modal; nothing else on the page works while it's
+        open. For modules too (e.g. My Company's Delete This Company).
+
    Rules that keep a future port to a framework cheap:
      - a module only ever touches the container element it is handed
      - a module never reads or writes the shell's DOM or globals
@@ -329,6 +340,7 @@ window.Mktforge = (() => {
 
     button.addEventListener('click', e => {
       e.stopPropagation();
+      closeCompanyMenu();
       menu.hidden ? open() : close();
     });
 
@@ -356,6 +368,263 @@ window.Mktforge = (() => {
     });
 
     document.addEventListener('mktforge:user-changed', renderProfile);
+  }
+
+  /* ---------- Modal ----------
+     One at a time. Resolves true for the confirm button, false for the
+     cancel button or Escape. Clicking the backdrop does nothing, so a stray
+     click can't answer a question like "delete this company?". */
+
+  let modalOpen = null;
+
+  function confirmModal({ message, confirmLabel = 'OK', cancelLabel = 'Cancel', danger = false } = {}) {
+    if (modalOpen) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const back = document.createElement('div');
+      back.className = 'modal';
+      back.innerHTML =
+        '<div class="modal__card" role="alertdialog" aria-modal="true" aria-labelledby="mf-modal-msg">' +
+          '<p class="modal__message" id="mf-modal-msg"></p>' +
+          '<div class="modal__actions">' +
+            '<button type="button" class="modal__btn" data-answer="no"></button>' +
+            `<button type="button" class="modal__btn modal__btn--${danger ? 'danger' : 'primary'}" data-answer="yes"></button>` +
+          '</div>' +
+        '</div>';
+      back.querySelector('.modal__message').textContent = message || '';
+      back.querySelector('[data-answer="no"]').textContent = cancelLabel;
+      back.querySelector('[data-answer="yes"]').textContent = confirmLabel;
+      const before = document.activeElement;
+      const app = document.querySelector('.app');
+      if (app) app.inert = true;               // nothing behind the modal can be used
+
+      const buttons = [...back.querySelectorAll('button')];
+      const done = (answer) => {
+        document.removeEventListener('keydown', onKey, true);
+        back.remove();
+        if (app) app.inert = false;
+        modalOpen = null;
+        if (before && before.focus) try { before.focus(); } catch (e) { /* gone */ }
+        resolve(answer);
+      };
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); done(false); }
+        if (e.key === 'Tab') {            // keep focus on the two buttons
+          e.preventDefault();
+          const i = buttons.indexOf(document.activeElement);
+          buttons[(i + (e.shiftKey ? buttons.length - 1 : 1)) % buttons.length].focus();
+        }
+      };
+      back.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-answer]');
+        if (b) done(b.dataset.answer === 'yes');
+      });
+      document.addEventListener('keydown', onKey, true);
+      document.body.appendChild(back);
+      modalOpen = back;
+      buttons[0].focus();                 // the safe answer has focus
+    });
+  }
+
+  /* ---------- Company dropdown ----------
+     Sits left of the account menu. Lists the account's companies (named A-Z,
+     then unnamed "Company X" ones), marks the active one, and ends with
+     Add New Company — or, at the limit, a red line saying so.
+
+     Switching or adding while a module is running asks first, naming what
+     will stop. */
+
+  const NAME_MAX = 26;
+  const NOTICE_KEY = 'mktforge.notice';     // a message to show after a reload
+  let companies = [];
+  let switching = false;
+
+  const Data = () => window.MktforgeData;
+  const shortName = (name) => (name.length > NAME_MAX ? `${name.slice(0, NAME_MAX)}...` : name);
+
+  function runningLabels() {
+    const out = [];
+    activity.forEach((a, id) => {
+      if (!a.running) return;
+      const mod = modules.find(m => m.id === id);
+      out.push(mod ? mod.label : id);
+    });
+    return out;
+  }
+
+  const listWords = (xs) => (xs.length <= 1 ? xs.join('')
+    : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+
+  function renderCompanies() {
+    const btnName = document.getElementById('company-name');
+    const menu = document.getElementById('company-menu');
+    if (!btnName || !menu) return;
+    const active = companies.find(c => c.id === Data().activeCompanyId);
+    const label = active ? active.displayName : '';
+    btnName.textContent = shortName(label);
+    const button = document.getElementById('company-button');
+    button.title = label.length > NAME_MAX ? label : '';
+    button.setAttribute('aria-label', label ? `Company: ${label}. Change company` : 'Change company');
+
+    menu.innerHTML = '';
+    companies.forEach(c => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'menu__item company__item';
+      item.setAttribute('role', 'menuitemradio');
+      const on = c.id === Data().activeCompanyId;
+      item.setAttribute('aria-checked', String(on));
+      item.dataset.company = c.id;
+      item.textContent = shortName(c.displayName);
+      if (c.displayName.length > NAME_MAX) item.title = c.displayName;
+      menu.appendChild(item);
+    });
+
+    const rule = document.createElement('div');
+    rule.className = 'company__rule';
+    rule.setAttribute('role', 'separator');
+    menu.appendChild(rule);
+
+    const full = companies.length >= Data().MAX_COMPANIES;
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.setAttribute('role', 'menuitem');
+    if (full) {
+      add.className = 'menu__item company__add is-full';
+      add.disabled = true;
+      add.textContent = `${Data().MAX_COMPANIES} Company Limit Reached`;
+    } else {
+      add.className = 'menu__item company__add';
+      add.dataset.add = '1';
+      add.innerHTML = '<span class="company__plus" aria-hidden="true">+</span><span>Add New Company</span>';
+    }
+    menu.appendChild(add);
+  }
+
+  function closeCompanyMenu() {
+    const menu = document.getElementById('company-menu');
+    const button = document.getElementById('company-button');
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+  }
+
+  /* Moves this tab to another company (or a new one). Until every module
+     keeps its own screen per company, that means reloading into it. */
+  async function changeCompany(target) {
+    if (switching) return;
+    closeCompanyMenu();
+    if (target !== 'new' && target === Data().activeCompanyId) return;
+
+    const running = runningLabels();
+    if (running.length) {
+      const adding = target === 'new';
+      const ok = await confirmModal({
+        message: `${adding ? 'Adding a new company' : 'Switching companies'} will stop ${listWords(running)}. ${adding ? 'Add' : 'Switch'} anyway?`,
+        confirmLabel: adding ? 'Add anyway' : 'Switch anyway',
+        cancelLabel: 'Cancel'
+      });
+      if (!ok) return;
+    }
+
+    switching = true;
+    document.body.dataset.switching = 'true';
+    try {
+      let id = target;
+      if (target === 'new') id = await Data().createCompany();
+      if (!(await Data().settle())) console.warn('[Mktforge] a save was still running when the company changed');
+      await Data().switchCompany(id);
+
+      if (modules.length && modules.every(m => m.companyAware)) {
+        activity.clear();
+        renderLights();
+        const here = activeId;
+        const mountEl = document.getElementById('display-mount');
+        const current = modules.find(m => m.id === here);
+        if (current && typeof current.unmount === 'function') {
+          try { current.unmount(mountEl); } catch (e) { console.error(`[Mktforge] ${here} unmount failed`, e); }
+        }
+        activeId = null;                       // force a fresh mount
+        mountEl.innerHTML = '';
+        if (target === 'new') goTo('my-company'); else show(here);
+        switching = false;
+        delete document.body.dataset.switching;
+        return;
+      }
+      if (target === 'new') history.replaceState(null, '', '#/my-company');
+      location.reload();
+    } catch (err) {
+      console.error('[Mktforge] could not change company', err);
+      switching = false;
+      delete document.body.dataset.switching;
+      const msg = err && err.code === 'company-limit' ? `${Data().MAX_COMPANIES} Company Limit Reached.`
+        : err && err.code === 'company-gone' ? 'That company no longer exists.'
+        : 'Couldn’t change company. Check your connection and try again.';
+      document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message: msg, tone: 'error' } }));
+    }
+  }
+
+  function initCompanyMenu() {
+    const button = document.getElementById('company-button');
+    const menu = document.getElementById('company-menu');
+    if (!button || !menu || !Data()) return;
+
+    button.addEventListener('click', e => {
+      e.stopPropagation();
+      const profileMenu = document.getElementById('profile-menu');
+      if (profileMenu && !profileMenu.hidden) {
+        profileMenu.hidden = true;
+        document.getElementById('profile-button').setAttribute('aria-expanded', 'false');
+      }
+      const open = menu.hidden;
+      menu.hidden = !open;
+      button.setAttribute('aria-expanded', String(open));
+      if (open) {
+        const cur = menu.querySelector('[aria-checked="true"]') || menu.querySelector('button:not([disabled])');
+        if (cur) cur.focus();
+      }
+    });
+    menu.addEventListener('click', e => {
+      const item = e.target.closest('[data-company], [data-add]');
+      if (!item) return;
+      changeCompany(item.dataset.add ? 'new' : item.dataset.company);
+    });
+    menu.addEventListener('keydown', e => {
+      const items = [...menu.querySelectorAll('button:not([disabled])')];
+      const i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    });
+    document.addEventListener('click', e => {
+      if (!menu.hidden && !menu.contains(e.target)) closeCompanyMenu();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !menu.hidden) { closeCompanyMenu(); button.focus(); }
+    });
+
+    // Live: names, adds and deletes from this tab or any other.
+    Data().onCompanies(list => { companies = list; renderCompanies(); });
+
+    // This tab's company was deleted in another tab: move to the oldest one.
+    document.addEventListener('mktforge:company-gone', async () => {
+      if (switching) return;
+      switching = true;
+      try {
+        const next = await Data().oldestCompanyId();
+        if (!next) return;
+        try { sessionStorage.setItem(NOTICE_KEY, 'The company you were working on was deleted in another tab, so you’ve been moved to your oldest company.'); } catch (e) { /* no notice */ }
+        await Data().switchCompany(next);
+        location.reload();
+      } catch (err) {
+        console.error('[Mktforge] could not move off a deleted company', err);
+        switching = false;
+      }
+    });
+  }
+
+  function showPendingNotice() {
+    let msg = '';
+    try { msg = sessionStorage.getItem(NOTICE_KEY) || ''; sessionStorage.removeItem(NOTICE_KEY); } catch (e) { /* none */ }
+    if (msg) document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message: msg } }));
   }
 
   /* ---------- Notices ----------
@@ -487,18 +756,37 @@ window.Mktforge = (() => {
     const user = await window.MktforgeAuth.requireAuth();
     if (!user) return;                    // redirecting; don't paint the shell
 
+    initNotices();
+
+    // Every module reads and writes one company, so this tab's company has
+    // to be settled before the first module mounts.
+    try {
+      await window.MktforgeData.start();
+    } catch (err) {
+      console.error('[Mktforge] could not open your company', err);
+      document.body.dataset.auth = 'ready';
+      const msg = (err && err.code === 'upgrade-pending' && err.message)
+        || 'Couldn’t load your company. Check your connection and refresh the page.';
+      document.getElementById('display-mount').innerHTML =
+        `<div style="padding:48px;color:#A8371F">${msg.replace(/</g, '&lt;')}</div>`;
+      renderProfile();
+      initProfileMenu();
+      return;
+    }
+
     document.body.dataset.auth = 'ready';
 
     initNavToggle();
-    initNotices();
     renderProfile();
     initProfileMenu();
     initAvatar();
+    initCompanyMenu();
     renderNav();
     initLogo();
     window.addEventListener('hashchange', route);
     route();
     booted = true;
+    showPendingNotice();
 
     if (!modules.length) {
       document.getElementById('display-mount').innerHTML =
@@ -519,6 +807,7 @@ window.Mktforge = (() => {
     register,
     loadScript,
     reportActivity,
+    confirm: confirmModal,
     get modules() { return modules.slice(); },
     get activeId() { return activeId; },
     go(id) { goTo(id); }         // modules' links always land at the top

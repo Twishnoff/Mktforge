@@ -38,8 +38,19 @@
 
   <!-- ========== MANAGEMENT BAR ========== -->
   <header class="mgmt">
-    <!-- future management-bar links go here, to the left of the profile -->
+    <!-- future management-bar links go here, to the left of the company menu -->
     <div class="mgmt__spacer"></div>
+
+    <div class="company" id="company">
+      <button class="company__button" id="company-button" type="button"
+              aria-haspopup="menu" aria-expanded="false" aria-controls="company-menu">
+        <span class="company__name" id="company-name">&nbsp;</span>
+        <span class="profile__caret" aria-hidden="true"></span>
+      </button>
+      <div class="menu company__menu" id="company-menu" role="menu" aria-label="Companies" hidden></div>
+    </div>
+
+    <span class="mgmt__divider" aria-hidden="true"></span>
 
     <div class="profile" id="profile">
       <button class="profile__button" id="profile-button" type="button"

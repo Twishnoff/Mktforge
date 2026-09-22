@@ -766,7 +766,10 @@
     } catch (ex) {
       console.error('[My Company] save failed', ex);
       if (mounted) {
-        err.textContent = 'Couldn’t save — check your connection and try again.';
+        // A duplicate company name, or a company deleted in another tab,
+        // says so; anything else is most likely the connection.
+        err.textContent = ex && (ex.code === 'duplicate-company' || ex.code === 'company-gone')
+          ? ex.message : 'Couldn’t save — check your connection and try again.';
         err.hidden = false;
       }
     } finally {

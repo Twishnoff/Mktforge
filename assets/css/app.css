@@ -413,6 +413,105 @@ body[data-nav="collapsed"] .nav__minimize-icon {
 
 .menu__item:hover { background: var(--paper-dim); color: var(--ink); }
 
+/* Company dropdown — left of the account menu, with a thin rule between */
+.mgmt__divider {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 26px;
+  background: #5B626E;
+  margin: 0 -8px;              /* sits in the middle of the 18px gap */
+}
+
+.company { position: relative; }
+
+.company__button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--ease), border-color var(--ease);
+}
+.company__button:hover { background: var(--frame-hover); border-color: var(--frame-line); }
+.company__button[aria-expanded="true"] .profile__caret { transform: rotate(180deg); }
+
+.company__name {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--frame-text-strong);
+  white-space: nowrap;
+}
+
+.company__menu { min-width: 240px; max-height: 70vh; overflow-y: auto; }
+
+.company__item { position: relative; padding-left: 26px; white-space: nowrap; }
+.company__item[aria-checked="true"] { color: var(--ink); font-weight: 600; }
+.company__item[aria-checked="true"]::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.company__rule { height: 1px; margin: 5px 4px; background: var(--paper-line); }
+
+.company__add { display: flex; align-items: center; gap: 8px; padding-left: 11px; }
+.company__plus { color: var(--accent); font-size: 17px; font-weight: 600; line-height: 1; width: 8px; text-align: center; }
+.company__add.is-full { color: #A8371F; cursor: default; }
+.company__add.is-full:hover { background: transparent; color: #A8371F; }
+
+body[data-switching="true"] { cursor: progress; }
+
+/* ==========================================================================
+   Modal (Mktforge.confirm)
+   ========================================================================== */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(32, 36, 43, .45);
+}
+
+.modal__card {
+  width: min(460px, 100%);
+  padding: 26px 26px 22px;
+  background: var(--paper);
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 44px rgba(32, 36, 43, .28);
+}
+
+.modal__message { margin: 0 0 22px; color: var(--ink); font-size: 15px; line-height: 1.55; }
+
+.modal__actions { display: flex; justify-content: center; gap: 12px; }
+
+.modal__btn {
+  padding: 9px 18px;
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius);
+  background: #FFFDF7;
+  color: var(--ink-soft);
+  font: 500 13.5px var(--font-body);
+  cursor: pointer;
+}
+.modal__btn:hover { background: var(--paper-dim); color: var(--ink); }
+.modal__btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.modal__btn--primary:hover { background: #285F43; color: #fff; }
+.modal__btn--danger { background: #A8371F; border-color: #A8371F; color: #fff; }
+.modal__btn--danger:hover { background: #8F2E19; color: #fff; }
+
 /* ==========================================================================
    Display field — the only scrolling region
    ========================================================================== */
