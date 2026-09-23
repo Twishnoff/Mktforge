@@ -83,6 +83,13 @@ window.MktforgeIcons = {
             <rect x="15" y="11.5" width="5" height="4" rx=".6"/>
           </svg>`,
 
+  /* Target Messaging — location pin */
+  pin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 21.2s-6.8-6.1-6.8-11.4a6.8 6.8 0 0 1 13.6 0c0 5.3-6.8 11.4-6.8 11.4z"/>
+          <circle cx="12" cy="9.8" r="2.5"/>
+        </svg>`,
+
   /* A few spares so new modules have something to point at */
   grid: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

@@ -80,6 +80,13 @@ window.MKTFORGE_CONFIG = {
     API_BASE_URL: 'https://draft-messaging.tyler-wishnoff.workers.dev'
   },
 
+  targetMessaging: {
+    // Its own Worker (C:\Users\Tyler\target-messaging, deployed as "target-messaging").
+    // Signed-in accounts only: every request carries the Firebase ID token.
+    // HubSpot data comes through the hubspot-connect Worker (service binding).
+    API_BASE_URL: 'https://target-messaging.tyler-wishnoff.workers.dev'
+  },
+
   marketingOpportunities: {
     API_URL: 'https://syndication-event-finder.tyler-wishnoff.workers.dev',
     // Worker verifies Firebase ID tokens against the shared KV allowlist and

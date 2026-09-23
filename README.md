@@ -23,6 +23,7 @@ modules/my-company/         My Company (profile + saved resources)
 modules/find-my-customer/   Find My Customer (ported from Customer-Intelligence)
 modules/build-positioning/  Build Positioning (positioning, framework stages 0–5)
 modules/draft-messaging/    Draft Messaging (messaging + homepage copy, stages 6–9)
+modules/target-messaging/   Target Messaging (email / landing page copy for a job title or a HubSpot contact)
 modules/persona-builder/    Persona Builder (ported from Persona Drafter)
 modules/battle-card-generator/  Battle Card Generator (ported from Battlecard-Generator)
 modules/marketing-opportunities/  Marketing Opportunities (ported from Syndication & Event Finder)
@@ -55,8 +56,8 @@ are all handled by the shell.
 
 The nav lists modules in the order their `<script>` tags appear in
 `index.html`, which is the order a person works through them: My Company, Find
-My Customer, Persona Builder, Build Positioning, Draft Messaging, Marketing
-Opportunities, Market Tracker, Battle Card Generator. Moving a module in the nav means moving
+My Customer, Persona Builder, Build Positioning, Draft Messaging, Target
+Messaging, Marketing Opportunities, Market Tracker, Battle Card Generator. Moving a module in the nav means moving
 its one line.
 
 ### The contract

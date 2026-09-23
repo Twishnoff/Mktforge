@@ -450,9 +450,9 @@ window.MktforgeKit = (() => {
 
        const hs = MktforgeKit.hubspot();            // the active company
        await hs.status()      -> { connected, needsReconnect, portalId, portalDomain, scopes, connectedAt }
-       await hs.connect()     sends the browser to HubSpot's approval screen
+       await hs.connect({ returnTo })  sends the browser to HubSpot's approval screen
        await hs.disconnect()
-       await hs.call('/api/…', body, { signal })   data endpoints (added later)
+       await hs.call('/api/…', body, { signal })   data endpoints, e.g. /api/read/contact-search
 
      Failures throw an Error whose .code is the Worker's error ('not_connected',
      'reconnect_needed', 'not_approved', …) and whose .message is safe to show. */
@@ -500,8 +500,10 @@ window.MktforgeKit = (() => {
     return {
       get companyId() { return cid(); },
       status: (opts) => request('GET', '/status', { query: {}, ...opts }),
-      async connect() {
-        const { url } = await request('POST', '/oauth/start');
+      /* returnTo: the module to come back to after HubSpot's approval screen
+         ('my-company' by default; the Worker only accepts modules it knows). */
+      async connect({ returnTo } = {}) {
+        const { url } = await request('POST', '/oauth/start', { body: returnTo ? { returnTo } : undefined });
         if (!url) throw new HubSpotError('HubSpot didn’t return an approval link.', 'no_url', 0);
         window.location.assign(url);
       },

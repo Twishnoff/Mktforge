@@ -1,19 +1,49 @@
-Mktforge — HubSpot integration, Step 8: clean up on Delete This Company
-======================================================================
+Mktforge — Target Messaging module (first build: plumbing test)
+===============================================================
 
-UPLOAD (keep the folders as they are in the zip)
+Three pieces, in this order.
 
-  READ-ME-FIRST.txt            (repo root)
-  assets/js/app.js
-  assets/js/module-kit.js
+1) hubspot-connect Worker  (C:\Users\Tyler\hubspot-connect)
+   src/index.js was updated in place (the old one is kept as
+   src/index.js.bak-2026-09-23). Deploy it:
 
-No rules change, no Worker deploy. Hard-refresh (Ctrl+Shift+R) after uploading.
+       cd C:\Users\Tyler\hubspot-connect
+       npx wrangler deploy
 
-WHAT'S NEW
+   New: POST /api/read/contact-search (name/email typeahead) and
+   POST /api/read/contact (one contact). /oauth/start now takes an optional
+   returnTo so "Connect My HubSpot Account" in Target Messaging lands back
+   on Target Messaging. Same scopes, so nobody has to reconnect.
 
-  Delete This Company now also removes that company's HubSpot connection
-  from the hubspot-connect Worker. It's best effort: it never blocks or
-  slows the delete, and the request is sent so it survives the page move.
-  (Mktforge stays installed in the HubSpot account itself until someone
-  uninstalls it under Connected Apps there; with the token gone, Mktforge
-  can no longer read anything.)
+2) target-messaging Worker  (new — from target-messaging-worker.zip)
+   Unzip so you have C:\Users\Tyler\target-messaging\wrangler.jsonc, then:
+
+       cd C:\Users\Tyler\target-messaging
+       npx wrangler deploy
+
+   It uses the shared ACCESS allowlist KV and a service binding to
+   hubspot-connect (deploy hubspot-connect first). No secrets yet.
+   Check: https://target-messaging.tyler-wishnoff.workers.dev/ should
+   answer {"ok":true,"service":"target-messaging"}.
+
+3) Site files  (repo root, keep the folders as they are in the zip)
+
+       READ-ME-FIRST.txt
+       README.md
+       index.html
+       assets/js/config.js
+       assets/js/data.js
+       assets/js/icons.js
+       assets/js/module-kit.js
+       modules/target-messaging/target-messaging.js      (new)
+       modules/target-messaging/target-messaging.css     (new)
+
+   No Firestore rules change: the editors' copy is saved on the company
+   record (targetMessaging field), which the current rules already allow.
+   Hard-refresh (Ctrl+Shift+R) after uploading.
+
+WHAT A RUN DOES FOR NOW
+   Both tabs send everything to the Worker, which answers "Hello World -
+   Job Title" / "Hello World - Individual" plus what it received (files and
+   how much text was read from each, the website, or the HubSpot contact,
+   page views and note count) into both editors.

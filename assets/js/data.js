@@ -17,7 +17,8 @@
      users/{uid}/companies/{companyId}  one COMPANY
        { status: 'active' | 'deleting', code: 'A1V3', name, createdAt,
          profile: {...}, pdfCounters: { moduleId: n },
-         buildPositioning: { answers: { key: text } } }
+         buildPositioning: { answers: { key: text } },
+         targetMessaging: { email, landingPage, updatedAt } }   (editor HTML)
      .../files/{fileId}                 { name, moduleId, moduleName, size, chunks, createdAt,
                                           source ('generated' | 'imported'), ext, mimeType,
                                           textChunks, textChars, textStatus,
@@ -89,6 +90,7 @@
        deleteFile(id) / renameFile(id, name) / nameTaken(name, exceptId)
        readFile(id) / getFileDigest(id) / setFileDigest(id, digest)
        getPositioningAnswers() / savePositioningAnswers(changes)
+       getTargetMessaging() / saveTargetMessaging({ email?, landingPage? })
        listTrackerBoxes() / saveTrackerBox(box) / deleteTrackerBox(id)
        getTitleLedger(title) / saveTitleLedger(title, l) / deleteTitleLedger(title)
        getCompetitorLedger(url) / saveCompetitorLedger(url, l) / deleteCompetitorLedger(url)
@@ -491,7 +493,7 @@ window.MktforgeData = (() => {
   const inflight = new Set();
   const WRITES = ['saveProfile', 'savePdfDoc', 'importFile', 'deleteFile', 'renameFile', 'setFileDigest',
     'savePositioningAnswers', 'saveTrackerBox', 'deleteTrackerBox', 'saveTitleLedger', 'deleteTitleLedger',
-    'saveCompetitorLedger', 'deleteCompetitorLedger'];
+    'saveCompetitorLedger', 'deleteCompetitorLedger', 'saveTargetMessaging'];
   function tracked(fn) {
     return (...args) => {
       const p = fn(...args);
@@ -1044,6 +1046,46 @@ window.MktforgeData = (() => {
       return { ...next };
     }
 
+    /* ---------- Target Messaging editors ----------
+       The two editors' contents (sanitized HTML), kept on the company record
+       so they survive a refresh or signing out until they're edited or a new
+       run overwrites them. Read fresh each time: another tab may have saved. */
+
+    const TM_MAX = 200000;          // characters per editor; well inside the 1 MiB doc cap
+    const cleanTm = (raw) => ({
+      email: typeof (raw && raw.email) === 'string' ? raw.email.slice(0, TM_MAX) : '',
+      landingPage: typeof (raw && raw.landingPage) === 'string' ? raw.landingPage.slice(0, TM_MAX) : '',
+      updatedAt: toMillis(raw && raw.updatedAt) || (raw && typeof raw.updatedAt === 'number' ? raw.updatedAt : 0)
+    });
+
+    async function getTargetMessaging() {
+      if (isLocal()) return cleanTm(localRead().targetMessaging);
+      const d = await getDb();
+      const snap = await withTimeout(baseRef(d).get(), TIMEOUT_MS, 'Loading your drafts');
+      return cleanTm(snap.exists ? snap.data().targetMessaging : null);
+    }
+
+    /* changes: { email?, landingPage? } — only the keys given are replaced. */
+    async function saveTargetMessaging(changes) {
+      const out = {};
+      ['email', 'landingPage'].forEach((k) => {
+        if (typeof (changes && changes[k]) !== 'string') return;
+        if (changes[k].length > TM_MAX) throw fail('too-long', 'This draft is too long to save. Shorten it and try again.');
+        out[k] = changes[k];
+      });
+      if (!Object.keys(out).length) return;
+      if (isLocal()) {
+        const data = localRead();
+        data.targetMessaging = { ...(data.targetMessaging || {}), ...out, updatedAt: Date.now() };
+        localWrite(data);
+        return;
+      }
+      const d = await getDb();
+      await withTimeout(
+        baseRef(d).set({ targetMessaging: { ...out, updatedAt: firebase.firestore.FieldValue.serverTimestamp() } }, { merge: true }),
+        TIMEOUT_MS, 'Saving your drafts');
+    }
+
     /* ---------- Market Tracker boxes ----------
        One document per tracked job title, so a box's results can be written or
        deleted on their own and never bloat the company record the rest of
@@ -1201,6 +1243,7 @@ window.MktforgeData = (() => {
       savePdfDoc, listFiles, openFile, deleteFile, renameFile, nameTaken,
       readFile, getFileDigest, setFileDigest, importFile, getFileText,
       getPositioningAnswers, savePositioningAnswers,
+      getTargetMessaging, saveTargetMessaging,
       listTrackerBoxes, saveTrackerBox, deleteTrackerBox,
       getCompetitorLedger, saveCompetitorLedger, deleteCompetitorLedger,
       getTitleLedger, saveTitleLedger, deleteTitleLedger,
@@ -1682,6 +1725,7 @@ window.MktforgeData = (() => {
     readFile: onActive('readFile'), getFileDigest: onActive('getFileDigest'), setFileDigest: onActive('setFileDigest'),
     importFile: onActive('importFile'), getFileText: onActive('getFileText'),
     getPositioningAnswers: onActive('getPositioningAnswers'), savePositioningAnswers: onActive('savePositioningAnswers'),
+    getTargetMessaging: onActive('getTargetMessaging'), saveTargetMessaging: onActive('saveTargetMessaging'),
     listTrackerBoxes: onActive('listTrackerBoxes'), saveTrackerBox: onActive('saveTrackerBox'),
     deleteTrackerBox: onActive('deleteTrackerBox'),
     getCompetitorLedger: onActive('getCompetitorLedger'), saveCompetitorLedger: onActive('saveCompetitorLedger'),
