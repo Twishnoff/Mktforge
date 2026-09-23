@@ -41,7 +41,8 @@
    screen. Once all modules are company-aware, the switch happens in place.
 
    Mktforge.deleteActiveCompany() -> Promise<boolean>; moves to the oldest
-     company and deletes this one. My Company asks first.
+     company and deletes this one (and its HubSpot connection, if any).
+     My Company asks first.
 
    Mktforge.confirm({ message, confirmLabel, cancelLabel, danger })
      -> Promise<boolean>. A modal; nothing else on the page works while it's
@@ -629,6 +630,11 @@ window.Mktforge = (() => {
       // Already deleted (another tab got there first): just move on.
     }
     // From here the company is gone for good; only the move remains.
+    // Its HubSpot connection goes too (best effort; never blocks the move).
+    if (window.MktforgeKit && window.MktforgeKit.hubspot) {
+      window.MktforgeKit.hubspot(id).disconnect({ keepalive: true })
+        .catch((err) => console.warn('[Mktforge] HubSpot token for the deleted company not removed', err));
+    }
     try { sessionStorage.setItem(NOTICE_KEY, 'Company deleted.'); } catch (e) { /* no notice */ }
     const here = inPlace ? takeDown() : null;
     try {

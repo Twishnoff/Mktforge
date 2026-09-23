@@ -466,7 +466,7 @@ window.MktforgeKit = (() => {
     const base = String(cfg.API_BASE_URL || '').replace(/\/+$/, '');
     const cid = () => companyId || (window.MktforgeData && window.MktforgeData.activeCompanyId) || null;
 
-    async function request(method, path, { body, query, signal } = {}) {
+    async function request(method, path, { body, query, signal, keepalive } = {}) {
       if (!base) throw new HubSpotError('HubSpot isn’t set up for Mktforge yet.', 'not_configured', 0);
       const id = cid();
       if (!id) throw new HubSpotError('No company is selected.', 'bad_company', 0);
@@ -476,7 +476,7 @@ window.MktforgeKit = (() => {
 
       const url = new URL(base + path);
       if (query) Object.entries({ companyId: id, ...query }).forEach(([k, v]) => url.searchParams.set(k, v));
-      const init = { method, headers: { Authorization: `Bearer ${token}` }, signal };
+      const init = { method, headers: { Authorization: `Bearer ${token}` }, signal, keepalive: !!keepalive };
       if (method !== 'GET') {
         init.headers['Content-Type'] = 'application/json';
         init.body = JSON.stringify({ companyId: id, ...(body || {}) });
@@ -505,7 +505,7 @@ window.MktforgeKit = (() => {
         if (!url) throw new HubSpotError('HubSpot didn’t return an approval link.', 'no_url', 0);
         window.location.assign(url);
       },
-      disconnect: () => request('POST', '/disconnect'),
+      disconnect: (opts = {}) => request('POST', '/disconnect', opts),   // { keepalive } survives a page reload
       call: (path, body, opts = {}) => request('POST', path, { body, ...opts })
     };
   }

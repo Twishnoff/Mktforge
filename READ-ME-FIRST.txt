@@ -1,28 +1,19 @@
-Mktforge — HubSpot integration, Step 7: Connect HubSpot in My Company
+Mktforge — HubSpot integration, Step 8: clean up on Delete This Company
 ======================================================================
 
 UPLOAD (keep the folders as they are in the zip)
 
-  READ-ME-FIRST.txt                          (repo root)
-  assets/js/config.js
+  READ-ME-FIRST.txt            (repo root)
+  assets/js/app.js
   assets/js/module-kit.js
-  modules/my-company/my-company.js
-  modules/my-company/my-company.css
 
-No rules change. The Worker (hubspot-connect) is already deployed.
-Hard-refresh (Ctrl+Shift+R) after uploading.
+No rules change, no Worker deploy. Hard-refresh (Ctrl+Shift+R) after uploading.
 
 WHAT'S NEW
 
-  My Company has an "Integrations" section between the profile and Your
-  Saved Resources, with a HubSpot card for the active company:
-    - Not connected: "Connect HubSpot" sends you to HubSpot's approval
-      screen, then back to My Company with a notice.
-    - Connected: "Connected to <portal> · read-only access" + Disconnect
-      (asks to confirm).
-    - Needs reconnecting (token revoked/expired): Reconnect + Disconnect.
-  Each Mktforge company has its own HubSpot connection.
-
-  config.js: new hubspot.API_BASE_URL.
-  module-kit.js: MktforgeKit.hubspot() — the shared client later modules
-  will use for HubSpot data (status / connect / disconnect / call).
+  Delete This Company now also removes that company's HubSpot connection
+  from the hubspot-connect Worker. It's best effort: it never blocks or
+  slows the delete, and the request is sent so it survives the page move.
+  (Mktforge stays installed in the HubSpot account itself until someone
+  uninstalls it under Connected Apps there; with the token gone, Mktforge
+  can no longer read anything.)
