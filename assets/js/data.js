@@ -335,18 +335,32 @@ window.MktforgeData = (() => {
     });
   }
 
+  /* The account document as the server holds it, never with this tab's
+     own pending writes laid over it (see getAvatar). Falls back to a plain
+     read if the transaction can't run, e.g. offline. */
+  async function readAccountDoc(d, label) {
+    const ref = userRef(d);
+    try {
+      return await withTimeout(d.runTransaction((tx) => tx.get(ref)), TIMEOUT_MS, label);
+    } catch (err) {
+      console.warn('[Mktforge] account read fell back to a plain get', err);
+      return withTimeout(ref.get(), TIMEOUT_MS, label);
+    }
+  }
+
   async function getAvatar({ fresh = false } = {}) {
     if (avatarCache !== null && !fresh) return avatarCache;
     if (isLocal()) {
       avatarCache = String(rootRead().avatar || '');
     } else {
       const d = await getDb();
-      /* From the server, not the local cache. On a refresh, start() has
-         already queued the "last company" write to this same document, and
-         before the first server read lands Firestore's local copy is ONLY
-         that pending write ({ lastCompanyId }). A plain get() can resolve
-         with that partial copy — no account, so no picture. */
-      const snap = await serverGet(userRef(d), 'Loading your profile picture');
+      /* Read inside a transaction. On a refresh, start() has already queued
+         the "last company" write to this same document, and any get() —
+         even { source: 'server' } — comes back with that pending write laid
+         over it, which on a fresh page is just { lastCompanyId }: no
+         account, so no picture. A transaction read goes straight to the
+         server and ignores pending local writes. */
+      const snap = await readAccountDoc(d, 'Loading your profile picture');
       const account = (snap.exists && snap.data().account) || null;
       avatarCache = String((account && account.photo) || '');
     }
@@ -1585,7 +1599,7 @@ window.MktforgeData = (() => {
   async function lastCompanyOnAccount() {
     if (isLocal()) return rootRead().lastCompanyId || '';
     const d = await getDb();
-    const snap = await serverGet(userRef(d), 'Loading your account');   // see getAvatar
+    const snap = await readAccountDoc(d, 'Loading your account');   // see getAvatar
     return (snap.exists && snap.data().lastCompanyId) || '';
   }
 
