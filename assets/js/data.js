@@ -341,7 +341,12 @@ window.MktforgeData = (() => {
       avatarCache = String(rootRead().avatar || '');
     } else {
       const d = await getDb();
-      const snap = await withTimeout(userRef(d).get(), TIMEOUT_MS, 'Loading your profile picture');
+      /* From the server, not the local cache. On a refresh, start() has
+         already queued the "last company" write to this same document, and
+         before the first server read lands Firestore's local copy is ONLY
+         that pending write ({ lastCompanyId }). A plain get() can resolve
+         with that partial copy — no account, so no picture. */
+      const snap = await serverGet(userRef(d), 'Loading your profile picture');
       const account = (snap.exists && snap.data().account) || null;
       avatarCache = String((account && account.photo) || '');
     }
@@ -1580,7 +1585,7 @@ window.MktforgeData = (() => {
   async function lastCompanyOnAccount() {
     if (isLocal()) return rootRead().lastCompanyId || '';
     const d = await getDb();
-    const snap = await withTimeout(userRef(d).get(), TIMEOUT_MS, 'Loading your account');
+    const snap = await serverGet(userRef(d), 'Loading your account');   // see getAvatar
     return (snap.exists && snap.data().lastCompanyId) || '';
   }
 
