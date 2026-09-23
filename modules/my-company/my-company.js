@@ -106,7 +106,10 @@
       filesError: '',
       renaming: null,        // { id, value, error, saving } while a file name is being edited
       uploads: [],           // import status lines
-      pumping: false
+      pumping: false,
+      hs: null,              // HubSpot status from the Worker, null until loaded
+      hsError: '',
+      hsBusy: ''             // 'connect' | 'disconnect' while a button is working
     }),
     held: ['drafts', 'editing']
   });
@@ -145,6 +148,13 @@
               <button type="submit" class="mc__btn" data-el="save">Save</button>
             </div>
           </form>
+        </section>
+
+        <section class="mc__integrations" aria-labelledby="mc-integrations-title">
+          <h2 class="mc__h2" id="mc-integrations-title">Integrations</h2>
+          <div class="mc__card mc__card--tight">
+            <div class="mc__hs" data-el="hubspot"><p class="mc__loading">Checking HubSpot…</p></div>
+          </div>
         </section>
 
         <section class="mc__resources" aria-labelledby="mc-resources-title" data-el="resources">
@@ -887,6 +897,178 @@
     if (onScreen(st)) renderRows();
   }
 
+  /* ---------- HubSpot (read-only) ----------
+     One connection per company. The Worker (hubspot-connect) holds the
+     tokens; this screen only shows status and starts/stops the connection.
+     Coming back from HubSpot's approval screen lands on
+     ?hubspot=<result>&company=<id>#/my-company — read once, then the query
+     is removed from the address bar so a refresh doesn't repeat the notice. */
+
+  const HS_RETURN = (() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const result = p.get('hubspot');
+      if (!result) return null;
+      p.delete('hubspot');
+      const company = p.get('company');
+      p.delete('company');
+      const rest = p.toString();
+      history.replaceState(history.state, '',
+        `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
+      return { result, company };
+    } catch (e) { return null; }
+  })();
+
+  const HS_NOTICES = {
+    connected: { message: 'HubSpot connected. Mktforge has read-only access.' },
+    denied:    { message: 'HubSpot wasn’t connected — the approval was cancelled.' },
+    expired:   { message: 'That HubSpot approval took too long. Click Connect HubSpot to try again.', tone: 'error' },
+    error:     { message: 'HubSpot didn’t finish connecting. Try again, and if it keeps failing, check you’re a Super Admin in that HubSpot account.', tone: 'error' }
+  };
+
+  if (HS_RETURN) {
+    document.addEventListener('mktforge:company-ready', () => {
+      const n = HS_NOTICES[HS_RETURN.result] || HS_NOTICES.error;
+      let message = n.message;
+      const active = Data() && Data().activeCompanyId;
+      if (HS_RETURN.result === 'connected' && HS_RETURN.company && active && HS_RETURN.company !== active) {
+        message = 'HubSpot connected to the company you started from. Switch back to it to see the connection.';
+      }
+      document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message, tone: n.tone } }));
+    }, { once: true });
+  }
+
+  function hsTime(iso) {
+    const t = Date.parse(iso || '');
+    return Number.isFinite(t) ? formatDate(t) : '';
+  }
+
+  function renderHubSpot() {
+    const box = root && q('[data-el="hubspot"]');
+    if (!box) return;
+    const st = state;
+    const s = st.hs;
+    const busy = st.hsBusy;
+    const err = st.hsError ? `<p class="mc__error mc__hs-error" role="alert">${esc(st.hsError)}</p>` : '';
+
+    const head = (statusHtml) => `
+      <div class="mc__hs-main">
+        <div class="mc__hs-name">
+          <span class="mc__hs-logo" aria-hidden="true">HS</span>
+          <div>
+            <h3 class="mc__h3 mc__hs-title">HubSpot</h3>
+            ${statusHtml}
+          </div>
+        </div>`;
+
+    if (!s) {
+      box.innerHTML = st.hsError
+        ? `${head('<p class="mc__hs-status">Status unavailable</p>')}
+             <button type="button" class="mc__btn mc__btn--sm mc__btn--ghost" data-hs="retry">Try again</button>
+           </div>${err}`
+        : '<p class="mc__loading">Checking HubSpot…</p>';
+      return;
+    }
+
+    if (!s.connected) {
+      box.innerHTML = `${head(`<p class="mc__hs-status">Not connected</p>`)}
+          <button type="button" class="mc__btn mc__btn--sm" data-hs="connect" ${busy ? 'disabled' : ''}>
+            ${busy === 'connect' ? 'Opening HubSpot…' : 'Connect HubSpot'}</button>
+        </div>
+        <p class="mc__hs-note">Lets Mktforge read this company’s HubSpot contacts, companies, deals and notes
+          to help draft emails. Read-only: Mktforge can’t create, edit or delete anything in HubSpot.
+          You’ll need to be a Super Admin (or have App Marketplace access) in the HubSpot account.</p>
+        ${err}`;
+      return;
+    }
+
+    const portal = s.portalDomain || (s.portalId ? `HubSpot account ${s.portalId}` : 'your HubSpot account');
+    const since = hsTime(s.connectedAt);
+
+    if (s.needsReconnect) {
+      box.innerHTML = `${head(`<p class="mc__hs-status is-warn">Needs reconnecting · ${esc(portal)}</p>`)}
+          <div class="mc__hs-actions">
+            <button type="button" class="mc__btn mc__btn--sm" data-hs="connect" ${busy ? 'disabled' : ''}>
+              ${busy === 'connect' ? 'Opening HubSpot…' : 'Reconnect HubSpot'}</button>
+            <button type="button" class="mc__delete" data-hs="disconnect" ${busy ? 'disabled' : ''}>
+              ${busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}</button>
+          </div>
+        </div>
+        <p class="mc__hs-note">The connection expired or the app was removed in HubSpot. Reconnect to keep using HubSpot data.</p>
+        ${err}`;
+      return;
+    }
+
+    box.innerHTML = `${head(`<p class="mc__hs-status is-ok"><span class="mc__hs-dot" aria-hidden="true"></span>
+            Connected to <strong>${esc(portal)}</strong> · read-only access</p>`)}
+        <button type="button" class="mc__delete" data-hs="disconnect" ${busy ? 'disabled' : ''}>
+          ${busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}</button>
+      </div>
+      <p class="mc__hs-note">${since ? `Connected ${esc(since)}. ` : ''}Mktforge currently has read-only access to this company’s HubSpot account.</p>
+      ${err}`;
+  }
+
+  async function loadHubSpot() {
+    const st = state;
+    st.hsError = '';
+    if (onScreen(st) && !st.hs) renderHubSpot();
+    try {
+      st.hs = await window.MktforgeKit.hubspot(st._cid).status();
+    } catch (ex) {
+      console.warn('[My Company] HubSpot status unavailable', ex);
+      if (!st.hs) st.hsError = ex.message || 'Couldn’t check the HubSpot connection.';
+    }
+    if (onScreen(st)) renderHubSpot();
+  }
+
+  async function handleHubSpotClick(e) {
+    const btn = e.target.closest('[data-hs]');
+    if (!btn || state.hsBusy) return;
+    const st = state;
+    const action = btn.dataset.hs;
+
+    if (action === 'retry') { st.hs = null; loadHubSpot(); return; }
+
+    if (action === 'connect') {
+      st.hsBusy = 'connect';
+      st.hsError = '';
+      renderHubSpot();
+      try {
+        await window.MktforgeKit.hubspot(st._cid).connect();   // leaves the page on success
+      } catch (ex) {
+        console.error('[My Company] HubSpot connect failed', ex);
+        st.hsError = ex.message || 'Couldn’t start the HubSpot connection.';
+        st.hsBusy = '';
+        if (onScreen(st)) renderHubSpot();
+      }
+      return;
+    }
+
+    if (action === 'disconnect') {
+      const ok = await Mktforge.confirm({
+        message: 'Disconnect HubSpot from this company? Mktforge will stop reading its HubSpot data and forget the connection. '
+          + 'To remove Mktforge from HubSpot completely, also uninstall it under Connected Apps in your HubSpot settings.',
+        cancelLabel: 'Keep Connected',
+        confirmLabel: 'Disconnect',
+        danger: true
+      });
+      if (!ok) return;
+      st.hsBusy = 'disconnect';
+      st.hsError = '';
+      if (onScreen(st)) renderHubSpot();
+      try {
+        await window.MktforgeKit.hubspot(st._cid).disconnect();
+        st.hs = { connected: false };
+        document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message: 'HubSpot disconnected.' } }));
+      } catch (ex) {
+        console.error('[My Company] HubSpot disconnect failed', ex);
+        st.hsError = ex.message || 'Couldn’t disconnect HubSpot. Try again.';
+      }
+      st.hsBusy = '';
+      if (onScreen(st)) renderHubSpot();
+    }
+  }
+
   /* ---------- Delete This Company ---------- */
 
   async function handleDeleteCompany() {
@@ -940,6 +1122,11 @@
       resources.addEventListener('keydown', handleFilesKeydown);
       wireImport();
       renderUploads();
+
+      q('[data-el="hubspot"]').addEventListener('click', handleHubSpotClick);
+      state.hsBusy = '';                             // a Connect that left the page is over
+      renderHubSpot();
+      loadHubSpot();                                 // always refresh on open
 
       if (state.loaded) {
         // Another module may have changed the profile (e.g. Find My Customer

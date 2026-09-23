@@ -12,6 +12,7 @@
      savedMaterials(cfg, opts, say) the account's Imported + Generated Materials for a
                                     Worker request, or null (see assets/js/research.js)
      perCompany(moduleId, opts)     one screen state per company (see below)
+     hubspot(companyId?)            read-only HubSpot client for a company (see bottom)
 
    Everything here only reads My Company data (through MktforgeData) and
    only touches the elements a module passes in.
@@ -442,6 +443,73 @@ window.MktforgeKit = (() => {
 
   document.addEventListener('mktforge:company-ready', () => instances.forEach((i) => i._ready()));
 
+  /* ---------- HubSpot (read-only) ----------
+     One connection per Mktforge company, held by the hubspot-connect Worker.
+     Every call sends the sign-in token and the company id; the Worker looks
+     up that company's HubSpot token itself.
+
+       const hs = MktforgeKit.hubspot();            // the active company
+       await hs.status()      -> { connected, needsReconnect, portalId, portalDomain, scopes, connectedAt }
+       await hs.connect()     sends the browser to HubSpot's approval screen
+       await hs.disconnect()
+       await hs.call('/api/…', body, { signal })   data endpoints (added later)
+
+     Failures throw an Error whose .code is the Worker's error ('not_connected',
+     'reconnect_needed', 'not_approved', …) and whose .message is safe to show. */
+
+  class HubSpotError extends Error {
+    constructor(message, code, status) { super(message); this.code = code; this.status = status; }
+  }
+
+  function hubspot(companyId) {
+    const cfg = (window.MKTFORGE_CONFIG || {}).hubspot || {};
+    const base = String(cfg.API_BASE_URL || '').replace(/\/+$/, '');
+    const cid = () => companyId || (window.MktforgeData && window.MktforgeData.activeCompanyId) || null;
+
+    async function request(method, path, { body, query, signal } = {}) {
+      if (!base) throw new HubSpotError('HubSpot isn’t set up for Mktforge yet.', 'not_configured', 0);
+      const id = cid();
+      if (!id) throw new HubSpotError('No company is selected.', 'bad_company', 0);
+      const a = window.MktforgeAuth;
+      const token = a && a.getIdToken ? await a.getIdToken() : null;
+      if (!token) throw new HubSpotError('Sign in to use HubSpot.', 'unauthenticated', 401);
+
+      const url = new URL(base + path);
+      if (query) Object.entries({ companyId: id, ...query }).forEach(([k, v]) => url.searchParams.set(k, v));
+      const init = { method, headers: { Authorization: `Bearer ${token}` }, signal };
+      if (method !== 'GET') {
+        init.headers['Content-Type'] = 'application/json';
+        init.body = JSON.stringify({ companyId: id, ...(body || {}) });
+      }
+
+      let res;
+      try { res = await fetch(url.toString(), init); } catch (err) {
+        if (err && err.name === 'AbortError') throw err;
+        throw new HubSpotError('Couldn’t reach the HubSpot connection. Check your internet and try again.', 'network', 0);
+      }
+      let data = {};
+      try { data = await res.json(); } catch (e) { /* empty body */ }
+      if (!res.ok) {
+        const msg = data.message
+          || (res.status === 401 || res.status === 403 ? NO_ACCESS : 'Something went wrong with the HubSpot connection.');
+        throw new HubSpotError(msg, data.error || `http_${res.status}`, res.status);
+      }
+      return data;
+    }
+
+    return {
+      get companyId() { return cid(); },
+      status: (opts) => request('GET', '/status', { query: {}, ...opts }),
+      async connect() {
+        const { url } = await request('POST', '/oauth/start');
+        if (!url) throw new HubSpotError('HubSpot didn’t return an approval link.', 'no_url', 0);
+        window.location.assign(url);
+      },
+      disconnect: () => request('POST', '/disconnect'),
+      call: (path, body, opts = {}) => request('POST', path, { body, ...opts })
+    };
+  }
+
   return { NO_ACCESS, accountEmail, accessProblem, accessError, seedCompanyUrl, attachPicker, savedMaterials,
-           perCompany, STOPPED, INTERRUPTED };
+           perCompany, STOPPED, INTERRUPTED, hubspot, HubSpotError };
 })();

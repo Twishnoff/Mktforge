@@ -1,42 +1,28 @@
-Mktforge — Multi-company, Session 4: every module per company; switch in place
-==============================================================================
+Mktforge — HubSpot integration, Step 7: Connect HubSpot in My Company
+======================================================================
 
 UPLOAD (keep the folders as they are in the zip)
 
-  READ-ME-FIRST.txt                                       (repo root)
-  assets/js/app.js
-  assets/js/data.js
+  READ-ME-FIRST.txt                          (repo root)
+  assets/js/config.js
   assets/js/module-kit.js
-  assets/js/research.js
-  modules/build-positioning/build-positioning.js
-  modules/draft-messaging/draft-messaging.js
-  modules/market-tracker/market-tracker.js
-  modules/persona-builder/persona-builder.js
-  modules/battle-card-generator/battle-card-generator.js
-  modules/find-my-customer/find-my-customer.js
-  modules/marketing-opportunities/marketing-opportunities.js
+  modules/my-company/my-company.js
+  modules/my-company/my-company.css
 
-No rules change, no Worker deploy. Hard-refresh (Ctrl+Shift+R) after uploading.
+No rules change. The Worker (hubspot-connect) is already deployed.
+Hard-refresh (Ctrl+Shift+R) after uploading.
 
 WHAT'S NEW
 
-  Switching companies no longer reloads the page. Results on screen stay with
-  their company: switch away and back and they're still there (until you
-  refresh or close the tab; saved data is always kept).
+  My Company has an "Integrations" section between the profile and Your
+  Saved Resources, with a HubSpot card for the active company:
+    - Not connected: "Connect HubSpot" sends you to HubSpot's approval
+      screen, then back to My Company with a notice.
+    - Connected: "Connected to <portal> · read-only access" + Disconnect
+      (asks to confirm).
+    - Needs reconnecting (token revoked/expired): Reconnect + Disconnect.
+  Each Mktforge company has its own HubSpot connection.
 
-  Build Positioning, Draft Messaging and Market Tracker now work like the
-  other modules:
-    - their own screen per company; typed inputs and unsaved answers are
-      kept and survive a refresh
-    - switching mid-run stops the run (the Worker request is really
-      cancelled) with "Run stopped when you switched companies. Run it
-      again." A Draft Answer row says "Draft stopped…"; a Market Tracker box
-      says "Run stopped… Refresh Data to run it again."
-    - a refresh mid-run shows the red light and "This run was interrupted."
-  Market Tracker's competitor and title history is kept per company, so
-  editing one company's My Company can never clear another's.
-
-  Also fixed while testing:
-    - saved materials are read from the company a run started on
-    - a PDF is saved to the company it was made for, never another one
-    - clicking a module while a switch is in progress opens it afterwards
+  config.js: new hubspot.API_BASE_URL.
+  module-kit.js: MktforgeKit.hubspot() — the shared client later modules
+  will use for HubSpot data (status / connect / disconnect / call).

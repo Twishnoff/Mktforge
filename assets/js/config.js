@@ -96,6 +96,13 @@ window.MKTFORGE_CONFIG = {
     // name so its URL — and the deploy you already have — never change.
     // Signed-in accounts only: every request carries the Firebase ID token.
     API_BASE_URL: 'https://customer-tracker.tyler-wishnoff.workers.dev'
+  },
+
+  hubspot: {
+    // Read-only HubSpot connection, one per Mktforge company
+    // (C:\Users\Tyler\hubspot-connect, deployed as "hubspot-connect").
+    // Tokens live in the Worker, encrypted; the browser never sees them.
+    API_BASE_URL: 'https://hubspot-connect.tyler-wishnoff.workers.dev'
   }
 
 };
