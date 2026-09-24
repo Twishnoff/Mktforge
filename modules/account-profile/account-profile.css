@@ -5,18 +5,18 @@
    ========================================================================== */
 
 .ap {
-  --ap-surface: #FFFDF7;
+  --ap-surface: var(--surface);
   --ap-line:    var(--paper-line);
   --ap-crit:      #A8371F;
   --ap-crit-soft: #F6E4E0;
-  --ap-shadow: 0 1px 2px rgba(32,36,43,.05), 0 6px 18px rgba(32,36,43,.045);
-  --ap-radius: 8px;
+  --ap-shadow: var(--shadow-card);
+  --ap-radius: var(--radius-card);
 
   max-width: 920px;
   margin: 0 auto;
   padding: 36px 32px 72px;
   color: var(--ink);
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 /* --- header --- */
@@ -83,7 +83,7 @@
 
 .ap__preview-cap {
   margin: 10px 0 0;
-  font-size: 12.5px;
+  font-size: 14px;
   color: var(--muted);
 }
 
@@ -112,7 +112,7 @@
 
 .ap__drop-sub {
   margin-top: 6px !important;
-  font-size: 12.5px;
+  font-size: 14px;
   color: var(--muted);
 }
 
@@ -129,7 +129,7 @@
 
 .ap__filename {
   margin: 10px 0 0;
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--ink-soft);
   overflow-wrap: anywhere;
 }
@@ -142,7 +142,7 @@
   border-radius: 6px;
   background: var(--ap-crit-soft);
   color: var(--ap-crit);
-  font-size: 13.5px;
+  font-size: 15px;
 }
 
 .ap__actions {
@@ -157,7 +157,7 @@
 .ap__btn {
   font: inherit;
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: 15.5px;
   padding: 10px 30px;
   border-radius: 999px;
   border: none;
@@ -175,7 +175,7 @@
   border: none;
   background: none;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 15px;
   color: var(--ap-crit);
   text-decoration: underline;
   cursor: pointer;

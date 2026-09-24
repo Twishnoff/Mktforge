@@ -4,20 +4,20 @@
    ========================================================================== */
 
 .bpos {
-  --bpos-surface: #FFFDF7;
+  --bpos-surface: var(--surface);
   --bpos-line:    var(--paper-line);
   --bpos-crit:      #A8371F;
   --bpos-crit-soft: #F6E4E0;
   --bpos-warn:      #8A5A00;
   --bpos-warn-soft: #F7EDD2;
-  --bpos-shadow: 0 1px 2px rgba(32,36,43,.05), 0 6px 18px rgba(32,36,43,.045);
-  --bpos-radius: 8px;
+  --bpos-shadow: var(--shadow-card);
+  --bpos-radius: var(--radius-card);
 
   max-width: 1180px;
   margin: 0 auto;
   padding: 36px 32px 72px;
   color: var(--ink);
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 .bpos__sr {
@@ -29,10 +29,10 @@
 
 .bpos__eyebrow {
   margin: 0 0 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
   color: var(--accent);
 }
 
@@ -71,10 +71,10 @@
 }
 
 .bpos__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.bpos__field label { font-size: 13px; font-weight: 600; }
+.bpos__field label { font-size: 14.5px; font-weight: 600; }
 .bpos__optional { font-weight: 400; color: var(--muted); }
 
-.bpos__field-note { margin: 0; font-size: 12.5px; color: var(--ink-soft); }
+.bpos__field-note { margin: 0; font-size: 14px; color: var(--ink-soft); }
 .bpos__field-note.is-error { color: var(--bpos-crit); }
 
 .bpos input[type="text"],
@@ -82,7 +82,7 @@
   width: 100%;
   min-width: 0;
   font: inherit;
-  font-size: 14.5px;
+  font-size: 15.5px;
   padding: 9px 12px;
   border: 1px solid var(--bpos-line);
   border-radius: 6px;
@@ -112,14 +112,14 @@
   margin: 16px 0 0;
   padding-top: 14px;
   border-top: 1px solid var(--paper-dim);
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--ink-soft);
 }
 
 /* --- question table --- */
 
 .bpos__qa-head { margin-bottom: 14px; }
-.bpos__qa-dek { margin: 10px 0 0; max-width: 78ch; font-size: 13.5px; color: var(--ink-soft); }
+.bpos__qa-dek { margin: 10px 0 0; max-width: 78ch; font-size: 15px; color: var(--ink-soft); }
 
 .bpos__qa-headline {
   display: flex;
@@ -143,12 +143,12 @@
 }
 
 .bpos__col-q   { width: 34%; }
-.bpos__col-act { width: 144px; }
+.bpos__col-act { width: 168px; }
 
 .bpos__qa thead th {
   padding: 8px 10px;
   border-bottom: 1px solid var(--bpos-line);
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -159,7 +159,7 @@
 .bpos__group th {
   padding: 20px 10px 6px;
   font-family: var(--font-display);
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   text-align: left;
   color: var(--ink);
@@ -173,12 +173,12 @@
 }
 
 .bpos__q { text-align: left; font-weight: 400; }
-.bpos__q label { display: block; font-size: 14px; font-weight: 600; color: var(--ink); }
+.bpos__q label { display: block; font-size: 15px; font-weight: 600; color: var(--ink); }
 
 .bpos__q-hint {
   display: block;
   margin-top: 2px;
-  font-size: 12.5px;
+  font-size: 14px;
   color: var(--muted);
 }
 
@@ -188,7 +188,7 @@
   padding: 1px 8px;
   border-radius: 999px;
   background: var(--accent-tint);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--accent);
 }
@@ -239,7 +239,7 @@
   background: var(--paper);
   color: var(--ink-soft);
   font: inherit;
-  font-size: 15px;
+  font-size: 16.5px;
   line-height: 1;
   cursor: pointer;
   z-index: 1;
@@ -260,7 +260,7 @@
   100% { background: transparent; }
 }
 
-.bpos__row-error { margin: 6px 0 0; font-size: 12.5px; color: var(--bpos-crit); }
+.bpos__row-error { margin: 6px 0 0; font-size: 14px; color: var(--bpos-crit); }
 
 .bpos__act-stack {
   display: flex;
@@ -271,7 +271,7 @@
 
 .bpos__row-btn {
   font: inherit;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 600;
   padding: 6px 12px;
   border: 1px solid var(--accent);
@@ -315,7 +315,7 @@
 .bpos__btn {
   font: inherit;
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: 15.5px;
   padding: 10px 26px;
   border-radius: 999px;
   border: none;
@@ -326,7 +326,7 @@
 }
 
 .bpos__btn:hover:not(:disabled) { opacity: .9; }
-.bpos__btn--lg { padding: 12px 32px; font-size: 15px; }
+.bpos__btn--lg { padding: 12px 32px; font-size: 16.5px; }
 
 .bpos__btn:disabled {
   background: var(--paper-dim);
@@ -353,7 +353,7 @@
   border-radius: 6px;
   background: var(--bpos-crit-soft);
   color: var(--bpos-crit);
-  font-size: 13.5px;
+  font-size: 15px;
 }
 
 .bpos__error[hidden] { display: none; }
@@ -378,7 +378,7 @@
   gap: 12px;
 }
 
-.bpos__hint, .bpos__status { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+.bpos__hint, .bpos__status { margin: 0; font-size: 15px; color: var(--ink-soft); }
 .bpos__hint:empty, .bpos__status:empty { display: none; }
 
 /* --- result boxes --- */
@@ -431,7 +431,7 @@
   background: var(--paper);
   color: var(--ink-soft);
   font: inherit;
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1;
   cursor: pointer;
 }
@@ -449,8 +449,8 @@
 .bpos__box.is-collapsed > .bpos__box-body { display: none; }
 
 .bpos__stage {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-family: var(--font-body);
+  font-size: 12px;
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--accent);
@@ -459,7 +459,7 @@
 .bpos__box-body {
   flex: 1;
   padding: 14px 18px 18px;
-  font-size: 13.5px;
+  font-size: 15px;
   overflow-wrap: anywhere;
 }
 
@@ -511,7 +511,7 @@
   align-items: center;
   gap: 8px;
   margin: 0 0 6px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -526,7 +526,7 @@
 
 .bpos__label {
   margin: 12px 0 4px !important;
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -546,7 +546,7 @@
   border-radius: 999px;
   border: 1px solid var(--bpos-line);
   background: var(--paper);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--ink-soft);
   white-space: nowrap;
@@ -578,7 +578,7 @@
 .bpos__rung {
   display: inline-block;
   min-width: 118px;
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--muted);
 }
@@ -619,7 +619,7 @@
   border: none;
   background: none;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink-soft);
   text-align: left;
@@ -634,7 +634,7 @@
 .bpos__inner-icon {
   flex: none;
   margin-left: auto;
-  font-size: 15px;
+  font-size: 16.5px;
   line-height: 1;
 }
 

@@ -11,7 +11,7 @@
    ========================================================================== */
 
 .pb {
-  --pb-surface: #FFFDF7;
+  --pb-surface: var(--surface);
   --pb-sunken:  var(--paper-dim);
   --pb-line:    var(--paper-line);
   --pb-ink:     var(--ink);
@@ -22,24 +22,24 @@
   --pb-accent-line: #BDD2C8;
   --pb-crit:      #A8371F;
   --pb-crit-soft: #F6E4E0;
-  --pb-shadow: 0 1px 2px rgba(32,36,43,.05), 0 6px 18px rgba(32,36,43,.045);
-  --pb-radius: 8px;
+  --pb-shadow: var(--shadow-card);
+  --pb-radius: var(--radius-card);
 
   max-width: 1180px;
   margin: 0 auto;
   padding: 36px 32px 64px;
   color: var(--pb-ink);
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 /* --- Module header --- */
 
 .pb__eyebrow {
   margin: 0 0 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
   color: var(--pb-accent);
 }
 
@@ -73,14 +73,14 @@
 
 .pb__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 
-.pb__field label { font-size: 13px; font-weight: 600; color: var(--pb-ink); }
+.pb__field label { font-size: 14.5px; font-weight: 600; color: var(--pb-ink); }
 .pb__optional { font-weight: 400; color: var(--pb-faint); }
 
 .pb input[type="email"],
 .pb input[type="text"],
 .pb select {
   font: inherit;
-  font-size: 14.5px;
+  font-size: 15.5px;
   padding: 10px 12px;
   border: 1px solid var(--pb-line);
   border-radius: 6px;
@@ -111,7 +111,7 @@
 .pb__btn {
   font: inherit;
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: 15.5px;
   padding: 11px 26px;
   border-radius: 999px;
   border: none;
@@ -135,15 +135,15 @@
   border-radius: 6px;
   background: var(--pb-crit-soft);
   color: var(--pb-crit);
-  font-size: 13.5px;
+  font-size: 15px;
 }
 
 /* --- Results grid --- */
 
 .pb__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(max(340px, calc((100% - 20px) / 2)), 1fr));
+  gap: 20px;
   margin-bottom: 26px;
 }
 
@@ -152,7 +152,7 @@
   flex-direction: column;
   gap: 10px;
   min-height: 180px;
-  padding: 16px 18px 18px;
+  padding: 20px 22px 22px;
   background: var(--pb-surface);
   border: 1px solid var(--pb-line);
   border-radius: var(--pb-radius);
@@ -162,12 +162,12 @@
 .pb__box h2 {
   margin: 0;
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: 16.5px;
   font-weight: 600;
   color: var(--pb-ink);
 }
 
-.pb__box-body { flex: 1; font-size: 13.5px; color: var(--pb-ink); }
+.pb__box-body { flex: 1; font-size: 15px; color: var(--pb-ink); }
 
 .pb__box-body.is-placeholder {
   display: flex;
@@ -214,7 +214,7 @@
   display: grid;
   grid-template-columns: 148px 1fr;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 .pb__k { color: var(--pb-soft); font-weight: 600; }
@@ -222,12 +222,12 @@
 
 /* --- Tables (profiles, gather) --- */
 
-.pb__box table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pb__box table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
 
 .pb__box th {
   padding: 0 6px 6px 0;
   text-align: left;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -257,7 +257,7 @@
   counter-increment: pb-rank;
   display: flex;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 .pb__rank li::before {
@@ -266,14 +266,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   margin-top: 1px;
   border-radius: 50%;
   background: var(--pb-accent-soft);
   color: var(--pb-accent);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-family: var(--font-body);
+  font-size: 12px;
 }
 
 /* --- Org chart --- */
@@ -286,7 +286,7 @@
   background: var(--pb-sunken);
   border: 1px solid var(--pb-line);
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size: 14px;
   text-align: center;
 }
 
@@ -299,8 +299,8 @@
 .pb__tier-label {
   display: block;
   margin-bottom: 2px;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-family: var(--font-body);
+  font-size: 11px;
   letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--pb-faint);
@@ -311,7 +311,7 @@
 .pb__branches { display: flex; gap: 10px; width: 100%; justify-content: center; }
 .pb__branches .pb__tier { flex: 1; min-width: 0; }
 
-.pb__empty { color: var(--pb-faint); font-size: 12.5px; font-style: italic; margin: 0; }
+.pb__empty { color: var(--pb-faint); font-size: 14px; font-style: italic; margin: 0; }
 
 /* --- PDF export row --- */
 
@@ -326,7 +326,7 @@
 .pb__status {
   margin: 0;
   min-height: 1.4em;
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--pb-soft);
 }
 
@@ -334,7 +334,7 @@
 
 .pb__hint {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 14px;
   color: var(--pb-faint);
 }
 

@@ -7,7 +7,7 @@
    ========================================================================== */
 
 .mo {
-  --mo-surface: #FFFDF7;
+  --mo-surface: var(--surface);
   --mo-sunken:  var(--paper-dim);
   --mo-line:    var(--paper-line);
   --mo-ink:     var(--ink);
@@ -17,25 +17,25 @@
   --mo-accent-soft: var(--accent-tint);
   --mo-crit:      #A8371F;
   --mo-crit-soft: #F6E4E0;
-  --mo-shadow: 0 1px 2px rgba(32,36,43,.05), 0 6px 18px rgba(32,36,43,.045);
-  --mo-radius: 8px;
+  --mo-shadow: var(--shadow-card);
+  --mo-radius: var(--radius-card);
 
   container-type: inline-size;
   max-width: 1180px;
   margin: 0 auto;
   padding: 36px 32px 64px;
   color: var(--mo-ink);
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 /* --- Module header --- */
 
 .mo__eyebrow {
   margin: 0 0 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
   color: var(--mo-accent);
 }
 
@@ -70,13 +70,13 @@
 
 .mo__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .mo__row:first-child .mo__field--wide { grid-column: span 2; }
-.mo__field label { font-size: 13px; font-weight: 600; }
+.mo__field label { font-size: 14.5px; font-weight: 600; }
 .mo__optional { font-weight: 400; color: var(--mo-faint); }
 
 .mo input[type="email"],
 .mo input[type="text"] {
   font: inherit;
-  font-size: 14.5px;
+  font-size: 15.5px;
   padding: 10px 12px;
   border: 1px solid var(--mo-line);
   border-radius: 6px;
@@ -104,7 +104,7 @@
 .mo__btn {
   font: inherit;
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: 15.5px;
   padding: 11px 26px;
   border-radius: 999px;
   border: none;
@@ -123,7 +123,7 @@
   cursor: not-allowed;
 }
 
-.mo__hint { margin: 0; font-size: 12.5px; color: var(--mo-faint); }
+.mo__hint { margin: 0; font-size: 14px; color: var(--mo-faint); }
 
 .mo__error {
   margin: 16px 0 0;
@@ -131,7 +131,7 @@
   border-radius: 6px;
   background: var(--mo-crit-soft);
   color: var(--mo-crit);
-  font-size: 13.5px;
+  font-size: 15px;
   text-align: center;
 }
 
@@ -145,7 +145,7 @@
   gap: 10px;
   min-height: 170px;
   min-width: 0;
-  padding: 16px 18px 18px;
+  padding: 20px 22px 22px;
   background: var(--mo-surface);
   border: 1px solid var(--mo-line);
   border-radius: var(--mo-radius);
@@ -157,13 +157,13 @@
 .mo__box h2 {
   margin: 0;
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: 16.5px;
   font-weight: 600;
 }
 
 .mo__count { font-weight: 400; color: var(--mo-faint); }
 
-.mo__box-body { flex: 1; font-size: 13px; overflow-x: auto; }
+.mo__box-body { flex: 1; font-size: 14.5px; overflow-x: auto; }
 
 /* All Results is uncapped; keep it from pushing the category boxes a
    screen and a half down the page. */
@@ -219,7 +219,7 @@
   .mo__box--last { grid-column: 1 / -1; }
 }
 
-@container (min-width: 900px) {
+@container (min-width: 1300px) {
   .mo__grid { grid-template-columns: repeat(3, 1fr); }
   .mo__box--last { grid-column: 2 / 3; }
 }
@@ -231,7 +231,7 @@
 .mo__box th {
   padding: 0 8px 6px 0;
   text-align: left;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -265,7 +265,7 @@
   border-radius: 999px;
   background: transparent;
   font: inherit;
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.5;
   color: var(--mo-accent);
@@ -296,7 +296,7 @@
   border-radius: 999px;
   background: var(--mo-accent-soft);
   color: var(--mo-accent);
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -314,6 +314,6 @@
 .mo__status {
   margin: 0;
   min-height: 1.4em;
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--mo-soft);
 }

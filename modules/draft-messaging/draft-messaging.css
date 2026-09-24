@@ -5,20 +5,20 @@
    ========================================================================== */
 
 .dmsg {
-  --dmsg-surface: #FFFDF7;
+  --dmsg-surface: var(--surface);
   --dmsg-line:    var(--paper-line);
   --dmsg-crit:      #A8371F;
   --dmsg-crit-soft: #F6E4E0;
   --dmsg-warn:      #8A5A00;
   --dmsg-warn-soft: #F7EDD2;
-  --dmsg-shadow: 0 1px 2px rgba(32,36,43,.05), 0 6px 18px rgba(32,36,43,.045);
-  --dmsg-radius: 8px;
+  --dmsg-shadow: var(--shadow-card);
+  --dmsg-radius: var(--radius-card);
 
   max-width: 1180px;
   margin: 0 auto;
   padding: 36px 32px 72px;
   color: var(--ink);
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 .dmsg__sr {
@@ -30,10 +30,10 @@
 
 .dmsg__eyebrow {
   margin: 0 0 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
   color: var(--accent);
 }
 
@@ -54,7 +54,7 @@
   font-weight: 600;
 }
 
-.dmsg__optional { font-weight: 400; font-size: 16px; color: var(--muted); }
+.dmsg__optional { font-weight: 400; font-size: 17px; color: var(--muted); }
 
 /* --- the two input columns --- */
 
@@ -77,15 +77,15 @@
   min-width: 0;
 }
 
-.dmsg__card-dek { margin: 0 0 16px; font-size: 13.5px; color: var(--ink-soft); }
+.dmsg__card-dek { margin: 0 0 16px; font-size: 15px; color: var(--ink-soft); }
 
 .dmsg__note {
   margin: 12px 0 10px;
-  font-size: 13.5px;
+  font-size: 15px;
   color: var(--ink-soft);
 }
 
-.dmsg__fine { font-size: 12.5px; }
+.dmsg__fine { font-size: 14px; }
 
 /* --- import --- */
 
@@ -102,8 +102,8 @@
   background: var(--accent-tint);
 }
 
-.dmsg__drop-main { margin: 0 0 4px; font-size: 13.5px; }
-.dmsg__drop-sub { margin: 0; font-size: 12px; color: var(--muted); }
+.dmsg__drop-main { margin: 0 0 4px; font-size: 15px; }
+.dmsg__drop-sub { margin: 0; font-size: 13.5px; color: var(--muted); }
 
 .dmsg__uploads { list-style: none; margin: 10px 0 0; padding: 0; }
 .dmsg__uploads[hidden] { display: none; }
@@ -116,7 +116,7 @@
   border: 1px solid var(--dmsg-line);
   border-radius: 6px;
   background: var(--paper);
-  font-size: 12.5px;
+  font-size: 14px;
 }
 
 .dmsg__upload + .dmsg__upload { margin-top: 6px; }
@@ -133,14 +133,14 @@
   border: none;
   background: none;
   color: var(--dmsg-crit);
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1;
   cursor: pointer;
 }
 
 .dmsg__pick-label {
   margin: 18px 0 8px;
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 600;
 }
 
@@ -160,7 +160,7 @@
   border-radius: 6px;
   background: var(--paper);
   font: inherit;
-  font-size: 14.5px;
+  font-size: 15.5px;
   color: var(--ink);
   text-align: left;
   cursor: pointer;
@@ -214,8 +214,8 @@
 .dmsg__option.is-empty { color: var(--muted); font-style: italic; cursor: default; }
 .dmsg__option.is-empty:hover { background: none; }
 
-.dmsg__option-name { display: block; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
-.dmsg__option-meta { display: block; font-size: 12px; color: var(--muted); }
+.dmsg__option-name { display: block; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.dmsg__option-meta { display: block; font-size: 13.5px; color: var(--muted); }
 
 /* --- chosen files table --- */
 
@@ -224,13 +224,13 @@
 .dmsg__table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 .dmsg__table th {
   padding: 6px 8px;
   border-bottom: 1px solid var(--dmsg-line);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -247,7 +247,7 @@
 
 .dmsg__cell-name { overflow-wrap: anywhere; }
 .dmsg__file { font-weight: 600; }
-.dmsg__meta { margin-left: 8px; font-size: 12px; color: var(--muted); }
+.dmsg__meta { margin-left: 8px; font-size: 13.5px; color: var(--muted); }
 .dmsg__cell-action { text-align: right; }
 
 .dmsg__flag {
@@ -256,7 +256,7 @@
   padding: 1px 8px;
   border-radius: 999px;
   background: var(--dmsg-warn-soft);
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--dmsg-warn);
 }
 
@@ -268,7 +268,7 @@
   border-radius: 6px;
   background: var(--paper);
   color: var(--dmsg-crit);
-  font-size: 15px;
+  font-size: 16.5px;
   line-height: 1;
   cursor: pointer;
 }
@@ -280,7 +280,7 @@
 .dmsg__btn {
   font: inherit;
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: 15.5px;
   padding: 10px 26px;
   border-radius: 999px;
   border: none;
@@ -291,8 +291,8 @@
 }
 
 .dmsg__btn:hover:not(:disabled) { opacity: .9; }
-.dmsg__btn--lg { padding: 12px 32px; font-size: 15px; }
-.dmsg__btn--sm { padding: 8px 18px; font-size: 13.5px; }
+.dmsg__btn--lg { padding: 12px 32px; font-size: 16.5px; }
+.dmsg__btn--sm { padding: 8px 18px; font-size: 15px; }
 
 .dmsg__btn:disabled {
   background: var(--paper-dim);
@@ -321,7 +321,7 @@
   border-radius: 6px;
   background: var(--dmsg-crit-soft);
   color: var(--dmsg-crit);
-  font-size: 13.5px;
+  font-size: 15px;
 }
 
 .dmsg__error[hidden] { display: none; }
@@ -347,7 +347,7 @@
   gap: 12px;
 }
 
-.dmsg__hint, .dmsg__status { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+.dmsg__hint, .dmsg__status { margin: 0; font-size: 15px; color: var(--ink-soft); }
 .dmsg__hint:empty, .dmsg__status:empty { display: none; }
 
 /* --- result boxes --- */
@@ -383,8 +383,8 @@
 .dmsg__box-title { min-width: 0; }
 
 .dmsg__stage {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-family: var(--font-body);
+  font-size: 12px;
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--accent);
@@ -405,7 +405,7 @@
   background: var(--paper);
   color: var(--ink-soft);
   font: inherit;
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1;
   cursor: pointer;
 }
@@ -423,7 +423,7 @@
 .dmsg__box-body {
   flex: 1;
   padding: 14px 18px 18px;
-  font-size: 13.5px;
+  font-size: 15px;
   overflow-wrap: anywhere;
 }
 
@@ -471,7 +471,7 @@
 
 .dmsg__label {
   margin: 14px 0 4px !important;
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -491,7 +491,7 @@
   border-radius: 999px;
   border: 1px solid var(--dmsg-line);
   background: var(--paper);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--ink-soft);
   white-space: nowrap;
@@ -505,7 +505,7 @@
   padding: 10px 12px;
   border-radius: 6px;
   background: var(--accent-tint);
-  font-size: 15px;
+  font-size: 16.5px;
 }
 
 /* The positioning statement is the one line here that never ships. */
@@ -532,16 +532,16 @@
 
 .dmsg__pillar-n {
   margin: 0 0 2px !important;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-family: var(--font-body);
+  font-size: 12px;
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--accent);
 }
 
-.dmsg__pillar-head { font-size: 14.5px; font-weight: 600; }
+.dmsg__pillar-head { font-size: 15.5px; font-weight: 600; }
 
-.dmsg__proof { margin-top: 6px !important; font-size: 12.5px; }
+.dmsg__proof { margin-top: 6px !important; font-size: 14px; }
 
 .dmsg__forms { display: grid; gap: 10px; }
 
@@ -552,7 +552,7 @@
   background: var(--paper);
 }
 
-.dmsg__form .dmsg__k { display: block; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.dmsg__form .dmsg__k { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .dmsg__form p { margin: 2px 0 0 !important; }
 
 .dmsg__talk + .dmsg__talk { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--paper-dim); }
@@ -582,10 +582,10 @@
   line-height: 1.2;
 }
 
-.dmsg__subhead { font-size: 15px; color: var(--ink-soft); }
+.dmsg__subhead { font-size: 16.5px; color: var(--ink-soft); }
 .dmsg__ctas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px !important; }
-.dmsg__variant { margin-top: 8px !important; font-size: 12.5px; }
-.dmsg__section-head { font-size: 15px; font-weight: 600; }
+.dmsg__variant { margin-top: 8px !important; font-size: 14px; }
+.dmsg__section-head { font-size: 16.5px; font-weight: 600; }
 .dmsg__prop + .dmsg__prop { margin-top: 10px; }
 
 /* --- nested minimize/maximize box --- */
@@ -607,7 +607,7 @@
   border: none;
   background: none;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink-soft);
   text-align: left;
@@ -622,7 +622,7 @@
 .dmsg__inner-icon {
   flex: none;
   margin-left: auto;
-  font-size: 15px;
+  font-size: 16.5px;
   line-height: 1;
 }
 

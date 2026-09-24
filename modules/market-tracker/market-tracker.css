@@ -7,7 +7,7 @@
    ========================================================================== */
 
 .mtrk {
-  --mtrk-surface: #FFFDF7;
+  --mtrk-surface: var(--surface);
   --mtrk-line:    var(--paper-line);
   --mtrk-crit:      #A8371F;
   --mtrk-crit-soft: #F6E4E0;
@@ -15,14 +15,14 @@
   --mtrk-warn-soft: #F7EDD2;
   --mtrk-good:      #2E7D4F;
   --mtrk-good-soft: #E3F1E6;
-  --mtrk-shadow: 0 1px 2px rgba(32,36,43,.05), 0 6px 18px rgba(32,36,43,.045);
-  --mtrk-radius: 8px;
+  --mtrk-shadow: var(--shadow-card);
+  --mtrk-radius: var(--radius-card);
 
   max-width: 1180px;
   margin: 0 auto;
   padding: 36px 32px 72px;
   color: var(--ink);
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 .mtrk__sr {
@@ -34,10 +34,10 @@
 
 .mtrk__eyebrow {
   margin: 0 0 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
   color: var(--accent);
 }
 
@@ -87,22 +87,22 @@
   border: 1px solid var(--mtrk-line);
   border-radius: 999px;
   background: var(--paper);
-  font-size: 12.5px;
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
 .mtrk__channel a { color: var(--ink); text-decoration: none; }
 .mtrk__channel a:hover { color: var(--accent); text-decoration: underline; }
-.mtrk__channel-none { font-size: 13px; color: var(--muted); font-style: italic; }
-.mtrk__channel-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.mtrk__channel-none { font-size: 14.5px; color: var(--muted); font-style: italic; }
+.mtrk__channel-note { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
 
-.mtrk__label { font-size: 14px; font-weight: 600; }
+.mtrk__label { font-size: 15px; font-weight: 600; }
 
 .mtrk select {
   width: 100%;
   max-width: 460px;
   min-width: 0;
   font: inherit;
-  font-size: 14.5px;
+  font-size: 15.5px;
   padding: 9px 36px 9px 12px;
   border: 1px solid var(--mtrk-line);
   border-radius: 6px;
@@ -124,7 +124,7 @@
 .mtrk__messages:empty { display: none; }
 .mtrk__messages { margin-top: 12px; display: grid; gap: 6px; }
 
-.mtrk__msg { margin: 0; font-size: 13.5px; }
+.mtrk__msg { margin: 0; font-size: 15px; }
 .mtrk__msg.is-error { color: var(--mtrk-crit); }
 .mtrk__msg.is-muted { color: var(--ink-soft); }
 .mtrk__msg.is-warn {
@@ -139,7 +139,7 @@
 .mtrk__btn {
   font: inherit;
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: 15.5px;
   padding: 10px 26px;
   border-radius: 999px;
   border: 1px solid var(--accent);
@@ -153,7 +153,7 @@
 
 .mtrk__btn--ghost {
   padding: 8px 20px;
-  font-size: 13.5px;
+  font-size: 15px;
   background: transparent;
   color: var(--accent);
 }
@@ -192,8 +192,8 @@
 
 .mtrk__group-head {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
   font-weight: 500;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -233,8 +233,8 @@
 
 .mtrk__meta {
   margin: 2px 0 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
   letter-spacing: .04em;
   color: var(--muted);
 }
@@ -244,7 +244,7 @@
 .mtrk__stop {
   flex: none;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 600;
   padding: 6px 12px;
   border: 1px solid var(--mtrk-line);
@@ -264,7 +264,7 @@
 
 .mtrk__box-body {
   padding: 14px 18px;
-  font-size: 13.5px;
+  font-size: 15px;
   min-width: 0;
 }
 
@@ -279,7 +279,7 @@
 .mtrk__note {
   flex: 1;
   margin: 0;
-  font-size: 12.5px;
+  font-size: 14px;
   color: var(--ink-soft);
 }
 
@@ -304,9 +304,9 @@
 
 .mtrk__stats {
   margin: 8px 0 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-style: normal;
-  font-size: 11.5px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--muted);
 }
@@ -344,7 +344,7 @@
   flex-wrap: wrap;
   gap: 6px 18px;
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--ink-soft);
 }
 
@@ -364,14 +364,14 @@
   min-width: 720px;
   border-collapse: separate;
   border-spacing: 0 6px;
-  font-size: 13.5px;
+  font-size: 15px;
 }
 
 .mtrk__table th {
   padding: 0 12px 2px;
   text-align: left;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-family: var(--font-body);
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -402,8 +402,8 @@
    published" — the page had no publish date to give. */
 .mtrk__found {
   display: block;
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-body);
+  font-size: 11.5px;
   letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--muted);
@@ -413,7 +413,7 @@
 .mtrk__c-link { width: 64px; white-space: nowrap; text-align: right; }
 
 .mtrk__source { display: block; font-weight: 600; overflow-wrap: anywhere; }
-.mtrk__kind { font-size: 12px; color: var(--muted); }
+.mtrk__kind { font-size: 13.5px; color: var(--muted); }
 .mtrk__tracked {
   display: block;
   width: fit-content;
@@ -422,19 +422,19 @@
   border-radius: 999px;
   background: var(--accent-tint);
   color: var(--accent);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .mtrk__c-excerpt p { margin: 0; overflow-wrap: anywhere; }
-.mtrk__role { margin-top: 4px !important; font-size: 12px; color: var(--muted); }
+.mtrk__role { margin-top: 4px !important; font-size: 13.5px; color: var(--muted); }
 
 /* Which thread a harvested comment came from — the thread's own title is what
    ties the commenter to a competitor they may never name themselves. */
 .mtrk__thread {
   margin-top: 4px !important;
-  font-size: 12px;
+  font-size: 13.5px;
   font-style: italic;
   color: var(--ink-soft);
 }
@@ -442,8 +442,8 @@
 .mtrk__tone {
   display: inline-block;
   margin-bottom: 3px;
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-body);
+  font-size: 11.5px;
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--muted);
@@ -458,7 +458,7 @@
   border: 1px solid var(--mtrk-line);
   border-radius: 999px;
   background: var(--mtrk-surface);
-  font-size: 12px;
+  font-size: 13.5px;
   overflow-wrap: anywhere;
 }
 
@@ -474,7 +474,7 @@
 
 .mtrk__box-url {
   margin: 3px 0 0;
-  font-size: 12.5px;
+  font-size: 14px;
   color: var(--ink-soft);
   overflow-wrap: anywhere;
 }
@@ -483,7 +483,7 @@
    of it, so the box never claims there is nothing while showing something. */
 .mtrk__quiet {
   margin: 10px 0 0;
-  font-size: 13px;
+  font-size: 14.5px;
   font-style: italic;
   color: var(--muted);
 }
@@ -491,8 +491,8 @@
 /* A competitor's findings are grouped by the kind of move they are. */
 .mtrk__group-row th {
   padding: 14px 12px 2px !important;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-family: var(--font-body);
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: .1em;
   text-transform: uppercase;

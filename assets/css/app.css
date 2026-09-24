@@ -11,12 +11,22 @@
   --desk:        #E8DFC6;  /* the sign-in page's ground (see login.css)     */
   --paper:       #F6F1E6;  /* display field                                  */
   --paper-dim:   #EDE6D3;  /* hover / scrollbar track                        */
-  --paper-line:  #CFC6AC;  /* hairlines and borders                          */
+  --paper-line:  #D6CEBC;  /* hairlines and borders                          */
+
+  /* Reading surfaces (readability pass, 2026-09-24).
+     Modules sit on --ground and draw their boxes in --surface, so a box is
+     separated from the page by brightness rather than by a faint border.
+     Every module's --xx-surface / --xx-shadow / --xx-radius points here. */
+  --ground:       #ECE7DB;  /* the display field behind the modules          */
+  --surface:      #FFFFFF;  /* module boxes and cards                        */
+  --surface-alt:  #F8F5EE;  /* alternate table rows                          */
+  --shadow-card:  0 1px 2px rgba(32,36,43,.06), 0 8px 24px rgba(32,36,43,.06);
+  --radius-card:  10px;
 
   /* Ink */
   --ink:         #20242B;
   --ink-soft:    #3C4149;
-  --muted:       #7A7565;
+  --muted:       #5F5A4C;  /* 6.6:1 on white; the old #7A7565 fell under 4.5:1 on paper */
 
   /* Accent */
   --accent:      #2F6F4E;
@@ -528,7 +538,7 @@ body[data-switching="true"] { cursor: progress; }
   min-width: 0;
   overflow-y: scroll;   /* always reserve the track so content never shifts */
   overflow-x: hidden;
-  background: var(--paper);
+  background: var(--ground);
   scrollbar-color: var(--paper-line) var(--paper-dim);
   scrollbar-width: thin;
 }
@@ -709,4 +719,15 @@ body[data-nav="collapsed"] .nav__button[aria-current="page"] .nav__status {
   body[data-nav="expanded"] .nav__button[aria-current="page"] .nav__status {
     border-color: var(--frame-active);
   }
+}
+
+/* ==========================================================================
+   Readability: striped rows in the research boxes' tables.
+   :where() keeps this at zero specificity, so any module rule that colours a
+   row or cell still wins. Market Tracker is left out on purpose — its row
+   colours carry meaning (sentiment), and stripes would muddy them.
+   ========================================================================== */
+
+.display :where(.pb__box, .fmc__box, .mo__box, .bcg__box) :where(tbody tr:nth-child(even)) > td {
+  background: var(--surface-alt);
 }

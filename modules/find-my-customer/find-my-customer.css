@@ -7,7 +7,7 @@
    ========================================================================== */
 
 .fmc {
-  --fmc-surface: #FFFDF7;
+  --fmc-surface: var(--surface);
   --fmc-sunken:  var(--paper-dim);
   --fmc-line:    var(--paper-line);
   --fmc-ink:     var(--ink);
@@ -17,24 +17,24 @@
   --fmc-accent-soft: var(--accent-tint);
   --fmc-crit:      #A8371F;
   --fmc-crit-soft: #F6E4E0;
-  --fmc-shadow: 0 1px 2px rgba(32,36,43,.05), 0 6px 18px rgba(32,36,43,.045);
-  --fmc-radius: 8px;
+  --fmc-shadow: var(--shadow-card);
+  --fmc-radius: var(--radius-card);
 
   max-width: 1180px;
   margin: 0 auto;
   padding: 36px 32px 64px;
   color: var(--fmc-ink);
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 /* --- Module header --- */
 
 .fmc__eyebrow {
   margin: 0 0 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
   color: var(--fmc-accent);
 }
 
@@ -70,12 +70,12 @@
 .fmc__field--wide { flex: 2 1 300px; }
 .fmc__field--action { flex: 0 0 auto; }
 
-.fmc__field label { font-size: 13px; font-weight: 600; }
+.fmc__field label { font-size: 14.5px; font-weight: 600; }
 
 .fmc input[type="email"],
 .fmc input[type="text"] {
   font: inherit;
-  font-size: 14.5px;
+  font-size: 15.5px;
   padding: 10px 12px;
   border: 1px solid var(--fmc-line);
   border-radius: 6px;
@@ -93,7 +93,7 @@
 .fmc__btn {
   font: inherit;
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: 15.5px;
   padding: 11px 26px;
   border-radius: 999px;
   border: none;
@@ -118,7 +118,7 @@
   border-radius: 6px;
   background: var(--fmc-crit-soft);
   color: var(--fmc-crit);
-  font-size: 13.5px;
+  font-size: 15px;
 }
 
 .fmc__error[hidden] { display: none; }
@@ -128,8 +128,8 @@
 .fmc__grid {
   display: grid;
   /* Two columns at most (like the original), one when the field is narrow. */
-  grid-template-columns: repeat(auto-fit, minmax(max(300px, calc((100% - 14px) / 2)), 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(max(340px, calc((100% - 20px) / 2)), 1fr));
+  gap: 20px;
   margin-bottom: 26px;
 }
 
@@ -139,7 +139,7 @@
   gap: 10px;
   min-height: 160px;
   min-width: 0;
-  padding: 16px 18px 18px;
+  padding: 20px 22px 22px;
   background: var(--fmc-surface);
   border: 1px solid var(--fmc-line);
   border-radius: var(--fmc-radius);
@@ -156,11 +156,11 @@
 .fmc__box h2 {
   margin: 0;
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: 16.5px;
   font-weight: 600;
 }
 
-.fmc__box-body { flex: 1; font-size: 13.5px; overflow-x: auto; }
+.fmc__box-body { flex: 1; font-size: 15px; overflow-x: auto; }
 
 .fmc__box-body.is-placeholder,
 .fmc__box-body.is-loading {
@@ -195,12 +195,12 @@
 
 /* --- Customer table --- */
 
-.fmc__box table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fmc__box table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
 
 .fmc__box th {
   padding: 0 8px 6px 0;
   text-align: left;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -255,7 +255,7 @@
   gap: 6px 12px;
   padding: 7px 0;
   border-top: 1px solid var(--fmc-line);
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 .fmc__title-name { min-width: 0; overflow-wrap: anywhere; }
@@ -268,7 +268,7 @@
   border-radius: 999px;
   background: transparent;
   font: inherit;
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
   color: var(--accent);
@@ -298,17 +298,17 @@
 
 .fmc__group h3 {
   margin: 0 0 6px;
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--fmc-accent);
 }
 
-.fmc__group ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.fmc__group ul { margin: 0; padding-left: 18px; font-size: 14.5px; }
 .fmc__group li + li { margin-top: 3px; }
 
 /* --- Top needs --- */
 
-.fmc__needs-title { margin: 0 0 10px; font-weight: 600; font-size: 14px; }
+.fmc__needs-title { margin: 0 0 10px; font-weight: 600; font-size: 15px; }
 
 .fmc__rank {
   list-style: none;
@@ -323,7 +323,7 @@
   counter-increment: fmc-rank;
   display: flex;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 .fmc__rank li::before {
@@ -338,8 +338,8 @@
   border-radius: 50%;
   background: var(--fmc-accent-soft);
   color: var(--fmc-accent);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-family: var(--font-body);
+  font-size: 12px;
 }
 
 /* --- PDF export row --- */
@@ -355,6 +355,6 @@
 .fmc__status {
   margin: 0;
   min-height: 1.4em;
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--fmc-soft);
 }
