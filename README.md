@@ -147,14 +147,21 @@ The first nav button (factory icon). Replaced the old "Module 1" placeholder.
 Clicking the Mktforge logo at the top of the nav also opens it.
 
 - **Profile**: Company Name, Company URL, Your Industry, Target Job Titles,
-  Target Industries, Competitors. Empty rows are inputs; saved rows show the
+  Target Industries, Competitors, Tracked News and Media URLs. Empty rows are inputs; saved rows show the
   value with an Edit button. Save writes the whole profile to the account.
 - **Your Industry / Target Industries** suggest from the Crunchbase glossary
   (`assets/data/industries.js`) once two letters are typed. Anything can
   still be entered.
 - **Tag fields**: Enter turns the text into a tag, × removes it, Backspace
-  in an empty box removes the last one. Competitors must be valid website
-  addresses (`rival.com` is fine; no `https://` needed). Text typed but not
+  in an empty box removes the last one. Competitors and Tracked News and
+  Media URLs must be valid website addresses (`rival.com` is fine; no
+  `https://` needed).
+- **Tracked News and Media URLs** (`profile.trackedChannels`): blogs,
+  publications, YouTube channels, subreddits and the like that Market Tracker
+  reads in depth on every refresh. Marketing Opportunities' Track Channel
+  button adds and removes them too. Two spellings of one channel
+  (`https://www.x.com/blog/`, `x.com/blog`) are one tag
+  (`MktforgeData.util.sameChannel`). Text typed but not
   yet entered is kept when Save is pressed.
 - **Your Saved Resources** has two lists, newest first:
   - **Generated Materials** — every PDF made in another module.
@@ -852,10 +859,27 @@ header would get the request blocked by the browser.
 The Worker's `ALLOWED_ORIGIN` defaults to `*`. If it has been set to
 `https://twishnoff.github.io`, Mktforge on GitHub Pages is covered.
 
+### Track Channel
+
+Rows in Influencers, Publications, Other Syndication Platforms and Social
+Media and Blogs get a **Track Channel** button to the right of the link (rows
+with no usable link get none). It saves the row's *channel* to My Company's
+Tracked News and Media URLs for the company on screen — a Medium post saves
+the author (`medium.com/@jane`), a Substack post the publication, a YouTube
+video its channel, a Reddit thread its subreddit, a blog post the blog index,
+a news story the publication. Once the channel is in the list the button
+reads **Stop Tracking**, and removes it.
+
+The channel comes from the Market Tracker Worker's `POST /api/channel`
+(it can open the page: YouTube's oEmbed, a site's feed link or breadcrumb).
+When the rules alone are sure (`MktforgeData.util.channelRule`) or the Worker
+can't be reached, the page uses the rules. A toast says what was saved.
+
 ### Drift
 
 The standalone site and this module are now two copies of the same frontend.
-If you change one, port the change to the other.
+If you change one, port the change to the other. (Track Channel is
+Mktforge-only.)
 
 
 ## Market Tracker
@@ -909,6 +933,17 @@ survived the rename untouched.
 - Removing or renaming a title in My Company removes its box (a rename is a
   remove plus an add); the same goes for a competitor URL, and that also
   deletes its ledger. Adding or removing boxes never changes My Company.
+- **Additional Tracked Channels:** below the two drop-downs, My Company's
+  Tracked News and Media URLs as read-only tags (no ×), with *"(Add or remove
+  channels from your My Company module)"*. Every run of either kind sends
+  them as `trackedChannels`; the Worker reads each channel directly and in
+  depth before its model call (every post from the last 30 days, the full
+  text of the newest), gives the model extra `site:` searches to sweep them
+  again, and lifts the vendor-blog filter for them. Rows found there are
+  labelled **Tracked channel**, and the line under the table says how many
+  channels were read and how many items came from them. Changing the list
+  only affects the next refresh. Worker details: its README, "Tracked
+  channels".
 
 ### Competitor boxes
 

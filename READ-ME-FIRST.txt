@@ -1,49 +1,55 @@
-Mktforge — Target Messaging module (first build: plumbing test)
-===============================================================
+Mktforge — Tracked News and Media URLs (My Company, Marketing Opportunities, Market Tracker)
+==========================================================================================
 
-Three pieces, in this order.
+Two pieces, in this order.
 
-1) hubspot-connect Worker  (C:\Users\Tyler\hubspot-connect)
-   src/index.js was updated in place (the old one is kept as
-   src/index.js.bak-2026-09-23). Deploy it:
+1) customer-tracker Worker  (C:\Users\Tyler\customer-tracker)
+   Already updated in place on your computer. The files it replaced are kept
+   next to them as *.bak-2026-09-24. New file: src/channels.js. Deploy it:
 
-       cd C:\Users\Tyler\hubspot-connect
+       cd C:\Users\Tyler\customer-tracker
        npx wrangler deploy
 
-   New: POST /api/read/contact-search (name/email typeahead) and
-   POST /api/read/contact (one contact). /oauth/start now takes an optional
-   returnTo so "Connect My HubSpot Account" in Target Messaging lands back
-   on Target Messaging. Same scopes, so nobody has to reconnect.
+   No new secrets, no new bindings. Check afterwards:
+   https://customer-tracker.tyler-wishnoff.workers.dev/api/track should
+   still answer {"message":"Method not allowed."} to a plain GET.
 
-2) target-messaging Worker  (new — from target-messaging-worker.zip)
-   Unzip so you have C:\Users\Tyler\target-messaging\wrangler.jsonc, then:
+   New: POST /api/channel (link -> the channel it belongs to; signed-in only,
+   not counted against the daily limit). /api/track now takes
+   trackedChannels in both modes. Run limits went up 2 minutes
+   (job title 8, competitor 10) because tracked channels are read first.
+   Reddit channels are read directly only if the Reddit secrets are set;
+   otherwise they're searched instead.
 
-       cd C:\Users\Tyler\target-messaging
-       npx wrangler deploy
-
-   It uses the shared ACCESS allowlist KV and a service binding to
-   hubspot-connect (deploy hubspot-connect first). No secrets yet.
-   Check: https://target-messaging.tyler-wishnoff.workers.dev/ should
-   answer {"ok":true,"service":"target-messaging"}.
-
-3) Site files  (repo root, keep the folders as they are in the zip)
+2) Site files  (repo root, keep the folders as they are in the zip)
 
        READ-ME-FIRST.txt
        README.md
-       index.html
-       assets/js/config.js
        assets/js/data.js
-       assets/js/icons.js
-       assets/js/module-kit.js
-       modules/target-messaging/target-messaging.js      (new)
-       modules/target-messaging/target-messaging.css     (new)
+       modules/my-company/my-company.js
+       modules/marketing-opportunities/marketing-opportunities.js
+       modules/marketing-opportunities/marketing-opportunities.css
+       modules/market-tracker/market-tracker.js
+       modules/market-tracker/market-tracker.css
 
-   No Firestore rules change: the editors' copy is saved on the company
-   record (targetMessaging field), which the current rules already allow.
+   No Firestore rules change: the list is saved on the company profile
+   (profile.trackedChannels), which the current rules already allow.
    Hard-refresh (Ctrl+Shift+R) after uploading.
 
-WHAT A RUN DOES FOR NOW
-   Both tabs send everything to the Worker, which answers "Hello World -
-   Job Title" / "Hello World - Individual" plus what it received (files and
-   how much text was read from each, the website, or the HubSpot contact,
-   page views and note count) into both editors.
+   Deploy the Worker first. The site works without it, but until then
+   Track Channel falls back to the page's own rules (it can't turn a
+   YouTube video into its channel, for example), and Market Tracker runs
+   ignore the tracked channels.
+
+WHAT CHANGED
+   My Company         new "Tracked News and Media URLs" tag field under
+                      Competitors. Type a URL, Enter to add, x to remove.
+   Marketing Opps     Track Channel / Stop Tracking on rows in Influencers,
+                      Publications, Other Syndication Platforms, Social Media
+                      and Blogs. Saves the channel, not the single page:
+                      Medium post -> author, YouTube video -> channel,
+                      Reddit thread -> subreddit, blog post -> blog index,
+                      news story -> publication.
+   Market Tracker     "Additional Tracked Channels:" line (read-only tags +
+                      reminder note). Every refresh reads each channel in
+                      depth and labels rows found there "Tracked channel".

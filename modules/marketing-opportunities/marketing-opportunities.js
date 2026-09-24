@@ -15,6 +15,18 @@
                results: { events, meetups, newsletters, influencers,
                           publications, syndication, social }  // [{ name, url }]
                allResults: [{ name, url, channel }] }
+
+   Track Channel
+     Influencers, Publications, Other Syndication Platforms and Social Media
+     and Blogs rows get a Track Channel button. It saves the row's CHANNEL —
+     not the one page the row links to — to My Company's Tracked News and
+     Media URLs, for whichever company is on screen; Market Tracker then
+     reads that channel in depth on every refresh. The channel comes from the
+     Market Tracker Worker (POST /api/channel: a video -> its YouTube
+     channel, a Medium post -> its author, an article -> its blog index or
+     publication), with MktforgeData.util.channelRule as the fallback when
+     the Worker can't be reached. Once tracked, the button reads Stop
+     Tracking and removes it again.
    ========================================================================== */
 
 (function () {
@@ -37,6 +49,12 @@
     social: 'Social Media and Blogs'
   };
   const CATEGORY_ORDER = Object.keys(CATEGORY_LABELS);
+
+  // The boxes whose rows are channels worth tracking.
+  const TRACKABLE = new Set(['influencers', 'publications', 'syndication', 'social']);
+  const TRACK_ADD = 'Track Channel';
+  const TRACK_REMOVE = 'Stop Tracking';
+  const CHANNEL_TIMEOUT_MS = 12000;
 
   const MARKUP = `
   <div class="mo">
@@ -108,6 +126,8 @@
   let boxes = null;
   let cfg = {};
   let mounted = false;
+  let trackBusy = false;
+  let unsubProfile = null;
 
   /* One per company (MktforgeKit.perCompany), kept across navigation for the
      life of the page; typed input also survives a refresh. */
@@ -120,9 +140,10 @@
       status:  '',
       error:   '',
       note:    '',
-      running: false
+      running: false,
+      channels: {}      // row URL -> the channel URL Track Channel saved for it
     }),
-    held: ['form'],
+    held: ['form', 'channels'],
     snapshot: ['run', 'lastKey', 'status']
   });
   let state = pc.state;
@@ -191,13 +212,23 @@
 
   /* ---------- renderers ---------- */
 
-  function renderCategory(b, items) {
+  /* Painted as Track Channel; paintTrackButtons() sets the real state once
+     the profile has been read. Rows with no usable link get no button. */
+  function trackCell(key, i, url) {
+    if (!safeUrl(url)) return '<td class="mo__col-track"></td>';
+    return `<td class="mo__col-track"><button type="button" class="mo__track" data-track="${key}" data-i="${i}" hidden>${TRACK_ADD}</button></td>`;
+  }
+
+  function renderCategory(b, items, key) {
     if (!items || items.length === 0) { emptyState(b); return; }
+    const trackable = TRACKABLE.has(key);
     b.className = 'mo__box-body';
     b.innerHTML =
-      '<table><thead><tr><th>Name</th><th class="mo__col-link">Link</th></tr></thead><tbody>' +
-      items.slice(0, MAX_ROWS).map((i) =>
-        `<tr><td>${escapeHtml(i.name || 'Untitled')}</td><td class="mo__col-link">${linkCell(i.url)}</td></tr>`
+      `<table><thead><tr><th>Name</th><th class="mo__col-link">Link</th>${
+        trackable ? '<th class="mo__col-track"><span class="mo__sr">Track</span></th>' : ''}</tr></thead><tbody>` +
+      items.slice(0, MAX_ROWS).map((i, n) =>
+        `<tr><td>${escapeHtml(i.name || 'Untitled')}</td><td class="mo__col-link">${linkCell(i.url)}</td>${
+          trackable ? trackCell(key, n, i.url) : ''}</tr>`
       ).join('') +
       '</tbody></table>';
   }
@@ -228,8 +259,131 @@
   }
 
   function renderResults(run) {
-    CATEGORY_ORDER.forEach((key) => renderCategory(boxes[key], run.results[key]));
+    CATEGORY_ORDER.forEach((key) => renderCategory(boxes[key], run.results[key], key));
     renderAll(boxes.all, run.allResults);
+    refreshTrackButtons();
+  }
+
+  /* ---------- Track Channel ---------- */
+
+  const U = () => window.MktforgeData && window.MktforgeData.util;
+
+  function rowOf(btn) {
+    const items = (state.run && state.run.results && state.run.results[btn.dataset.track]) || [];
+    const item = items[Number(btn.dataset.i)];
+    return item && safeUrl(item.url) ? item : null;
+  }
+
+  /* Every spelling this row could have been saved under: what Track Channel
+     saved for it, the rule's guess at its channel, and the link itself. */
+  function candidatesFor(url) {
+    const u = U();
+    const rule = u ? u.channelRule(url) : null;
+    return [(state.channels || {})[url], rule && rule.url, url].filter(Boolean);
+  }
+
+  const trackedIn = (list, url) => {
+    const u = U();
+    return !!u && candidatesFor(url).some((c) => list.some((t) => u.sameChannel(t, c)));
+  };
+
+  function paintTrackButtons(list) {
+    if (!mounted || !boxes) return;
+    TRACKABLE.forEach((key) => {
+      if (!boxes[key]) return;
+      boxes[key].querySelectorAll('[data-track]').forEach((btn) => {
+        const item = rowOf(btn);
+        if (!item) { btn.hidden = true; return; }
+        const on = trackedIn(list, item.url);
+        btn.textContent = on ? TRACK_REMOVE : TRACK_ADD;
+        btn.classList.toggle('is-tracked', on);
+        btn.setAttribute('aria-label', `${on ? TRACK_REMOVE : TRACK_ADD}: ${item.name || item.url}`);
+        btn.disabled = trackBusy;
+        btn.hidden = false;
+      });
+    });
+  }
+
+  function refreshTrackButtons() {
+    if (!window.MktforgeData) return;
+    window.MktforgeData.getProfile()
+      .then((p) => paintTrackButtons(p.trackedChannels || []))
+      .catch((err) => console.warn('[Marketing Opportunities] profile unavailable for tracked channels', err));
+  }
+
+  /* The channel a row belongs to, from the Market Tracker Worker. Falls back
+     to the page's own rules if it can't be reached in time. */
+  async function channelFor(url) {
+    const u = U();
+    const rule = u.channelRule(url) || { url, lookup: false };
+    const tracker = (window.MKTFORGE_CONFIG && window.MKTFORGE_CONFIG.marketTracker) || {};
+    if (!rule.lookup || !tracker.API_BASE_URL) return rule.url;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), CHANNEL_TIMEOUT_MS);
+    try {
+      const token = window.MktforgeAuth && window.MktforgeAuth.getIdToken
+        ? await window.MktforgeAuth.getIdToken() : null;
+      if (!token) return rule.url;
+      const res = await fetch(`${tracker.API_BASE_URL}/api/channel`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url }),
+        signal: ctl.signal
+      });
+      const data = res.ok ? await res.json().catch(() => null) : null;
+      return (data && u.isValidUrl(data.url)) ? data.url : rule.url;
+    } catch (err) {
+      console.warn('[Marketing Opportunities] channel lookup failed; using the link’s own site', err);
+      return rule.url;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  const shortUrl = (url) => String(url).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '');
+
+  async function handleTrackClick(e) {
+    const btn = e.target.closest('[data-track]');
+    if (!btn || trackBusy || !state.run) return;
+    const item = rowOf(btn);
+    if (!item) return;
+    const st = state;
+    const wasOn = btn.classList.contains('is-tracked');
+
+    trackBusy = true;
+    TRACKABLE.forEach((key) => boxes[key] && boxes[key].querySelectorAll('[data-track]').forEach((b) => { b.disabled = true; }));
+    btn.textContent = wasOn ? 'Removing…' : 'Adding…';
+    try {
+      const D = await window.MktforgeData.scope();      // the company on screen now
+      const u = U();
+      let profile = await D.getProfile();
+      const list = profile.trackedChannels || [];
+      let message = '';
+      if (trackedIn(list, item.url)) {
+        const drop = candidatesFor(item.url);
+        profile.trackedChannels = list.filter((t) => !drop.some((c) => u.sameChannel(t, c)));
+        message = `Stopped tracking ${shortUrl(drop.find((c) => list.some((t) => u.sameChannel(t, c))) || item.url)}.`;
+      } else {
+        const channel = u.normalizeUrl(await channelFor(item.url));
+        st.channels = { ...(st.channels || {}), [item.url]: channel };
+        pc.hold(st);                                      // survives a refresh
+        profile = await D.getProfile();                   // re-read: the lookup took a moment
+        const now = profile.trackedChannels || [];
+        profile.trackedChannels = now.some((t) => u.sameChannel(t, channel)) ? now : [...now, channel];
+        message = `Now tracking ${shortUrl(channel)} in My Company’s Tracked News and Media URLs.`;
+      }
+      const saved = await D.saveProfile(profile);
+      trackBusy = false;
+      paintTrackButtons(saved.trackedChannels || []);
+      document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message, tone: 'info' } }));
+    } catch (err) {
+      console.error('[Marketing Opportunities] could not update tracked channels', err);
+      trackBusy = false;
+      refreshTrackButtons();
+      document.dispatchEvent(new CustomEvent('mktforge:notify', {
+        detail: { message: 'Couldn’t update your Tracked News and Media URLs. Please try again.', tone: 'error' }
+      }));
+    }
   }
 
   /* ---------- validation ---------- */
@@ -488,6 +642,11 @@
         el[k].addEventListener('input', updateSubmitEnabled));
       el.form.addEventListener('submit', handleSubmit);
       el.pdf.addEventListener('click', handlePdf);
+      TRACKABLE.forEach((key) => boxes[key].addEventListener('click', handleTrackClick));
+      if (window.MktforgeData) {
+        // Only fires for the company on screen; My Company edits land here too.
+        unsubProfile = window.MktforgeData.onProfile((p) => paintTrackButtons(p.trackedChannels || []));
+      }
 
       // Only the person's own typing clears a "Run stopped" note, not autofill.
       const hold = (e) => { captureForm(); pc.hold(e && e.isTrusted ? undefined : state); };
@@ -503,6 +662,7 @@
       captureForm();
       pc.hold(state);                   // keeps any "Run stopped" note
       mounted = false;
+      if (unsubProfile) { unsubProfile(); unsubProfile = null; }
       // A run in flight is deliberately NOT aborted; it finishes into state.
       el = null;
       boxes = null;

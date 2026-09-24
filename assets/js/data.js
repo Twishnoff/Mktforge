@@ -104,6 +104,9 @@
      Account
        getAvatar() / saveAvatar(dataUrl) / onAvatar(fn)
        util.imageToAvatarDataUrl(file), util.normalizeUrl, util.isValidUrl
+       util.channelRule(url), util.channelKey(url), util.sameChannel(a, b)
+                                       tracked channels (My Company's Tracked News and
+                                       Media URLs) — see "Tracked channels" below
        trackerId(title), trackerTitleId(title), trackerCompetitorId(url), competitorKey(url)
    ========================================================================== */
 
@@ -135,7 +138,8 @@ window.MktforgeData = (() => {
 
   const EMPTY_PROFILE = Object.freeze({
     companyName: '', companyUrl: '', industry: '',
-    targetTitles: [], targetIndustries: [], competitors: []
+    targetTitles: [], targetIndustries: [], competitors: [],
+    trackedChannels: []           // Tracked News and Media URLs
   });
 
   const MESSAGES = {
@@ -177,11 +181,13 @@ window.MktforgeData = (() => {
     ['companyName', 'companyUrl', 'industry'].forEach((k) => {
       out[k] = typeof p[k] === 'string' ? p[k].trim() : '';
     });
-    ['targetTitles', 'targetIndustries', 'competitors'].forEach((k) => {
+    ['targetTitles', 'targetIndustries', 'competitors', 'trackedChannels'].forEach((k) => {
       const seen = new Set();
+      // Two spellings of one channel ("https://www.x.com/blog/" and "x.com/blog") are one tag.
+      const keyOf = k === 'trackedChannels' ? (v) => channelKey(v) || v.toLowerCase() : (v) => v.toLowerCase();
       out[k] = (Array.isArray(p[k]) ? p[k] : [])
         .map((v) => String(v).trim())
-        .filter((v) => v && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()));
+        .filter((v) => v && !seen.has(keyOf(v)) && seen.add(keyOf(v)));
     });
     return out;
   }
@@ -396,6 +402,97 @@ window.MktforgeData = (() => {
   }
 
   function onAvatar(fn) { avatarListeners.add(fn); return () => avatarListeners.delete(fn); }
+
+  /* ---------- Tracked channels ----------
+     My Company's "Tracked News and Media URLs". Each is a CHANNEL — a Medium
+     author, a YouTube channel, a subreddit, a blog index, a publication —
+     not one page. Marketing Opportunities saves them (Track Channel) and
+     Market Tracker's research reads every one of them in depth.
+
+     channelRule() is the no-network half of the Worker's channel lookup
+     (customer-tracker, channelRule in src/shared.js — keep the two in step).
+     It is used when the Worker can't be reached, and to tell whether a row
+     is already tracked without asking it. `lookup: true` means the rule
+     couldn't tell for sure (a YouTube video, an article whose path names no
+     section) and the Worker should be asked. */
+
+  const BLOG_SEGMENT = /^(blogs?|news|newsroom|articles?|insights|posts?|stories|journal|magazine|resources|learn|library|podcasts?|episodes|videos|press|press-releases|updates|editorial|column|columns|opinion|research|engineering|writing|notes|essays|newsletter|newsletters)$/i;
+  const SOCIAL_RESERVED = /^(status|statuses|i|home|explore|search|hashtag|p|reel|reels|share|watch|intent|settings|messages|notifications|login|signup)$/i;
+
+  function toUrlObj(raw) {
+    const v = String(raw || '').trim();
+    if (!isValidUrl(v)) return null;
+    try { return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(v) ? v : `https://${v}`); } catch (e) { return null; }
+  }
+
+  function channelRule(raw) {
+    const u = toUrlObj(raw);
+    if (!u) return null;
+    const host = u.hostname.toLowerCase().replace(/^www\./, '');
+    const segs = u.pathname.split('/').filter(Boolean);
+    const at = (n) => `${u.protocol}//${u.hostname}/${segs.slice(0, n).join('/')}`.replace(/\/$/, '');
+    const origin = `${u.protocol}//${u.hostname}`;
+    const out = (url, platform, lookup = false) => ({ url, platform, lookup });
+
+    if (/(^|\.)youtube\.com$/.test(host) || host === 'youtu.be') {
+      if (host === 'youtu.be') return out(u.href, 'YouTube', true);
+      if (segs[0] && segs[0].startsWith('@')) return out(at(1), 'YouTube');
+      if (['channel', 'c', 'user'].includes(segs[0]) && segs[1]) return out(at(2), 'YouTube');
+      if (segs[0] === 'playlist' && u.searchParams.get('list')) return out(`${origin}/playlist?list=${u.searchParams.get('list')}`, 'YouTube');
+      return out(u.href, 'YouTube', true);
+    }
+    if (/(^|\.)medium\.com$/.test(host)) {
+      if (host !== 'medium.com') return out(origin, 'Medium');
+      if (segs[0] && segs[0].startsWith('@')) return out(at(1), 'Medium');
+      if (segs[0] && !['p', 'm', 'tag', 'tags', 'search', 'topic', 'topics', 'me'].includes(segs[0])) return out(at(1), 'Medium');
+      return out(u.href, 'Medium', true);
+    }
+    if (/(^|\.)substack\.com$/.test(host)) {
+      if (host !== 'substack.com') return out(origin, 'Substack');
+      if (segs[0] && segs[0].startsWith('@')) return out(at(1), 'Substack');
+      return out(u.href, 'Substack', true);
+    }
+    if (/(^|\.)reddit\.com$/.test(host)) {
+      if (['r', 'user', 'u'].includes(segs[0]) && segs[1]) return out(`https://www.reddit.com/${segs[0] === 'u' ? 'user' : segs[0]}/${segs[1]}`, 'Reddit');
+      return out('https://www.reddit.com', 'Reddit');
+    }
+    if (host === 'news.ycombinator.com') return out('https://news.ycombinator.com', 'Hacker News');
+    if (/(^|\.)(twitter|x|tiktok|facebook|instagram)\.com$/.test(host) || /(^|\.)threads\.net$/.test(host)) {
+      if (segs[0] && !SOCIAL_RESERVED.test(segs[0].replace(/^@/, ''))) return out(at(1), 'Social');
+      return out(origin, 'Social');
+    }
+    if (/(^|\.)linkedin\.com$/.test(host)) {
+      if (['in', 'company', 'school', 'showcase', 'newsletters'].includes(segs[0]) && segs[1]) return out(at(2), 'LinkedIn');
+      if (segs[0] === 'posts' && segs[1] && segs[1].split('_')[0]) return out(`${origin}/in/${segs[1].split('_')[0]}`, 'LinkedIn');
+      return out(u.href, 'LinkedIn');
+    }
+    if (host === 'github.com') return out(segs[0] ? at(1) : origin, 'GitHub');
+    if (host === 'dev.to') return out(segs[0] ? at(1) : origin, 'DEV');
+    if (/\.(hashnode\.dev|wordpress\.com|blogspot\.com|ghost\.io|beehiiv\.com|buttondown\.email|tumblr\.com)$/.test(host)) return out(origin, 'Blog');
+    if (host === 'podcasts.apple.com') {
+      const i = segs.indexOf('podcast');
+      if (i >= 0 && segs[i + 2]) return out(at(i + 3), 'Apple Podcasts');
+      return out(u.href.split('?')[0], 'Apple Podcasts');
+    }
+    if (host === 'open.spotify.com') {
+      if (segs[0] === 'show' && segs[1]) return out(at(2), 'Spotify');
+      return out(u.href.split('?')[0], 'Spotify', segs[0] === 'episode');
+    }
+    if (!segs.length) return out(origin, 'Website');
+    const i = segs.findIndex((x) => BLOG_SEGMENT.test(x));
+    if (i >= 0) return out(at(i + 1), 'Website');
+    return out(origin, 'Website', true);
+  }
+
+  /* One spelling per channel: no scheme, no www, no trailing slash, no case. */
+  function channelKey(raw) {
+    const u = toUrlObj(raw);
+    if (!u) return '';
+    const list = u.searchParams.get('list');
+    return `${u.hostname.replace(/^www\./i, '')}${u.pathname.replace(/\/+$/, '')}${list ? `?list=${list}` : ''}`.toLowerCase();
+  }
+
+  const sameChannel = (a, b) => !!channelKey(a) && channelKey(a) === channelKey(b);
 
   /* ---------- Market Tracker ids (pure; the same in every company) ---------- */
 
@@ -1739,6 +1836,6 @@ window.MktforgeData = (() => {
     trackerId, trackerCompetitorId, trackerTitleId, competitorKey, isViewable,
     MAX_FILE_BYTES,
     get isLocal() { return isLocal(); },
-    util: { normalizeUrl, isValidUrl, imageToAvatarDataUrl }
+    util: { normalizeUrl, isValidUrl, imageToAvatarDataUrl, channelRule, channelKey, sameChannel }
   };
 })();

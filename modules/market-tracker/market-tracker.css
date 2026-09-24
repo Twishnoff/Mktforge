@@ -75,6 +75,26 @@
 
 .mtrk__pick { display: contents; }
 
+/* Additional Tracked Channels: read-only tags under the two pickers. The
+   tags take the select's and the button's columns together. */
+.mtrk__pick--channels .mtrk__label { align-self: start; padding-top: 3px; }
+/* contain: its tags must not widen the grid columns the pickers use. */
+.mtrk__channels { grid-column: 2 / -1; min-width: 0; contain: inline-size; }
+.mtrk__channel-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.mtrk__channel {
+  max-width: 100%;
+  padding: 2px 10px;
+  border: 1px solid var(--mtrk-line);
+  border-radius: 999px;
+  background: var(--paper);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.mtrk__channel a { color: var(--ink); text-decoration: none; }
+.mtrk__channel a:hover { color: var(--accent); text-decoration: underline; }
+.mtrk__channel-none { font-size: 13px; color: var(--muted); font-style: italic; }
+.mtrk__channel-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+
 .mtrk__label { font-size: 14px; font-weight: 600; }
 
 .mtrk select {
@@ -97,6 +117,7 @@
 @media (max-width: 560px) {
   .mtrk__picks { display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
   .mtrk__pick { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .mtrk__pick--channels { flex-direction: column; align-items: stretch; }
   .mtrk select { flex: 1 1 240px; }
 }
 
@@ -393,6 +414,18 @@
 
 .mtrk__source { display: block; font-weight: 600; overflow-wrap: anywhere; }
 .mtrk__kind { font-size: 12px; color: var(--muted); }
+.mtrk__tracked {
+  display: block;
+  width: fit-content;
+  margin-top: 3px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 
 .mtrk__c-excerpt p { margin: 0; overflow-wrap: anywhere; }
 .mtrk__role { margin-top: 4px !important; font-size: 12px; color: var(--muted); }

@@ -18,6 +18,9 @@
    Page
      Job Title  [dropdown of My Company's Target Job Titles] [Track Title]
      Competitor [dropdown of My Company's Competitors]       [Track Competitor]
+     Additional Tracked Channels: My Company's Tracked News and Media URLs,
+                read-only here (added and removed in My Company, or with
+                Marketing Opportunities' Track Channel)
      Tracked Buyers      — title boxes, alphabetical
      Tracked Competitors — competitor boxes, alphabetical by name
 
@@ -38,6 +41,14 @@
      them; the box then offers Refresh Data. Nav light: yellow while any box
      is researching, then green, or red if a run failed.
 
+   Tracked channels
+     Every run, of either kind, sends the Tracked News and Media URLs up as
+     `trackedChannels`. The Worker reads each one directly and in depth before
+     its model call — every recent post, the full text of the newest — and
+     gives the model extra searches to sweep them again. Rows found there
+     come back with `tracked: true` and are labelled. Changing the list
+     affects the next refresh only; nothing already shown is re-judged.
+
    Storage
      users/{uid}/tracker/{boxId}               the boxes and their rows
      users/{uid}/competitorLedger/{ledgerId}   what has already been seen
@@ -52,7 +63,9 @@
 
   const MODULE_ID = 'market-tracker';
   const MODULE_NAME = 'Market Tracker';
-  const RUN_TIMEOUT_MS = 9 * 60 * 1000;
+  /* Above the Worker's own limits (8 minutes for a job title, 10 for a
+     competitor — tracked channels are read before the model starts). */
+  const RUN_TIMEOUT_MS = 12 * 60 * 1000;
   const CONFIRM_MS = 4000;
 
   /* A row first shown less than this ago survives the next refresh, so a
@@ -154,6 +167,10 @@
 
   function profileTitles() {
     return (state.profile && state.profile.targetTitles) || [];
+  }
+
+  function profileChannels() {
+    return (state.profile && state.profile.trackedChannels) || [];
   }
 
   function profileCompetitors() {
@@ -657,6 +674,7 @@
           companyUrl: profile.companyUrl,
           companyName: profile.companyName || '',
           otherCompetitorUrls: profileCompetitors().filter((u) => compKey(u) !== box.key),
+          trackedChannels: profile.trackedChannels || [],
           context,
           ledger,
           firstRun: !box.runs,
@@ -684,6 +702,7 @@
           companyUrl: profile.companyUrl,
           companyName: profile.companyName || '',
           competitorUrls: profile.competitors || [],
+          trackedChannels: profile.trackedChannels || [],
           context,
           reports,
           otherTitles: others,
@@ -845,6 +864,13 @@
           <select id="mtrk-competitor" data-el="comp-select"></select>
           <button type="button" class="mtrk__btn" data-el="track-comp">Track Competitor</button>
         </div>
+        <div class="mtrk__pick mtrk__pick--channels">
+          <span class="mtrk__label" id="mtrk-channels-label">Additional Tracked Channels:</span>
+          <div class="mtrk__channels" aria-labelledby="mtrk-channels-label">
+            <ul class="mtrk__channel-list" data-el="channels" role="list"></ul>
+            <p class="mtrk__channel-note">(Add or remove channels from your My Company module)</p>
+          </div>
+        </div>
       </div>
       <div class="mtrk__messages" data-el="messages"></div>
     </section>
@@ -860,7 +886,23 @@
   function paint() {
     if (!mounted || !root) return;
     paintPicker();
+    paintChannels();
     paintBoxes();
+  }
+
+  /* Read-only: no X. They are managed in My Company. */
+  function paintChannels() {
+    const list = el('channels');
+    if (!list) return;
+    const channels = profileChannels();
+    list.innerHTML = channels.length
+      ? channels.map((c) => {
+        const href = safeUrl(/^https?:\/\//i.test(c) ? c : `https://${c}`);
+        const label = String(c).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '');
+        return `<li class="mtrk__channel">${href
+          ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>` : esc(label)}</li>`;
+      }).join('')
+      : `<li class="mtrk__channel-none">${state.loaded ? 'None yet' : '…'}</li>`;
   }
 
   function paintPicker() {
@@ -1074,7 +1116,28 @@
         forums = ` Of the ${plural(n(dc.checked), 'site', 'sites')} your reports name, ${bits.join('; ')} — not read yet.`;
       }
     }
-    return (parts.length ? `${head}. Left out: ${parts.join(', ')}.` : `${head}.`) + reddit + forums;
+    return (parts.length ? `${head}. Left out: ${parts.join(', ')}.` : `${head}.`) + reddit + forums + trackedText(stats.tracked, box);
+  }
+
+  /* What the agent did with the Tracked News and Media URLs this run. */
+  function trackedText(t, box) {
+    if (!t || typeof t !== 'object' || !Number(t.channels)) return '';
+    const n = (v) => Number(v) || 0;
+    const s = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+    let out = ` Tracked channels: ${n(t.read)} of ${n(t.channels)} read directly`;
+    out += n(t.items) ? ` — ${s(n(t.items), 'item', 'items')} from the last 30 days` : ' — nothing new in the last 30 days';
+    if (n(t.deep)) out += `, ${n(t.deep)} opened for their full text`;
+    if (n(t.items)) {
+      out += box.kind === 'competitor'
+        ? `, ${n(t.judged)} naming this competitor`
+        : `, ${n(t.judged)} judged against this title`;
+    }
+    out += '.';
+    const searchOnly = Array.isArray(t.searchOnly) ? t.searchOnly : [];
+    const unreadable = Array.isArray(t.unreadable) ? t.unreadable : [];
+    if (searchOnly.length) out += ` Searched instead (couldn’t be read directly): ${searchOnly.join(', ')}.`;
+    if (unreadable.length) out += ` Can’t be read by any tool: ${unreadable.join(', ')}.`;
+    return out;
   }
 
   const fmtWhen = (ms) => new Date(ms).toLocaleString(undefined, {
@@ -1117,6 +1180,7 @@
         <td class="mtrk__c-source">
           <span class="mtrk__source">${esc(r.source)}</span>
           <span class="mtrk__kind">${esc(KIND[r.kind] || 'Post')}${r.companySite ? ' · company’s own site' : ''}</span>
+          ${r.tracked ? '<span class="mtrk__tracked" title="From one of your Tracked News and Media URLs">Tracked channel</span>' : ''}
         </td>
         <td class="mtrk__c-excerpt">
           ${competitor ? '' : `<span class="mtrk__tone">${esc(TONE[tone])}${r.churn ? ' · left you' : ''}</span>`}

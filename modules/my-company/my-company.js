@@ -27,7 +27,12 @@
     { key: 'targetIndustries', label: 'Target Industries', kind: 'tags', suggest: true,
       placeholder: 'Type an industry and press Enter' },
     { key: 'competitors', label: 'Competitors', hint: 'Enter URLs', kind: 'tags', url: true,
-      placeholder: 'e.g. rival.com, then Enter' }
+      placeholder: 'e.g. rival.com, then Enter' },
+    /* Blogs, publications, channels and communities the user wants watched.
+       Marketing Opportunities adds and removes these too (Track Channel), and
+       Market Tracker reads every one of them in depth on each refresh. */
+    { key: 'trackedChannels', label: 'Tracked News and Media URLs', hint: 'Enter URLs', kind: 'tags', url: true,
+      placeholder: 'e.g. medium.com/@writer, then Enter' }
   ];
 
   const isArrayField = (f) => f.kind === 'tags';
@@ -596,7 +601,10 @@
       return false;
     }
     const clean = f.url ? Data().util.normalizeUrl(value) : value;
-    if (!d.tags.some((t) => t.toLowerCase() === clean.toLowerCase())) d.tags.push(clean);
+    const same = f.key === 'trackedChannels'
+      ? (t) => Data().util.sameChannel(t, clean)
+      : (t) => t.toLowerCase() === clean.toLowerCase();
+    if (!d.tags.some(same)) d.tags.push(clean);
     state.drafts[f.key] = { tags: d.tags, text: '' };
     return true;
   }
