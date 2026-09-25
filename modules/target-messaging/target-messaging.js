@@ -20,8 +20,16 @@
         company as it's edited, and stays until edited again or a new run
         overwrites it (after a confirm).
 
-   The Worker (target-messaging) is a plumbing test for now: it answers
-   "Hello World" plus a summary of what it received, in both editors.
+   The Worker (target-messaging):
+     By Job Title  — the drafting agent. Besides the sources chosen here, every
+                     run also sends the company's Persona Builder and Battle
+                     Card Generator PDFs (role "persona" / "battlecard"); the
+                     Worker keeps only the ones written for this job title.
+     By Individual — the contact agent: HubSpot notes on the contact and their
+                     deals (competitors, pain points, goals, features) plus
+                     every Persona Builder, Battle Card, Find My Customer,
+                     Build Positioning, Draft Messaging and imported file;
+                     the Worker keeps the ones about the contact's title.
    ========================================================================== */
 
 (() => {
@@ -30,8 +38,24 @@
   const MODULE_NAME = 'Target Messaging';
   const MESSAGING_ID = 'draft-messaging';     // the only generated files offered here
 
-  const FILE_CHARS = 60000;                   // per file sent to the Worker
+  const FILE_CHARS = 60000;                   // per chosen file sent to the Worker
   const FILES_TOTAL_CHARS = 240000;
+  // Persona Builder / Battle Card PDFs sent automatically with a Job Title run.
+  const AUTO_MODULES = {                      // newest first, up to max of each
+    'persona-builder': { role: 'persona', max: 15 },
+    'battle-card-generator': { role: 'battlecard', max: 15 }
+  };
+  // By Individual: everything that might be about the contact's job title.
+  const INDIVIDUAL_MODULES = {
+    'persona-builder': { role: 'persona', max: 15 },
+    'battle-card-generator': { role: 'battlecard', max: 15 },
+    'find-my-customer': { role: 'customer', max: 10 },
+    'build-positioning': { role: 'positioning', max: 6 },
+    'draft-messaging': { role: 'messaging', max: 6 },
+    imported: { role: 'imported', max: 15 }
+  };
+  const AUTO_FILE_CHARS = 40000;
+  const AUTO_TOTAL_CHARS = 600000;
   const SAVE_DELAY_MS = 800;
   const SEARCH_DELAY_MS = 250;
 
@@ -1174,29 +1198,67 @@
       throw new Error(`${missing.map((m) => m.name).join(', ')} missing. Try again with a different file.`);
     }
     const chosen = st.picked.map((p) => files.find((f) => f.id === p.id));
-    if (!chosen.length) return [];
+    // Persona Builder and Battle Card PDFs go with every Job Title run; the
+    // Worker decides which of them were written for this title.
+    return readFiles(D, files, chosen, AUTO_MODULES, setStatus, 'Reading your sources, personas and battle cards');
+  }
+
+  /* By Individual: the contact's job title is only known once the Worker has
+     looked them up in HubSpot, so every candidate Mktforge file goes along
+     and the Worker keeps the ones that match the title. */
+  async function readIndividualSources(st, setStatus) {
+    const D = dataOf(st);
+    setStatus('Checking your Mktforge files…');
+    const files = await D.listFiles();
+    st.files = files;
+    return readFiles(D, files, [], INDIVIDUAL_MODULES, setStatus, 'Reading your Mktforge files');
+  }
+
+  /* chosen: files the user picked (role "selected"); modules: moduleId ->
+     { role, max } for files sent automatically ('imported' = imported files). */
+  async function readFiles(D, files, chosen, modules, setStatus, label) {
+    const chosenIds = new Set(chosen.map((f) => f.id));
+    const auto = [];
+    Object.keys(modules).forEach((mid) => {
+      const { role, max } = modules[mid];
+      files.filter((f) => (mid === 'imported' ? f.source === 'imported' : f.source !== 'imported' && f.moduleId === mid))
+        .filter((f) => !chosenIds.has(f.id))
+        .slice(0, max)
+        .forEach((f) => auto.push({ f, auto: true, role }));
+    });
+    const all = [...chosen.map((f) => ({ f, auto: false, role: 'selected' })), ...auto];
+    if (!all.length) return [];
     let done = 0;
-    const say = () => setStatus(`Reading your sources (${done} of ${chosen.length})…`);
+    const say = () => setStatus(`${label} (${done} of ${all.length})…`);
     say();
-    const rows = await pool(chosen, 3, async (f) => {
+    const rows = await pool(all, 3, async (row) => {
       let text = '';
-      try { text = await D.getFileText(f.id); } catch (err) { console.warn('[Target Messaging] could not read', f.name, err); }
+      try { text = await D.getFileText(row.f.id); } catch (err) { console.warn('[Target Messaging] could not read', row.f.name, err); }
       done += 1;
       say();
-      return { f, text: String(text || '') };
+      return { ...row, text: String(text || '') };
     });
     let room = FILES_TOTAL_CHARS;
-    return rows.map(({ f, text }) => {
-      const t = text.slice(0, Math.max(0, Math.min(FILE_CHARS, room)));
-      room -= t.length;
+    let autoRoom = AUTO_TOTAL_CHARS;
+    return rows.map(({ f, auto: isAuto, role, text }) => {
+      let t;
+      if (isAuto) {
+        t = text.slice(0, Math.max(0, Math.min(AUTO_FILE_CHARS, autoRoom)));
+        autoRoom -= t.length;
+      } else {
+        t = text.slice(0, Math.max(0, Math.min(FILE_CHARS, room)));
+        room -= t.length;
+      }
       return {
         name: fullName(f),
         origin: f.source === 'imported' ? 'imported' : 'generated',
+        moduleId: f.source === 'imported' ? 'imported' : (f.moduleId || ''),
+        role,
         type: kindLabel(f),
         date: stamp(f.createdAt),
         text: t
       };
-    });
+    }).filter((r) => r.role === 'selected' || r.text);
   }
 
   function editorsHaveCopy(st) {
@@ -1250,7 +1312,15 @@
         body = { ...base, jobTitle: st.jobTitle, files, useWebsite: !!st.useWebsite };
         if (!st.useWebsite) body.companyUrl = '';
       } else {
-        body = { ...base, contactId: st.contact.id, contactLabel: contactLabel(st.contact) };
+        const files = await readIndividualSources(st, setStatus);
+        if (!live()) return;
+        body = {
+          ...base,
+          contactId: st.contact.id,
+          contactLabel: contactLabel(st.contact),
+          competitors: ((profile && profile.competitors) || []).filter(Boolean).slice(0, 20),
+          files
+        };
       }
 
       setStatus('Sending to the drafting agent…');
