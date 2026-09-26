@@ -175,12 +175,39 @@ window.MktforgeBattleCardText = (function () {
       <p class="bcg__error" data-el="error" role="alert" hidden></p>
     </section>
 
-    <section class="bcg__grid" aria-label="Battle card results">${boxMarkup}
+    <section class="bcg__grid is-idle" data-el="grid" aria-label="Battle card results">
+      <div class="bcg__idle">
+        <div class="bcg__intro">
+          <img class="bcg__intro-img" src="modules/battle-card-generator/battle-card-panda.png"
+            alt="" width="640" height="549">
+          <div class="bcg__intro-copy">
+            <p class="bcg__intro-title">Let's prepare for battle!</p>
+            <p class="bcg__intro-text">Any competitor. Any job title. Any industry. We'll use this
+              information to draft tailored one-page battle cards you can use to win any sales
+              scenario.</p>
+          </div>
+        </div>
+        <div class="bcg__idle-loading">
+          <!-- The forging clips are shared with Find My Customer. -->
+          <div class="bcg__forge-stage" aria-hidden="true">
+            <video class="bcg__forge" data-el="forge" muted loop playsinline preload="auto"
+              width="660" height="540" aria-hidden="true">
+              <source src="modules/find-my-customer/find-customer-forge.webm" type="video/webm">
+              <source src="modules/find-my-customer/find-customer-forge.mp4" type="video/mp4">
+            </video>
+            <video class="bcg__forge bcg__forge--end" data-el="forgeEnd" muted playsinline preload="auto"
+              width="660" height="540" aria-hidden="true">
+              <source src="modules/find-my-customer/find-customer-forge-end.webm" type="video/webm">
+              <source src="modules/find-my-customer/find-customer-forge-end.mp4" type="video/mp4">
+            </video>
+          </div>
+          <p class="bcg__status" data-el="status" aria-live="polite"></p>
+        </div>
+      </div>${boxMarkup}
     </section>
 
-    <div class="bcg__pdf-row">
+    <div class="bcg__pdf-row" data-el="pdfRow" hidden style="display:none">
       <button type="button" class="bcg__btn" data-el="pdf" disabled title="Run the generator first">Create Battle Card PDF</button>
-      <p class="bcg__status" data-el="status" aria-live="polite"></p>
     </div>
 
   </div>`;
@@ -422,6 +449,7 @@ window.MktforgeBattleCardText = (function () {
     st.status = 'Researching both companies… this usually takes 30–90 seconds.';
     setPdfEnabled(false);
     setAllBoxesLoading();
+    setView('loading');
     el.status.textContent = st.status;
     updateGenerateEnabled();
 
@@ -431,6 +459,7 @@ window.MktforgeBattleCardText = (function () {
       st.status = '';
       if (onScreen(st)) {
         setAllBoxesPlaceholder();
+        setView('intro');
         showError(message);
         el.status.textContent = '';
       }
@@ -477,9 +506,17 @@ window.MktforgeBattleCardText = (function () {
       };
       st.status = 'Battle card ready.';
 
+      // The panda finishes his pass and puts the hammer down first, with
+      // "Battle card ready." under him while he does.
       if (onScreen(st)) {
-        renderResults(st.run);
         el.status.textContent = st.status;
+        await finishForge();
+        if (!pc.live(st, runId)) return;
+      }
+
+      if (onScreen(st)) {
+        setView('results');
+        renderResults(st.run);
         setPdfEnabled(true);
       }
     } catch (err) {
@@ -492,6 +529,85 @@ window.MktforgeBattleCardText = (function () {
       Mktforge.reportActivity('battle-card-generator', st.error ? 'error' : 'idle');
       updateGenerateEnabled();
     }
+  }
+
+  /* ---------- the single box that stands in for the results ----------
+       'intro'   — before a run (or after one that failed): the panda + copy
+       'loading' — while a run is researching: the forging panda + progress
+       'results' — the nine boxes, with the battle card in them */
+  function setView(view) {
+    el.grid.classList.toggle('is-idle', view !== 'results');
+    el.grid.classList.toggle('is-running', view === 'loading');
+    // Nothing to save until there are results. Set inline too, so no
+    // stylesheet (even a stale cached one) can bring the button back early.
+    el.pdfRow.hidden = view !== 'results';
+    el.pdfRow.style.display = view === 'results' ? '' : 'none';
+    playForge(view === 'loading');
+  }
+
+  /* The forging panda: two clips stacked in one spot. `forge` loops while a
+     run researches; `forgeEnd` (the last strike, then the hammer goes down)
+     plays once when the battle card arrives, before it's shown. Nothing
+     plays for anyone who has asked their system for reduced motion — the
+     first frame stays up and results appear straight away. */
+  const reducedMotion = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let forgeDone = null;   // settles a finishForge() still waiting, if any
+
+  function playForge(on) {
+    const loop = el.forge, end = el.forgeEnd;
+    if (!loop || !end) return;
+    if (forgeDone) forgeDone();
+    end.pause();
+    end.currentTime = 0;
+    end.classList.remove('is-on');
+    loop.classList.remove('is-off');
+    loop.loop = true;
+    loop.currentTime = 0;
+    if (on && !reducedMotion) {
+      const p = loop.play();
+      if (p && p.catch) p.catch(() => {});   // autoplay refused: first frame stays up
+    } else {
+      loop.pause();
+    }
+  }
+
+  /* Lets the current pass of the loop finish, plays the ending, holds its
+     last frame for a beat, then resolves. Resolves at once if the loop
+     isn't actually playing, and never waits longer than both clips take. */
+  function finishForge() {
+    const loop = el && el.forge, end = el && el.forgeEnd;
+    if (!loop || !end || reducedMotion || loop.paused) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const clipMs = (v, fallback) => (isFinite(v.duration) ? v.duration : fallback) * 1000;
+      const timer = setTimeout(() => done(), clipMs(loop, 5) + clipMs(end, 4) + 2000);
+
+      function done() {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        loop.removeEventListener('ended', onLoopEnd);
+        end.removeEventListener('ended', onEndEnd);
+        if (forgeDone === done) forgeDone = null;
+        resolve();
+      }
+      function onLoopEnd() {
+        end.currentTime = 0;
+        end.classList.add('is-on');
+        loop.classList.add('is-off');
+        const p = end.play();
+        if (p && p.catch) p.catch(done);
+      }
+      function onEndEnd() { setTimeout(done, 600); }
+
+      forgeDone = done;
+      loop.addEventListener('ended', onLoopEnd);
+      end.addEventListener('ended', onEndEnd);
+      loop.loop = false;   // finish this pass, then fire 'ended'
+    });
   }
 
   /* ---------- PDF export ---------- */
@@ -534,12 +650,13 @@ window.MktforgeBattleCardText = (function () {
     el.jobTitle.value      = f.jobTitle;
     el.industry.value      = f.industry;
 
+    setView(state.running ? 'loading' : state.run ? 'results' : 'intro');
+
     if (state.running) {
       setAllBoxesLoading();
       el.status.textContent = state.status;
     } else if (state.run) {
       renderResults(state.run);
-      el.status.textContent = state.status;
       setPdfEnabled(true);
     }
 
@@ -563,7 +680,10 @@ window.MktforgeBattleCardText = (function () {
     label:  'Battle Card Generator',
     icon:   'swords',
     companyAware: true,
-    styles: 'modules/battle-card-generator/battle-card-generator.css',
+    // The ?v= changes whenever this stylesheet does, so a browser holding the
+    // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
+    // new one instead of pairing new markup with old styles.
+    styles: 'modules/battle-card-generator/battle-card-generator.css?v=2026-09-26a',
 
     mount(container) {
       container.innerHTML = MARKUP;
@@ -575,7 +695,8 @@ window.MktforgeBattleCardText = (function () {
         form: q('form'), companyUrl: q('companyUrl'),
         competitorUrl: q('competitorUrl'), jobTitle: q('jobTitle'), industry: q('industry'),
         generate: q('generate'), hint: q('hint'), error: q('error'),
-        pdf: q('pdf'), status: q('status')
+        pdf: q('pdf'), status: q('status'),
+        grid: q('grid'), forge: q('forge'), forgeEnd: q('forgeEnd'), pdfRow: q('pdfRow')
       };
       theirTitleEl = container.querySelector('[data-title="theirFeatures"]');
 
@@ -601,6 +722,8 @@ window.MktforgeBattleCardText = (function () {
       captureForm();
       pc.hold(state);                   // keeps any "Run stopped" note
       mounted = false;
+      if (el && el.forge) { el.forge.pause(); el.forgeEnd.pause(); }
+      if (forgeDone) forgeDone();       // a waiting finish shows results on the way back
       // A run in flight is deliberately NOT aborted; it finishes into state.
       el = null;
       boxes = null;

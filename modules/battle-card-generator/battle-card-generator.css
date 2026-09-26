@@ -155,6 +155,92 @@
   box-shadow: var(--bcg-shadow);
 }
 
+/* --- Single box in place of the results ---
+   One full-width box standing in for the nine result boxes until the
+   battle card is ready — the same 452px as Find My Customer and Persona
+   Builder, so the modules match. Before a run it shows the knight panda
+   and intro copy; while a run researches (.is-running) it shows the
+   forging panda with the progress under him. */
+
+.bcg__idle { display: none; }
+
+.bcg__grid.is-idle > .bcg__box { display: none; }
+
+.bcg__grid.is-idle > .bcg__idle {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 452px;
+  padding: 32px 40px;
+  background: var(--bcg-surface);
+  border: 1px solid var(--bcg-line);
+  border-radius: var(--bcg-radius);
+  box-shadow: var(--bcg-shadow);
+}
+
+.bcg__intro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  max-width: 860px;
+}
+
+.bcg__intro-img {
+  flex: none;
+  width: 320px;
+  height: auto;
+}
+
+.bcg__intro-copy { flex: 0 1 440px; min-width: 0; }
+
+.bcg__intro-title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--bcg-ink);
+}
+
+.bcg__intro-text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--bcg-soft);
+}
+
+.bcg__idle-loading { display: none; }
+
+.bcg__grid.is-running .bcg__intro { display: none; }
+.bcg__grid.is-running .bcg__idle-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* The loop and its ending share one spot; only one is visible at a time.
+   Opacity (not display) keeps the hidden one decoded, so the swap from
+   loop to ending has no blank frame. Multiply keeps any off-white pixels
+   in the clip from showing as a faint rectangle against the box. */
+.bcg__forge-stage { display: grid; }
+
+.bcg__forge {
+  grid-area: 1 / 1;
+  display: block;
+  height: 310px;
+  width: auto;
+  max-width: 100%;
+  mix-blend-mode: multiply;
+}
+
+.bcg__forge.is-off,
+.bcg__forge--end { opacity: 0; }
+
+.bcg__forge--end.is-on { opacity: 1; }
+
 .bcg__box h2 {
   margin: 0;
   font-family: var(--font-body);
@@ -301,6 +387,8 @@
 
 /* --- PDF export row --- */
 
+.bcg__pdf-row[hidden] { display: none; }
+
 .bcg__pdf-row {
   display: flex;
   flex-direction: column;
@@ -309,9 +397,11 @@
   margin-bottom: 20px;
 }
 
+/* Run progress, under the panda inside the loading box. */
 .bcg__status {
   margin: 0;
-  min-height: 1.4em;
-  font-size: 14.5px;
+  min-height: 1.5em;
+  font-size: 15px;
+  text-align: center;
   color: var(--bcg-soft);
 }
