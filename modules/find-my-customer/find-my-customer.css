@@ -153,7 +153,7 @@
    exist. Its height is about half of what those boxes take up empty
    (~905px: three rows of boxes, the double-height Competitors box and
    the gaps between them). Before a run it shows the panda and intro copy;
-   while a run is collecting data (.is-running) it shows the pulsing dots. */
+   while a run is collecting data (.is-running) it shows the forging panda. */
 
 .fmc__idle { display: none; }
 
@@ -203,12 +203,32 @@
   color: var(--fmc-soft);
 }
 
-.fmc__idle-loading { display: none; gap: 8px; }
+/* While a run collects data: the forging panda, looping. The clip's
+   background is white; multiply keeps any off-white pixels from showing
+   as a faint rectangle against the box. */
+.fmc__idle-loading { display: none; }
 
 .fmc__grid.is-running .fmc__intro { display: none; }
 .fmc__grid.is-running .fmc__idle-loading { display: flex; }
 
-.fmc__idle-loading .fmc__dot { width: 10px; height: 10px; }
+/* The loop and its ending share one spot; only one is visible at a time.
+   Opacity (not display) keeps the hidden one decoded, so the swap from
+   loop to ending has no blank frame. */
+.fmc__forge-stage { display: grid; }
+
+.fmc__forge {
+  grid-area: 1 / 1;
+  display: block;
+  height: 340px;
+  width: auto;
+  max-width: 100%;
+  mix-blend-mode: multiply;
+}
+
+.fmc__forge.is-off,
+.fmc__forge--end { opacity: 0; }
+
+.fmc__forge--end.is-on { opacity: 1; }
 
 .fmc__box h2 {
   margin: 0;

@@ -68,8 +68,19 @@
               you should be aware of.</p>
           </div>
         </div>
-        <div class="fmc__idle-loading" aria-label="Collecting data">
-          <span class="fmc__dot"></span><span class="fmc__dot"></span><span class="fmc__dot"></span>
+        <div class="fmc__idle-loading" role="img" aria-label="Collecting data">
+          <div class="fmc__forge-stage">
+            <video class="fmc__forge" data-el="forge" muted loop playsinline preload="auto"
+              width="660" height="540" aria-hidden="true">
+              <source src="modules/find-my-customer/find-customer-forge.webm" type="video/webm">
+              <source src="modules/find-my-customer/find-customer-forge.mp4" type="video/mp4">
+            </video>
+            <video class="fmc__forge fmc__forge--end" data-el="forgeEnd" muted playsinline preload="auto"
+              width="660" height="540" aria-hidden="true">
+              <source src="modules/find-my-customer/find-customer-forge-end.webm" type="video/webm">
+              <source src="modules/find-my-customer/find-customer-forge-end.mp4" type="video/mp4">
+            </video>
+          </div>
         </div>
       </div>
       <article class="fmc__box fmc__box--wide"><h2>Customer List</h2>
@@ -199,6 +210,73 @@
   function setView(view) {
     el.grid.classList.toggle('is-idle', view !== 'results');
     el.grid.classList.toggle('is-running', view === 'loading');
+    playForge(view === 'loading');
+  }
+
+  /* The forging panda: two clips stacked in one spot. `forge` loops while a
+     run collects data; `forgeEnd` (the last strike, then the hammer goes
+     down) plays once when results arrive, before they're shown. Nothing
+     plays for anyone who has asked their system for reduced motion — the
+     first frame stays up and results appear straight away. */
+  const reducedMotion = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let forgeDone = null;   // settles a finishForge() still waiting, if any
+
+  function playForge(on) {
+    const loop = el.forge, end = el.forgeEnd;
+    if (!loop || !end) return;
+    if (forgeDone) forgeDone();
+    end.pause();
+    end.currentTime = 0;
+    end.classList.remove('is-on');
+    loop.classList.remove('is-off');
+    loop.loop = true;
+    loop.currentTime = 0;
+    if (on && !reducedMotion) {
+      const p = loop.play();
+      if (p && p.catch) p.catch(() => {});   // autoplay refused: first frame stays up
+    } else {
+      loop.pause();
+    }
+  }
+
+  /* Lets the current pass of the loop finish, plays the ending, holds its
+     last frame for a beat, then resolves. Resolves at once if the loop
+     isn't actually playing (reduced motion, autoplay refused), and never
+     waits longer than both clips should take. */
+  function finishForge() {
+    const loop = el && el.forge, end = el && el.forgeEnd;
+    if (!loop || !end || reducedMotion || loop.paused) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const clipMs = (v, fallback) => (isFinite(v.duration) ? v.duration : fallback) * 1000;
+      const timer = setTimeout(() => done(), clipMs(loop, 5) + clipMs(end, 4) + 2000);
+
+      function done() {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        loop.removeEventListener('ended', onLoopEnd);
+        end.removeEventListener('ended', onEndEnd);
+        if (forgeDone === done) forgeDone = null;
+        resolve();
+      }
+      function onLoopEnd() {
+        end.currentTime = 0;
+        end.classList.add('is-on');
+        loop.classList.add('is-off');
+        const p = end.play();
+        if (p && p.catch) p.catch(done);
+      }
+      function onEndEnd() { setTimeout(done, 600); }
+
+      forgeDone = done;
+      loop.addEventListener('ended', onLoopEnd);
+      end.addEventListener('ended', onEndEnd);
+      loop.loop = false;   // finish this pass, then fire 'ended'
+    });
   }
 
   function setAllBoxesLoading() {
@@ -549,6 +627,12 @@
       };
       st.runUrl  = rawUrl;
       st.lastUrl = normalized;
+
+      // The panda finishes his pass and puts the hammer down first.
+      if (onScreen(st)) {
+        await finishForge();
+        if (!pc.live(st, runId)) return;
+      }
       st.status  = 'Research complete.';
 
       if (onScreen(st)) {
@@ -647,7 +731,7 @@
       el = {
         form: q('form'), url: q('url'), submit: q('submit'),
         error: q('error'), pdf: q('pdf'), status: q('status'),
-        grid: q('grid')
+        grid: q('grid'), forge: q('forge'), forgeEnd: q('forgeEnd')
       };
 
       boxes = {};
@@ -675,6 +759,8 @@
 
     unmount() {
       captureForm();
+      if (el && el.forge) { el.forge.pause(); el.forgeEnd.pause(); }
+      if (forgeDone) forgeDone();       // a waiting finish shows results on the way back
       pc.hold(state);                   // keeps any "Run stopped" note
       mounted = false;
       if (unsubProfile) { unsubProfile(); unsubProfile = null; }
