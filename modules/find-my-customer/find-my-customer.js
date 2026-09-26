@@ -68,8 +68,8 @@
               you should be aware of.</p>
           </div>
         </div>
-        <div class="fmc__idle-loading" role="img" aria-label="Collecting data">
-          <div class="fmc__forge-stage">
+        <div class="fmc__idle-loading">
+          <div class="fmc__forge-stage" aria-hidden="true">
             <video class="fmc__forge" data-el="forge" muted loop playsinline preload="auto"
               width="660" height="540" aria-hidden="true">
               <source src="modules/find-my-customer/find-customer-forge.webm" type="video/webm">
@@ -81,6 +81,7 @@
               <source src="modules/find-my-customer/find-customer-forge-end.mp4" type="video/mp4">
             </video>
           </div>
+          <p class="fmc__status" data-el="status" aria-live="polite"></p>
         </div>
       </div>
       <article class="fmc__box fmc__box--wide"><h2>Customer List</h2>
@@ -97,9 +98,8 @@
         <div class="fmc__box-body is-placeholder" data-box="competitorsToWatch">No Data</div></article>
     </section>
 
-    <div class="fmc__pdf-row">
+    <div class="fmc__pdf-row" data-el="pdfRow" hidden>
       <button type="button" class="fmc__btn" data-el="pdf" disabled title="Run a search first">Save as PDF</button>
-      <p class="fmc__status" data-el="status" aria-live="polite"></p>
     </div>
 
   </div>`;
@@ -210,6 +210,7 @@
   function setView(view) {
     el.grid.classList.toggle('is-idle', view !== 'results');
     el.grid.classList.toggle('is-running', view === 'loading');
+    el.pdfRow.hidden = view !== 'results';     // nothing to save until there are results
     playForge(view === 'loading');
   }
 
@@ -627,18 +628,19 @@
       };
       st.runUrl  = rawUrl;
       st.lastUrl = normalized;
+      st.status  = 'Research complete.';
 
-      // The panda finishes his pass and puts the hammer down first.
+      // The panda finishes his pass and puts the hammer down first, with
+      // "Research complete." under him while he does.
       if (onScreen(st)) {
+        el.status.textContent = st.status;
         await finishForge();
         if (!pc.live(st, runId)) return;
       }
-      st.status  = 'Research complete.';
 
       if (onScreen(st)) {
         setView('results');
         renderDashboard(st.data);
-        el.status.textContent = st.status;
         setPdfEnabled(true);
       }
     } catch (err) {
@@ -731,7 +733,7 @@
       el = {
         form: q('form'), url: q('url'), submit: q('submit'),
         error: q('error'), pdf: q('pdf'), status: q('status'),
-        grid: q('grid'), forge: q('forge'), forgeEnd: q('forgeEnd')
+        grid: q('grid'), forge: q('forge'), forgeEnd: q('forgeEnd'), pdfRow: q('pdfRow')
       };
 
       boxes = {};

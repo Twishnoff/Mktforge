@@ -209,7 +209,12 @@
 .fmc__idle-loading { display: none; }
 
 .fmc__grid.is-running .fmc__intro { display: none; }
-.fmc__grid.is-running .fmc__idle-loading { display: flex; }
+.fmc__grid.is-running .fmc__idle-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
 
 /* The loop and its ending share one spot; only one is visible at a time.
    Opacity (not display) keeps the hidden one decoded, so the swap from
@@ -219,7 +224,7 @@
 .fmc__forge {
   grid-area: 1 / 1;
   display: block;
-  height: 340px;
+  height: 310px;
   width: auto;
   max-width: 100%;
   mix-blend-mode: multiply;
@@ -421,6 +426,8 @@
 
 /* --- PDF export row --- */
 
+.fmc__pdf-row[hidden] { display: none; }
+
 .fmc__pdf-row {
   display: flex;
   flex-direction: column;
@@ -429,9 +436,11 @@
   margin-bottom: 20px;
 }
 
+/* Run progress, under the panda inside the loading box. */
 .fmc__status {
   margin: 0;
-  min-height: 1.4em;
-  font-size: 14.5px;
+  min-height: 1.5em;
+  font-size: 15px;
+  text-align: center;
   color: var(--fmc-soft);
 }
