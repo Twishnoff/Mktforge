@@ -154,6 +154,95 @@
 
 .mo__box--all { margin-bottom: 14px; }
 
+/* --- Single box in place of the results ---
+   One full-width box standing in for All Results and the per-channel boxes
+   until results exist — the same 452px as the other modules, so they
+   match. Before a run it shows the scroll panda and intro copy; while a
+   run searches (.is-running) it shows the forging panda with the progress
+   under him. */
+
+.mo__idle { display: none; }
+
+.mo__results.is-idle > .mo__box--all,
+.mo__results.is-idle > .mo__grid { display: none; }
+
+.mo__results.is-idle > .mo__idle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 452px;
+  margin-bottom: 26px;
+  padding: 32px 40px;
+  background: var(--mo-surface);
+  border: 1px solid var(--mo-line);
+  border-radius: var(--mo-radius);
+  box-shadow: var(--mo-shadow);
+}
+
+.mo__intro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  max-width: 860px;
+}
+
+/* The image keeps its white background (for the scroll's glow); multiply
+   drops that white into the box. */
+.mo__intro-img {
+  flex: none;
+  width: 320px;
+  height: auto;
+  mix-blend-mode: multiply;
+}
+
+.mo__intro-copy { flex: 0 1 440px; min-width: 0; }
+
+.mo__intro-title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--mo-ink);
+}
+
+.mo__intro-text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--mo-soft);
+}
+
+.mo__idle-loading { display: none; }
+
+.mo__results.is-running .mo__intro { display: none; }
+.mo__results.is-running .mo__idle-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* The loop and its ending share one spot; only one is visible at a time.
+   Opacity (not display) keeps the hidden one decoded, so the swap from
+   loop to ending has no blank frame. */
+.mo__forge-stage { display: grid; }
+
+.mo__forge {
+  grid-area: 1 / 1;
+  display: block;
+  height: 310px;
+  width: auto;
+  max-width: 100%;
+  mix-blend-mode: multiply;
+}
+
+.mo__forge.is-off,
+.mo__forge--end { opacity: 0; }
+
+.mo__forge--end.is-on { opacity: 1; }
+
 .mo__box h2 {
   margin: 0;
   font-family: var(--font-body);
@@ -303,6 +392,8 @@
 
 /* --- PDF export row --- */
 
+.mo__pdf-row[hidden] { display: none; }
+
 .mo__pdf-row {
   display: flex;
   flex-direction: column;
@@ -311,9 +402,11 @@
   margin-bottom: 20px;
 }
 
+/* Run progress, under the panda inside the loading box. */
 .mo__status {
   margin: 0;
-  min-height: 1.4em;
-  font-size: 14.5px;
+  min-height: 1.5em;
+  font-size: 15px;
+  text-align: center;
   color: var(--mo-soft);
 }

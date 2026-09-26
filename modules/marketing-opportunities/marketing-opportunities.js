@@ -102,6 +102,36 @@
       <p class="mo__error" data-el="error" role="alert" hidden></p>
     </section>
 
+    <div class="mo__results is-idle" data-el="grid">
+
+    <div class="mo__idle">
+      <div class="mo__intro">
+        <img class="mo__intro-img" src="modules/marketing-opportunities/marketing-opportunities-panda.jpg"
+          alt="" width="640" height="550">
+        <div class="mo__intro-copy">
+          <p class="mo__intro-title">Let's get the word out!</p>
+          <p class="mo__intro-text">Pick your target job title and we'll find the best places to
+            reach out and find the buyers you're after.</p>
+        </div>
+      </div>
+      <div class="mo__idle-loading">
+        <!-- The forging clips are shared with Find My Customer. -->
+        <div class="mo__forge-stage" aria-hidden="true">
+          <video class="mo__forge" data-el="forge" muted loop playsinline preload="auto"
+            width="660" height="540" aria-hidden="true">
+            <source src="modules/find-my-customer/find-customer-forge.webm" type="video/webm">
+            <source src="modules/find-my-customer/find-customer-forge.mp4" type="video/mp4">
+          </video>
+          <video class="mo__forge mo__forge--end" data-el="forgeEnd" muted playsinline preload="auto"
+            width="660" height="540" aria-hidden="true">
+            <source src="modules/find-my-customer/find-customer-forge-end.webm" type="video/webm">
+            <source src="modules/find-my-customer/find-customer-forge-end.mp4" type="video/mp4">
+          </video>
+        </div>
+        <p class="mo__status" data-el="status" aria-live="polite"></p>
+      </div>
+    </div>
+
     <section class="mo__box mo__box--all" aria-label="All results">
       <h2>All Results <span class="mo__count" data-el="count"></span></h2>
       <div class="mo__box-body is-placeholder" data-box="all">No Data Collected</div>
@@ -113,9 +143,10 @@
         <div class="mo__box-body is-placeholder" data-box="${key}">No Data Collected</div></article>`).join('')}
     </section>
 
-    <div class="mo__pdf-row">
+    </div>
+
+    <div class="mo__pdf-row" data-el="pdfRow" hidden style="display:none">
       <button type="button" class="mo__btn" data-el="pdf" disabled title="Run a search first">Create PDF</button>
-      <p class="mo__status" data-el="status" aria-live="polite"></p>
     </div>
 
   </div>`;
@@ -475,6 +506,7 @@
     st.status = 'Searching for channels… this can take a minute or two.';
     setPdfEnabled(false);
     setAllBoxesLoading();
+    setView('loading');
     el.status.textContent = st.status;
     updateSubmitEnabled();
 
@@ -484,6 +516,7 @@
       st.status = '';
       if (onScreen(st)) {
         setAllBoxesPlaceholder();
+        setView('intro');
         showError(message);
         el.status.textContent = '';
       }
@@ -530,9 +563,17 @@
       st.lastKey = key;
       st.status = 'Search complete.';
 
+      // The panda finishes his pass and puts the hammer down first, with
+      // "Search complete." under him while he does.
       if (onScreen(st)) {
-        renderResults(st.run);
         el.status.textContent = st.status;
+        await finishForge();
+        if (!pc.live(st, runId)) return;
+      }
+
+      if (onScreen(st)) {
+        setView('results');
+        renderResults(st.run);
         setPdfEnabled(true);
       }
     } catch (err) {
@@ -545,6 +586,85 @@
       Mktforge.reportActivity('marketing-opportunities', st.error ? 'error' : 'idle');
       updateSubmitEnabled();
     }
+  }
+
+  /* ---------- the single box that stands in for the results ----------
+       'intro'   — before a run (or after one that failed): the panda + copy
+       'loading' — while a run is searching: the forging panda + progress
+       'results' — All Results plus the per-channel boxes */
+  function setView(view) {
+    el.grid.classList.toggle('is-idle', view !== 'results');
+    el.grid.classList.toggle('is-running', view === 'loading');
+    // Nothing to save until there are results. Set inline too, so no
+    // stylesheet (even a stale cached one) can bring the button back early.
+    el.pdfRow.hidden = view !== 'results';
+    el.pdfRow.style.display = view === 'results' ? '' : 'none';
+    playForge(view === 'loading');
+  }
+
+  /* The forging panda: two clips stacked in one spot. `forge` loops while a
+     run searches; `forgeEnd` (the last strike, then the hammer goes down)
+     plays once when results arrive, before they're shown. Nothing plays for
+     anyone who has asked their system for reduced motion — the first frame
+     stays up and results appear straight away. */
+  const reducedMotion = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let forgeDone = null;   // settles a finishForge() still waiting, if any
+
+  function playForge(on) {
+    const loop = el.forge, end = el.forgeEnd;
+    if (!loop || !end) return;
+    if (forgeDone) forgeDone();
+    end.pause();
+    end.currentTime = 0;
+    end.classList.remove('is-on');
+    loop.classList.remove('is-off');
+    loop.loop = true;
+    loop.currentTime = 0;
+    if (on && !reducedMotion) {
+      const p = loop.play();
+      if (p && p.catch) p.catch(() => {});   // autoplay refused: first frame stays up
+    } else {
+      loop.pause();
+    }
+  }
+
+  /* Lets the current pass of the loop finish, plays the ending, holds its
+     last frame for a beat, then resolves. Resolves at once if the loop
+     isn't actually playing, and never waits longer than both clips take. */
+  function finishForge() {
+    const loop = el && el.forge, end = el && el.forgeEnd;
+    if (!loop || !end || reducedMotion || loop.paused) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const clipMs = (v, fallback) => (isFinite(v.duration) ? v.duration : fallback) * 1000;
+      const timer = setTimeout(() => done(), clipMs(loop, 5) + clipMs(end, 4) + 2000);
+
+      function done() {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        loop.removeEventListener('ended', onLoopEnd);
+        end.removeEventListener('ended', onEndEnd);
+        if (forgeDone === done) forgeDone = null;
+        resolve();
+      }
+      function onLoopEnd() {
+        end.currentTime = 0;
+        end.classList.add('is-on');
+        loop.classList.add('is-off');
+        const p = end.play();
+        if (p && p.catch) p.catch(done);
+      }
+      function onEndEnd() { setTimeout(done, 600); }
+
+      forgeDone = done;
+      loop.addEventListener('ended', onLoopEnd);
+      end.addEventListener('ended', onEndEnd);
+      loop.loop = false;   // finish this pass, then fire 'ended'
+    });
   }
 
   /* ---------- PDF export ---------- */
@@ -590,12 +710,13 @@
     el.jobTitle3.value  = f.jobTitle3;
     el.industry.value   = f.industry;
 
+    setView(state.running ? 'loading' : state.run ? 'results' : 'intro');
+
     if (state.running) {
       setAllBoxesLoading();
       el.status.textContent = state.status;
     } else if (state.run) {
       renderResults(state.run);
-      el.status.textContent = state.status;
       setPdfEnabled(true);
     }
 
@@ -620,7 +741,10 @@
     label:  'Marketing Opportunities',
     icon:   'megaphone',
     companyAware: true,
-    styles: 'modules/marketing-opportunities/marketing-opportunities.css',
+    // The ?v= changes whenever this stylesheet does, so a browser holding the
+    // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
+    // new one instead of pairing new markup with old styles.
+    styles: 'modules/marketing-opportunities/marketing-opportunities.css?v=2026-09-26a',
 
     mount(container) {
       container.innerHTML = MARKUP;
@@ -632,7 +756,8 @@
         form: q('form'), companyUrl: q('companyUrl'),
         jobTitle1: q('jobTitle1'), jobTitle2: q('jobTitle2'), jobTitle3: q('jobTitle3'),
         industry: q('industry'), submit: q('submit'), hint: q('hint'),
-        error: q('error'), pdf: q('pdf'), status: q('status'), count: q('count')
+        error: q('error'), pdf: q('pdf'), status: q('status'), count: q('count'),
+        grid: q('grid'), forge: q('forge'), forgeEnd: q('forgeEnd'), pdfRow: q('pdfRow')
       };
 
       boxes = {};
@@ -663,6 +788,8 @@
       pc.hold(state);                   // keeps any "Run stopped" note
       mounted = false;
       if (unsubProfile) { unsubProfile(); unsubProfile = null; }
+      if (el && el.forge) { el.forge.pause(); el.forgeEnd.pause(); }
+      if (forgeDone) forgeDone();       // a waiting finish shows results on the way back
       // A run in flight is deliberately NOT aborted; it finishes into state.
       el = null;
       boxes = null;
