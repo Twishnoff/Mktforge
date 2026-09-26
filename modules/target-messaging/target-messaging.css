@@ -568,6 +568,20 @@
 
 .tmsg__results-head .tmsg__tabs { border-bottom: none; margin-bottom: 0; }
 
+/* "Define Your Customer" with its two tabs beside it, on one line over one
+   rule (the same arrangement as the Draft Email / Landing Page tabs). */
+.tmsg__define-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 4px 28px;
+  border-bottom: 1px solid var(--tmsg-line);
+  margin-bottom: 20px;
+}
+
+.tmsg__define-head .tmsg__h2 { margin: 0; padding-bottom: 5px; }
+.tmsg__define-head .tmsg__tabs { border-bottom: none; margin-bottom: 0; }
+
 .tmsg__saved {
   margin-left: auto;
   padding-bottom: 9px;

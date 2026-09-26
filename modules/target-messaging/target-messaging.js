@@ -285,12 +285,14 @@
     </header>
 
     <section class="tmsg__card" aria-labelledby="tmsg-define-title">
-      <h2 class="tmsg__h2" id="tmsg-define-title">Define Your Customer</h2>
-      <div class="tmsg__tabs" role="tablist" aria-label="Define your customer">
-        <button type="button" class="tmsg__tab" role="tab" id="tmsg-tab-job-title" data-tab="job-title"
-          aria-controls="tmsg-panel-job-title">By Job Title</button>
-        <button type="button" class="tmsg__tab" role="tab" id="tmsg-tab-individual" data-tab="individual"
-          aria-controls="tmsg-panel-individual">By Individual</button>
+      <div class="tmsg__define-head">
+        <h2 class="tmsg__h2" id="tmsg-define-title">Define Your Customer</h2>
+        <div class="tmsg__tabs" role="tablist" aria-label="Define your customer">
+          <button type="button" class="tmsg__tab" role="tab" id="tmsg-tab-job-title" data-tab="job-title"
+            aria-controls="tmsg-panel-job-title">By Job Title</button>
+          <button type="button" class="tmsg__tab" role="tab" id="tmsg-tab-individual" data-tab="individual"
+            aria-controls="tmsg-panel-individual">By Individual</button>
+        </div>
       </div>
 
       <div class="tmsg__panel" role="tabpanel" id="tmsg-panel-job-title" aria-labelledby="tmsg-tab-job-title" data-panel="job-title">
@@ -1455,7 +1457,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/target-messaging/target-messaging.css?v=2026-09-26a',
+    styles: 'modules/target-messaging/target-messaging.css?v=2026-09-26b',
 
     mount(container) {
       mounted = true;
