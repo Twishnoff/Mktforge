@@ -56,6 +56,10 @@
   const TRACK_REMOVE = 'Stop Tracking';
   const CHANNEL_TIMEOUT_MS = 12000;
 
+  // The two optional extra job titles are hidden for now. While hidden they
+  // are always sent empty, even if an older session typed something in them.
+  const SHOW_EXTRA_TITLES = false;
+
   const MARKUP = `
   <div class="mo">
 
@@ -69,17 +73,26 @@
     <section class="mo__submit" aria-label="Search inputs">
       <form class="mo__form" data-el="form" autocomplete="off" novalidate>
         <div class="mo__row">
-          <div class="mo__field mo__field--wide">
+          <div class="mo__field">
             <label for="mo-url">Company URL</label>
             <input type="text" id="mo-url" data-el="companyUrl" placeholder="yourcompany.com">
           </div>
-        </div>
-
-        <div class="mo__row">
           <div class="mo__field">
             <label for="mo-title1">Job Title</label>
             <input type="text" id="mo-title1" data-el="jobTitle1" placeholder="e.g. Data Engineer">
           </div>
+          <div class="mo__field">
+            <label for="mo-industry">Industry <span class="mo__optional">(optional)</span></label>
+            <input type="text" id="mo-industry" data-el="industry" placeholder="e.g. Oil and Gas">
+          </div>
+          <div class="mo__field mo__field--action">
+            <button type="submit" class="mo__btn" data-el="submit" disabled>Find Opportunities</button>
+          </div>
+        </div>
+
+        <!-- Two extra job titles, parked for now. Set SHOW_EXTRA_TITLES to
+             true (top of this file) to bring them back as a second row. -->
+        <div class="mo__row mo__row--extra" data-el="extraTitles" hidden>
           <div class="mo__field">
             <label for="mo-title2">Job Title <span class="mo__optional">(optional)</span></label>
             <input type="text" id="mo-title2" data-el="jobTitle2" placeholder="Optional">
@@ -88,17 +101,9 @@
             <label for="mo-title3">Job Title <span class="mo__optional">(optional)</span></label>
             <input type="text" id="mo-title3" data-el="jobTitle3" placeholder="Optional">
           </div>
-          <div class="mo__field">
-            <label for="mo-industry">Industry <span class="mo__optional">(optional)</span></label>
-            <input type="text" id="mo-industry" data-el="industry" placeholder="e.g. Oil and Gas">
-          </div>
-        </div>
-
-        <div class="mo__submit-row">
-          <button type="submit" class="mo__btn" data-el="submit" disabled>Find Opportunities</button>
-          <p class="mo__hint" data-el="hint" aria-live="polite"></p>
         </div>
       </form>
+      <p class="mo__hint" data-el="hint" aria-live="polite"></p>
       <p class="mo__error" data-el="error" role="alert" hidden></p>
     </section>
 
@@ -423,8 +428,8 @@
     return {
       companyUrl: el.companyUrl.value.trim(),
       jobTitle1:  el.jobTitle1.value.trim(),
-      jobTitle2:  el.jobTitle2.value.trim(),
-      jobTitle3:  el.jobTitle3.value.trim(),
+      jobTitle2:  SHOW_EXTRA_TITLES ? el.jobTitle2.value.trim() : '',
+      jobTitle3:  SHOW_EXTRA_TITLES ? el.jobTitle3.value.trim() : '',
       industry:   el.industry.value.trim()
     };
   }
@@ -744,7 +749,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/marketing-opportunities/marketing-opportunities.css?v=2026-09-26a',
+    styles: 'modules/marketing-opportunities/marketing-opportunities.css?v=2026-09-26b',
 
     mount(container) {
       container.innerHTML = MARKUP;
@@ -757,8 +762,11 @@
         jobTitle1: q('jobTitle1'), jobTitle2: q('jobTitle2'), jobTitle3: q('jobTitle3'),
         industry: q('industry'), submit: q('submit'), hint: q('hint'),
         error: q('error'), pdf: q('pdf'), status: q('status'), count: q('count'),
+        extraTitles: q('extraTitles'),
         grid: q('grid'), forge: q('forge'), forgeEnd: q('forgeEnd'), pdfRow: q('pdfRow')
       };
+
+      el.extraTitles.hidden = !SHOW_EXTRA_TITLES;
 
       boxes = {};
       container.querySelectorAll('[data-box]').forEach((b) => { boxes[b.dataset.box] = b; });

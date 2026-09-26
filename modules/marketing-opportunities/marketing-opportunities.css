@@ -60,16 +60,21 @@
   margin: 28px 0;
 }
 
+/* One row: Company URL, Job Title, Industry, then Find Opportunities at the
+   far right, bottom-aligned with the inputs (same layout as Find My Customer
+   and Persona Builder). Wraps only when the display field is too narrow. */
 .mo__row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 16px 18px;
 }
 
 .mo__row + .mo__row { margin-top: 16px; }
+.mo__row[hidden] { display: none; }
 
-.mo__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.mo__row:first-child .mo__field--wide { grid-column: span 2; }
+.mo__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 190px; }
+.mo__field--action { flex: 0 0 auto; }
 .mo__field label { font-size: 14.5px; font-weight: 600; }
 .mo__optional { font-weight: 400; color: var(--mo-faint); }
 
@@ -90,15 +95,6 @@
 .mo a:focus-visible {
   outline: 2px solid var(--mo-accent);
   outline-offset: 1px;
-}
-
-.mo__submit-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  margin-top: 20px;
 }
 
 .mo__btn {
@@ -123,7 +119,9 @@
   cursor: not-allowed;
 }
 
-.mo__hint { margin: 0; font-size: 14px; color: var(--mo-faint); }
+/* Under the input row; takes no space once nothing is missing. */
+.mo__hint { margin: 12px 0 0; font-size: 14px; color: var(--mo-faint); }
+.mo__hint:empty { display: none; }
 
 .mo__error {
   margin: 16px 0 0;
