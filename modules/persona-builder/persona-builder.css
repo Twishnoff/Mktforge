@@ -159,6 +159,92 @@
   box-shadow: var(--pb-shadow);
 }
 
+/* --- Single box in place of the results ---
+   One full-width box standing in for the six result boxes until the
+   persona is ready. Same size as Find My Customer's (452px) so the two
+   modules match, and so the forging panda and progress line fit. Before a
+   run it shows the blueprint panda and intro copy; while a run researches
+   (.is-running) it shows the forging panda with the progress under him. */
+
+.pb__idle { display: none; }
+
+.pb__grid.is-idle > .pb__box { display: none; }
+
+.pb__grid.is-idle > .pb__idle {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 452px;
+  padding: 32px 40px;
+  background: var(--pb-surface);
+  border: 1px solid var(--pb-line);
+  border-radius: var(--pb-radius);
+  box-shadow: var(--pb-shadow);
+}
+
+.pb__intro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  max-width: 860px;
+}
+
+.pb__intro-img {
+  flex: none;
+  width: 320px;
+  height: auto;
+}
+
+.pb__intro-copy { flex: 0 1 440px; min-width: 0; }
+
+.pb__intro-title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--pb-ink);
+}
+
+.pb__intro-text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--pb-soft);
+}
+
+.pb__idle-loading { display: none; }
+
+.pb__grid.is-running .pb__intro { display: none; }
+.pb__grid.is-running .pb__idle-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* The loop and its ending share one spot; only one is visible at a time.
+   Opacity (not display) keeps the hidden one decoded, so the swap from
+   loop to ending has no blank frame. Multiply keeps any off-white pixels
+   in the clip from showing as a faint rectangle against the box. */
+.pb__forge-stage { display: grid; }
+
+.pb__forge {
+  grid-area: 1 / 1;
+  display: block;
+  height: 310px;
+  width: auto;
+  max-width: 100%;
+  mix-blend-mode: multiply;
+}
+
+.pb__forge.is-off,
+.pb__forge--end { opacity: 0; }
+
+.pb__forge--end.is-on { opacity: 1; }
+
 .pb__box h2 {
   margin: 0;
   font-family: var(--font-body);
@@ -315,6 +401,8 @@
 
 /* --- PDF export row --- */
 
+.pb__pdf-row[hidden] { display: none; }
+
 .pb__pdf-row {
   display: flex;
   flex-direction: column;
@@ -323,12 +411,24 @@
   margin-bottom: 20px;
 }
 
+/* Run progress, under the panda inside the loading box. */
 .pb__status {
   margin: 0;
-  min-height: 1.4em;
-  font-size: 14.5px;
+  min-height: 1.5em;
+  font-size: 15px;
+  text-align: center;
   color: var(--pb-soft);
 }
+
+/* A partial run's notice, under the PDF button once results show. */
+.pb__note {
+  margin: 0;
+  font-size: 14.5px;
+  text-align: center;
+  color: var(--pb-soft);
+}
+
+.pb__note[hidden] { display: none; }
 
 /* --- disabled-button hint: a grey button always says what's missing --- */
 

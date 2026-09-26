@@ -60,7 +60,35 @@
       </form>
     </section>
 
-    <section class="pb__grid" aria-label="Persona research results">
+    <section class="pb__grid is-idle" data-el="grid" aria-label="Persona research results">
+      <div class="pb__idle">
+        <div class="pb__intro">
+          <img class="pb__intro-img" src="modules/persona-builder/persona-builder-panda.png"
+            alt="" width="640" height="498">
+          <div class="pb__intro-copy">
+            <p class="pb__intro-title">Let's build a blueprint for your buyer!</p>
+            <p class="pb__intro-text">With just a job title, target company size, and industry
+              (optional), we'll use all the data we've collected, plus additional research, to
+              draft a usable buyer persona.</p>
+          </div>
+        </div>
+        <div class="pb__idle-loading">
+          <!-- The forging clips are shared with Find My Customer. -->
+          <div class="pb__forge-stage" aria-hidden="true">
+            <video class="pb__forge" data-el="forge" muted loop playsinline preload="auto"
+              width="660" height="540" aria-hidden="true">
+              <source src="modules/find-my-customer/find-customer-forge.webm" type="video/webm">
+              <source src="modules/find-my-customer/find-customer-forge.mp4" type="video/mp4">
+            </video>
+            <video class="pb__forge pb__forge--end" data-el="forgeEnd" muted playsinline preload="auto"
+              width="660" height="540" aria-hidden="true">
+              <source src="modules/find-my-customer/find-customer-forge-end.webm" type="video/webm">
+              <source src="modules/find-my-customer/find-customer-forge-end.mp4" type="video/mp4">
+            </video>
+          </div>
+          <p class="pb__status" data-el="status" aria-live="polite"></p>
+        </div>
+      </div>
       <article class="pb__box"><h2>Overview</h2>
         <div class="pb__box-body is-placeholder" data-box="overview">No Data Collected</div></article>
       <article class="pb__box"><h2>Sample Profiles</h2>
@@ -75,9 +103,9 @@
         <div class="pb__box-body is-placeholder" data-box="development">No Data Collected</div></article>
     </section>
 
-    <div class="pb__pdf-row">
+    <div class="pb__pdf-row" data-el="pdfRow" hidden style="display:none">
       <button class="pb__btn" data-el="pdf" disabled>Create Persona PDF</button>
-      <p class="pb__status" data-el="status" aria-live="polite"></p>
+      <p class="pb__note" data-el="note" hidden></p>
     </div>
 
   </div>`;
@@ -134,6 +162,93 @@
       b.className = 'pb__box-body is-placeholder';
       b.textContent = 'No Data Collected';
     });
+  }
+
+  /* ---------- the single box that stands in for the results ----------
+       'intro'   — before a run (or after one that failed): the panda + copy
+       'loading' — while a run is researching: the forging panda + progress
+       'results' — the six boxes, with the persona in them */
+  function setView(view) {
+    el.grid.classList.toggle('is-idle', view !== 'results');
+    el.grid.classList.toggle('is-running', view === 'loading');
+    // Nothing to save until there are results. Set inline too, so no
+    // stylesheet (even a stale cached one) can bring the button back early.
+    el.pdfRow.hidden = view !== 'results';
+    el.pdfRow.style.display = view === 'results' ? '' : 'none';
+    playForge(view === 'loading');
+  }
+
+  /* The forging panda: two clips stacked in one spot. `forge` loops while a
+     run researches; `forgeEnd` (the last strike, then the hammer goes down)
+     plays once when the persona arrives, before it's shown. Nothing plays
+     for anyone who has asked their system for reduced motion — the first
+     frame stays up and results appear straight away. */
+  const reducedMotion = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let forgeDone = null;   // settles a finishForge() still waiting, if any
+
+  function playForge(on) {
+    const loop = el.forge, end = el.forgeEnd;
+    if (!loop || !end) return;
+    if (forgeDone) forgeDone();
+    end.pause();
+    end.currentTime = 0;
+    end.classList.remove('is-on');
+    loop.classList.remove('is-off');
+    loop.loop = true;
+    loop.currentTime = 0;
+    if (on && !reducedMotion) {
+      const p = loop.play();
+      if (p && p.catch) p.catch(() => {});   // autoplay refused: first frame stays up
+    } else {
+      loop.pause();
+    }
+  }
+
+  /* Lets the current pass of the loop finish, plays the ending, holds its
+     last frame for a beat, then resolves. Resolves at once if the loop
+     isn't actually playing, and never waits longer than both clips take. */
+  function finishForge() {
+    const loop = el && el.forge, end = el && el.forgeEnd;
+    if (!loop || !end || reducedMotion || loop.paused) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const clipMs = (v, fallback) => (isFinite(v.duration) ? v.duration : fallback) * 1000;
+      const timer = setTimeout(() => done(), clipMs(loop, 5) + clipMs(end, 4) + 2000);
+
+      function done() {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        loop.removeEventListener('ended', onLoopEnd);
+        end.removeEventListener('ended', onEndEnd);
+        if (forgeDone === done) forgeDone = null;
+        resolve();
+      }
+      function onLoopEnd() {
+        end.currentTime = 0;
+        end.classList.add('is-on');
+        loop.classList.add('is-off');
+        const p = end.play();
+        if (p && p.catch) p.catch(done);
+      }
+      function onEndEnd() { setTimeout(done, 600); }
+
+      forgeDone = done;
+      loop.addEventListener('ended', onLoopEnd);
+      end.addEventListener('ended', onEndEnd);
+      loop.loop = false;   // finish this pass, then fire 'ended'
+    });
+  }
+
+  /* After results: a partial run keeps its "budget ran out" notice visible
+     under the PDF button, since the progress line lives in the hidden box. */
+  function showPartialNote(persona, status) {
+    const partial = !!(persona && status && /^Done —/.test(status));
+    el.note.textContent = partial ? status : '';
+    el.note.hidden = !partial;
   }
 
   function showFormError(msg) { el.error.textContent = msg; el.error.hidden = false; }
@@ -345,6 +460,7 @@
     updateGenerateEnabled();
     st.status = 'Conducting Research…';
     setAllBoxesLoading();
+    setView('loading');
     el.status.textContent = st.status;
 
     const payload = {
@@ -376,11 +492,9 @@
           st.status = data.partial
             ? 'Done — research budget ran out before every box was fully filled in.'
             : 'Research complete.';
-          if (onScreen(st)) {
-            renderPersona(data.persona);
-            el.status.textContent = st.status;
-            el.pdf.disabled = false;
-          }
+          // Painted after the stream closes, once the panda has put the
+          // hammer down (below). Until then the status sits under him.
+          if (onScreen(st)) el.status.textContent = st.status;
         },
         onError: (message) => {
           if (!pc.live(st, runId)) return;
@@ -389,11 +503,31 @@
           st.persona = null;
           if (onScreen(st)) {
             setAllBoxesPlaceholder();
+            setView('intro');
             showFormError(st.error);
             el.status.textContent = '';
           }
         }
       }, st.controller.signal);
+      if (!pc.live(st, runId)) return;
+
+      if (st.persona && !st.error) {
+        if (onScreen(st)) {
+          await finishForge();
+          if (!pc.live(st, runId)) return;
+        }
+        if (onScreen(st)) {
+          setView('results');
+          renderPersona(st.persona);
+          showPartialNote(st.persona, st.status);
+          el.pdf.disabled = false;
+        }
+      } else if (!st.error && onScreen(st)) {
+        // The stream closed without a result or an error: back to the start.
+        setAllBoxesPlaceholder();
+        setView('intro');
+        el.status.textContent = '';
+      }
     } catch (err) {
       if (!pc.live(st, runId)) return;                 // superseded or cancelled
       if (err && err.name === 'AbortError') return;
@@ -402,6 +536,7 @@
       st.status = '';
       if (onScreen(st)) {
         setAllBoxesPlaceholder();
+        setView('intro');
         showFormError(st.error);
         el.status.textContent = '';
       }
@@ -456,12 +591,14 @@
     el.companySize.value = state.form.companySize;
     el.industry.value    = state.form.industry;
 
+    setView(state.running ? 'loading' : state.persona ? 'results' : 'intro');
+
     if (state.running) {
       setAllBoxesLoading();
       el.status.textContent = state.status || 'Conducting Research…';
     } else if (state.persona) {
       renderPersona(state.persona);
-      el.status.textContent = state.status;
+      showPartialNote(state.persona, state.status);
       el.pdf.disabled = false;
     }
 
@@ -483,7 +620,10 @@
     label:  'Persona Builder',
     icon:   'persona',
     companyAware: true,
-    styles: 'modules/persona-builder/persona-builder.css',
+    // The ?v= changes whenever this stylesheet does, so a browser holding the
+    // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
+    // new one instead of pairing new markup with old styles.
+    styles: 'modules/persona-builder/persona-builder.css?v=2026-09-26a',
 
     mount(container) {
       container.innerHTML = MARKUP;
@@ -495,7 +635,9 @@
         form: q('form'), jobTitle: q('jobTitle'),
         companySize: q('companySize'), industry: q('industry'),
         generate: q('generate'), hint: q('hint'),
-        error: q('error'), pdf: q('pdf'), status: q('status')
+        error: q('error'), pdf: q('pdf'), status: q('status'),
+        grid: q('grid'), forge: q('forge'), forgeEnd: q('forgeEnd'),
+        pdfRow: q('pdfRow'), note: q('note')
       };
 
       boxes = {};
@@ -521,6 +663,8 @@
       captureForm();
       pc.hold(state);                   // keeps any "Run stopped" note
       mounted = false;
+      if (el && el.forge) { el.forge.pause(); el.forgeEnd.pause(); }
+      if (forgeDone) forgeDone();       // a waiting finish shows results on the way back
 
       // A run in flight is deliberately NOT aborted. Leaving mid-research and
       // losing a minute of work is the exact frustration this is meant to fix;
