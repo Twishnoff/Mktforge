@@ -124,6 +124,12 @@
         box.confirmStop = false;
         if (!box.running) return;
         box._run = (box._run || 0) + 1;              // its late answer is ignored
+        if (box.finishing) {                         // results already saved; only the ending was playing
+          box.finishing = false;
+          box.running = false;
+          box.progress = '';
+          return;
+        }
         if (box.controller) { try { box.controller.abort(); } catch (e) { /* done */ } }
         box.controller = null;
         box.running = false;
@@ -774,6 +780,17 @@
       box.lastRefreshed = Date.now();
       box.status = 'done';
       persist(box);
+
+      /* Results are saved. If the box is on screen, the panda finishes his
+         pass and puts the hammer down before they're shown. */
+      if (mounted && box._cid === state._cid) {
+        box.finishing = true;
+        box.progress = 'Research complete.';
+        paintBox(box);
+        await finishForge(box);
+        box.finishing = false;
+        if (!live()) return;
+      }
     } catch (err) {
       if (!live()) return;                           // Stop Tracking, a removed title, or a switch
       if (err && err.name === 'AbortError' && !timedOut) return;
@@ -878,6 +895,118 @@
     <div class="mtrk__boxes" data-el="boxes"></div>
   </div>`;
 
+  /* Shown in place of the boxes until something is tracked. */
+  const INTRO = `
+    <section class="mtrk__intro-box" aria-label="Nothing tracked yet">
+      <div class="mtrk__intro">
+        <img class="mtrk__intro-img" src="modules/market-tracker/market-tracker-panda.png"
+          alt="" width="640" height="549">
+        <div class="mtrk__intro-copy">
+          <p class="mtrk__intro-title">Let's listen in!</p>
+          <p class="mtrk__intro-text">Choose a job title or competitor and we'll create a tracker that
+            helps you stay up to date on what competitors or buyers in your market are talking about
+            as it relates to you and the challenges your product solves.</p>
+        </div>
+      </div>
+    </section>`;
+
+  /* ---------- the forging panda (while a box researches) ----------
+     Two clips stacked in one spot, shared with Find My Customer: `loop`
+     plays while the box researches, `end` (the last strike, then the hammer
+     goes down) plays once when the results are in, before they're shown.
+     Boxes are repainted often (every progress message), so a running box's
+     clips are carried across repaints rather than rebuilt, which would
+     restart them. Nothing plays for anyone who asked for reduced motion. */
+
+  const reducedMotion = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const FORGE = `
+    <div class="mtrk__forge-stage" data-forge aria-hidden="true">
+      <video class="mtrk__forge" data-forge-loop muted loop playsinline preload="auto" width="660" height="540">
+        <source src="modules/find-my-customer/find-customer-forge.webm" type="video/webm">
+        <source src="modules/find-my-customer/find-customer-forge.mp4" type="video/mp4">
+      </video>
+      <video class="mtrk__forge mtrk__forge--end" data-forge-end muted playsinline preload="auto" width="660" height="540">
+        <source src="modules/find-my-customer/find-customer-forge-end.webm" type="video/webm">
+        <source src="modules/find-my-customer/find-customer-forge-end.mp4" type="video/mp4">
+      </video>
+    </div>`;
+
+  const pendingFinishes = new Set();   // settled on unmount, so no run waits on a clip nobody sees
+
+  function stagesIn(scope) {
+    const out = new Map();
+    if (!scope) return out;
+    scope.querySelectorAll('[data-box]').forEach((n) => {
+      const stage = n.querySelector('[data-forge]');
+      if (stage) out.set(n.dataset.box, stage);
+    });
+    return out;
+  }
+
+  /* After a repaint: a box that was already forging gets its own clips back
+     (still mid-swing); a box that just started gets its loop going. */
+  function wireStages(scope, previous) {
+    if (!scope) return;
+    scope.querySelectorAll('[data-box]').forEach((n) => {
+      const fresh = n.querySelector('[data-forge]');
+      if (!fresh) return;
+      const kept = previous && previous.get(n.dataset.box);
+      const stage = kept && kept !== fresh ? kept : fresh;
+      if (stage !== fresh) fresh.replaceWith(stage);
+      if (reducedMotion) return;
+      const loop = stage.querySelector('[data-forge-loop]');
+      const end = stage.querySelector('[data-forge-end]');
+      const active = end.classList.contains('is-on') ? end : loop;
+      if (active.paused && !(active === end && active.ended)) {
+        const p = active.play();
+        if (p && p.catch) p.catch(() => {});
+      }
+    });
+  }
+
+  function finishForge(box) {
+    const node = root && root.querySelector(`[data-box="${cssKey(box.key)}"]`);
+    const stage = node && node.querySelector('[data-forge]');
+    const loop = stage && stage.querySelector('[data-forge-loop]');
+    const end = stage && stage.querySelector('[data-forge-end]');
+    if (!loop || !end || reducedMotion || loop.paused) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const clipMs = (v, fallback) => (isFinite(v.duration) ? v.duration : fallback) * 1000;
+      const timer = setTimeout(() => done(), clipMs(loop, 5) + clipMs(end, 4) + 2000);
+
+      function done() {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        loop.removeEventListener('ended', onLoopEnd);
+        end.removeEventListener('ended', onEndEnd);
+        pendingFinishes.delete(done);
+        resolve();
+      }
+      function onLoopEnd() {
+        end.currentTime = 0;
+        end.classList.add('is-on');
+        loop.classList.add('is-off');
+        const p = end.play();
+        if (p && p.catch) p.catch(done);
+      }
+      function onEndEnd() { setTimeout(done, 600); }
+
+      pendingFinishes.add(done);
+      loop.addEventListener('ended', onLoopEnd);
+      end.addEventListener('ended', onEndEnd);
+      loop.loop = false;   // finish this pass, then fire 'ended'
+    });
+  }
+
+  /* Additional Tracked Channels shows this many, then "+ X more." */
+  const CHANNELS_SHOWN = 3;
+  let showAllChannels = false;
+
   const el = (name) => root && root.querySelector(`[data-el="${name}"]`);
 
   const availableTitles = () => profileTitles().filter((t) => !state.boxes.has(titleKey(t)));
@@ -895,13 +1024,19 @@
     const list = el('channels');
     if (!list) return;
     const channels = profileChannels();
+    const extra = Math.max(0, channels.length - CHANNELS_SHOWN);
+    const shown = showAllChannels || !extra ? channels : channels.slice(0, CHANNELS_SHOWN);
+    const more = !extra ? ''
+      : showAllChannels
+        ? `<li class="mtrk__channel-more"><button type="button" class="mtrk__link" data-act="channels-less">Show Less</button></li>`
+        : `<li class="mtrk__channel-more">+ ${extra} more. <button type="button" class="mtrk__link" data-act="channels-all">Show All</button></li>`;
     list.innerHTML = channels.length
-      ? channels.map((c) => {
+      ? shown.map((c) => {
         const href = safeUrl(/^https?:\/\//i.test(c) ? c : `https://${c}`);
         const label = String(c).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '');
         return `<li class="mtrk__channel">${href
           ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>` : esc(label)}</li>`;
-      }).join('')
+      }).join('') + more
       : `<li class="mtrk__channel-none">${state.loaded ? 'None yet' : '…'}</li>`;
   }
 
@@ -961,11 +1096,17 @@
       ['Tracked Buyers', boxesOfKind('title')],
       ['Tracked Competitors', boxesOfKind('competitor')]
     ].filter(([, boxes]) => boxes.length);
+    if (!sections.length) {
+      host.innerHTML = state.loaded ? INTRO : '';
+      return;
+    }
+    const previous = stagesIn(host);
     host.innerHTML = sections.map(([label, boxes]) => `
       <section class="mtrk__group" aria-label="${esc(label)}">
         <h2 class="mtrk__group-head">${esc(label)}</h2>
         ${boxes.map(boxHtml).join('')}
       </section>`).join('');
+    wireStages(host, previous);
   }
 
   function paintBox(box) {
@@ -973,7 +1114,16 @@
     if (box._cid && box._cid !== state._cid) return;   // another company's box
     const node = root.querySelector(`[data-box="${cssKey(box.key)}"]`);
     if (!node) { paintBoxes(); return; }
+    /* Still researching and already showing the panda: only the words change,
+       so the clips keep playing where they are. */
+    const progress = node.querySelector('[data-progress]');
+    if (box.running && progress) {
+      progress.textContent = box.progress || 'Researching…';
+      return;
+    }
+    const previous = stagesIn(node.parentNode);
     node.outerHTML = boxHtml(box);
+    wireStages(root.querySelector('[data-el="boxes"]'), previous);
   }
 
   const cssKey = (key) => encodeURIComponent(key);
@@ -1231,9 +1381,9 @@
 
   function bodyHtml(box) {
     if (box.running) {
-      return `<div class="mtrk__state is-loading" role="status">
-          <span class="mtrk__dots" aria-hidden="true"><span></span><span></span><span></span></span>
-          <span>${esc(box.progress || 'Researching…')}</span>
+      return `<div class="mtrk__working">
+          ${FORGE}
+          <p class="mtrk__progress" data-progress role="status">${esc(box.progress || 'Researching…')}</p>
         </div>`;
     }
     const parts = [];
@@ -1321,6 +1471,14 @@
     const btn = e.target.closest('button');
     if (!btn || btn.disabled) return;
 
+    if (btn.dataset.act === 'channels-all' || btn.dataset.act === 'channels-less') {
+      showAllChannels = btn.dataset.act === 'channels-all';
+      paintChannels();
+      const next = el('channels') && el('channels').querySelector('.mtrk__link');
+      if (next) next.focus();
+      return;
+    }
+
     if (btn.matches('[data-el="track"]')) {
       if (state.selectedTitle) trackTitle(state.selectedTitle);
       paint();
@@ -1364,7 +1522,10 @@
     label:  MODULE_NAME,
     icon:   'radar',
     companyAware: true,
-    styles: 'modules/market-tracker/market-tracker.css',
+    // The ?v= changes whenever this stylesheet does, so a browser holding the
+    // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
+    // new one instead of pairing new markup with old styles.
+    styles: 'modules/market-tracker/market-tracker.css?v=2026-09-26a',
 
     mount(container) {
       mounted = true;
@@ -1388,6 +1549,8 @@
 
     unmount() {
       mounted = false;
+      if (root) root.querySelectorAll('video').forEach((v) => v.pause());
+      [...pendingFinishes].forEach((done) => done());   // results show on the way back
       // Runs in flight keep going and land in `state`.
       root = null;
     }
