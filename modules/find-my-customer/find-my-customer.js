@@ -56,7 +56,22 @@
       <p class="fmc__error" data-el="error" role="alert" hidden></p>
     </section>
 
-    <section class="fmc__grid" aria-label="Customer research results">
+    <section class="fmc__grid is-idle" data-el="grid" aria-label="Customer research results">
+      <div class="fmc__idle" data-el="idle">
+        <div class="fmc__intro">
+          <img class="fmc__intro-img" src="modules/find-my-customer/find-customer-panda.png"
+            alt="" width="640" height="549">
+          <div class="fmc__intro-copy">
+            <p class="fmc__intro-title">Let's find you some customers!</p>
+            <p class="fmc__intro-text">Based on your website, I'll help you find the job titles that
+              best fit what you're selling along with details about their needs and even competitors
+              you should be aware of.</p>
+          </div>
+        </div>
+        <div class="fmc__idle-loading" aria-label="Collecting data">
+          <span class="fmc__dot"></span><span class="fmc__dot"></span><span class="fmc__dot"></span>
+        </div>
+      </div>
       <article class="fmc__box fmc__box--wide"><h2>Customer List</h2>
         <div class="fmc__box-body is-placeholder" data-box="customers">No Data</div></article>
       <article class="fmc__box"><h2>Job Titles</h2>
@@ -176,6 +191,15 @@
   }
 
   function eachBox(fn) { Object.values(boxes).forEach(fn); }
+
+  /* Until results exist, the six result boxes are replaced by one panel:
+       'intro'   — before a run (or after one that failed): the panda + copy
+       'loading' — while a run is collecting data: the pulsing dots
+       'results' — the six boxes, with their data */
+  function setView(view) {
+    el.grid.classList.toggle('is-idle', view !== 'results');
+    el.grid.classList.toggle('is-running', view === 'loading');
+  }
 
   function setAllBoxesLoading() {
     eachBox((b) => {
@@ -464,6 +488,7 @@
     el.submit.disabled = true;
     setPdfEnabled(false);
     setAllBoxesLoading();
+    setView('loading');
     el.status.textContent = st.status;
 
     const fail = (message) => {
@@ -472,6 +497,7 @@
       st.status = '';
       if (onScreen(st)) {
         setAllBoxesPlaceholder();
+        setView('intro');
         showError(message);
         el.status.textContent = '';
       }
@@ -526,6 +552,7 @@
       st.status  = 'Research complete.';
 
       if (onScreen(st)) {
+        setView('results');
         renderDashboard(st.data);
         el.status.textContent = st.status;
         setPdfEnabled(true);
@@ -580,6 +607,8 @@
   function restore() {
     el.url.value   = state.form.url;
 
+    setView(state.running ? 'loading' : state.data ? 'results' : 'intro');
+
     if (state.running) {
       setAllBoxesLoading();
       el.submit.disabled = true;
@@ -617,7 +646,8 @@
       const q = (name) => container.querySelector(`[data-el="${name}"]`);
       el = {
         form: q('form'), url: q('url'), submit: q('submit'),
-        error: q('error'), pdf: q('pdf'), status: q('status')
+        error: q('error'), pdf: q('pdf'), status: q('status'),
+        grid: q('grid')
       };
 
       boxes = {};

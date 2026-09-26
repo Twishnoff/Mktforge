@@ -148,10 +148,67 @@
 
 .fmc__box--wide { grid-column: 1 / -1; }
 
-/* Twice the height of a standard box (two boxes plus the gap between them),
-   still a minimum — a long competitor table grows past it rather than
-   scrolling inside. */
-.fmc__box--tall { min-height: calc(160px * 2 + 14px); }
+/* --- Pre-run panel ---
+   One full-width box standing in for the six result boxes until results
+   exist. Its height is about half of what those boxes take up empty
+   (~905px: three rows of boxes, the double-height Competitors box and
+   the gaps between them). Before a run it shows the panda and intro copy;
+   while a run is collecting data (.is-running) it shows the pulsing dots. */
+
+.fmc__idle { display: none; }
+
+.fmc__grid.is-idle > .fmc__box { display: none; }
+
+.fmc__grid.is-idle > .fmc__idle {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 452px;
+  padding: 32px 40px;
+  background: var(--fmc-surface);
+  border: 1px solid var(--fmc-line);
+  border-radius: var(--fmc-radius);
+  box-shadow: var(--fmc-shadow);
+}
+
+.fmc__intro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  max-width: 860px;
+}
+
+.fmc__intro-img {
+  flex: none;
+  width: 300px;
+  height: auto;
+}
+
+.fmc__intro-copy { flex: 0 1 440px; min-width: 0; }
+
+.fmc__intro-title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.fmc__intro-text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--fmc-soft);
+}
+
+.fmc__idle-loading { display: none; gap: 8px; }
+
+.fmc__grid.is-running .fmc__intro { display: none; }
+.fmc__grid.is-running .fmc__idle-loading { display: flex; }
+
+.fmc__idle-loading .fmc__dot { width: 10px; height: 10px; }
 
 .fmc__box h2 {
   margin: 0;
