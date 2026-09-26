@@ -52,12 +52,12 @@
           <input type="text" id="pb-industry" data-el="industry" placeholder="e.g. Fintech">
         </div>
 
-        <div class="pb__field pb__submit-row">
+        <div class="pb__field pb__field--action">
           <button type="submit" class="pb__btn" data-el="generate" disabled>Generate Persona</button>
-          <p class="pb__hint" data-el="hint" aria-live="polite"></p>
-          <p class="pb__error" data-el="error" role="alert" hidden></p>
         </div>
       </form>
+      <p class="pb__hint" data-el="hint" aria-live="polite"></p>
+      <p class="pb__error" data-el="error" role="alert" hidden></p>
     </section>
 
     <section class="pb__grid is-idle" data-el="grid" aria-label="Persona research results">
@@ -623,7 +623,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/persona-builder/persona-builder.css?v=2026-09-26a',
+    styles: 'modules/persona-builder/persona-builder.css?v=2026-09-26b',
 
     mount(container) {
       container.innerHTML = MARKUP;

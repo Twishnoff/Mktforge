@@ -65,13 +65,18 @@
   margin: 28px 0;
 }
 
+/* One row: the three inputs, then the Generate button at the end, bottom-
+   aligned with the inputs (same layout as Find My Customer). Wraps onto a
+   second line only when the display field is too narrow. */
 .pb__form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 16px 18px;
 }
 
-.pb__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pb__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 190px; }
+.pb__field--action { flex: 0 0 auto; }
 
 .pb__field label { font-size: 14.5px; font-weight: 600; color: var(--pb-ink); }
 .pb__optional { font-weight: 400; color: var(--pb-faint); }
@@ -96,17 +101,10 @@
   outline-offset: 1px;
 }
 
-.pb select { appearance: auto; }
-
-.pb__submit-row {
-  grid-column: 1 / -1;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  margin-top: 4px;
-  flex-wrap: wrap;
-}
+/* Selects ignore line-height, so match the text inputs' height directly
+   (1.6 line-height + 10px padding top and bottom + 1px borders) to keep all
+   three fields and the button on one baseline. */
+.pb select { appearance: auto; height: calc(1.6em + 22px); }
 
 .pb__btn {
   font: inherit;
@@ -118,6 +116,7 @@
   background: var(--pb-accent);
   color: #F2F7F4;
   cursor: pointer;
+  white-space: nowrap;
   transition: opacity .15s ease;
 }
 
@@ -130,7 +129,7 @@
 }
 
 .pb__error {
-  margin: 0;
+  margin: 16px 0 0;
   padding: 8px 12px;
   border-radius: 6px;
   background: var(--pb-crit-soft);
@@ -432,9 +431,12 @@
 
 /* --- disabled-button hint: a grey button always says what's missing --- */
 
+/* Under the input row; takes no space once nothing is missing. */
 .pb__hint {
-  margin: 0;
+  margin: 12px 0 0;
   font-size: 14px;
   color: var(--pb-faint);
 }
+
+.pb__hint:empty { display: none; }
 
