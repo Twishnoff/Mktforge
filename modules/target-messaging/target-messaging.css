@@ -164,56 +164,24 @@
   font-weight: 600;
 }
 
-/* --- import --- */
+/* --- Company website tick box, the third source on the line ---
+   Same height as the two drop-downs beside it; its words wrap to two lines
+   rather than pushing the sources onto a second row. */
 
-.tmsg__drop {
-  padding: 10px 12px;
-  border: 1px dashed var(--tmsg-line);
-  border-radius: 6px;
-  background: var(--paper);
-  text-align: center;
-}
-
-.tmsg__import.is-dragging .tmsg__drop {
-  border-color: var(--accent);
-  background: var(--accent-tint);
-}
-
-.tmsg__drop-main { margin: 0 0 2px; font-size: 15px; }
-.tmsg__drop-sub { margin: 0; font-size: 13px; color: var(--muted); }
-
-.tmsg__uploads { list-style: none; margin: 8px 0 0; padding: 0; }
-.tmsg__uploads[hidden] { display: none; }
-
-.tmsg__upload {
+.tmsg__check--site {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid var(--tmsg-line);
-  border-radius: 6px;
-  background: var(--paper);
-  font-size: 14px;
+  gap: 10px;
+  min-height: 46px;
+  line-height: 1.3;
 }
 
-.tmsg__upload + .tmsg__upload { margin-top: 6px; }
-.tmsg__upload-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.tmsg__upload-status { margin-left: auto; color: var(--muted); text-align: right; }
-.tmsg__upload.is-done { border-color: #BDD2C8; background: var(--accent-tint); }
-.tmsg__upload.is-done .tmsg__upload-status { color: var(--accent); }
-.tmsg__upload.is-error { border-color: #E5BDB3; background: var(--tmsg-crit-soft); }
-.tmsg__upload.is-error .tmsg__upload-status { color: var(--tmsg-crit); }
+.tmsg__check--site input { flex: none; }
 
-.tmsg__upload-x {
-  flex: none;
-  padding: 0 4px;
-  border: none;
-  background: none;
-  color: var(--tmsg-crit);
-  font-size: 17px;
-  line-height: 1;
-  cursor: pointer;
-}
+.tmsg__check--site:has(input:disabled) { color: var(--muted); cursor: not-allowed; }
+.tmsg__check input:disabled { cursor: not-allowed; }
+
+.tmsg__source .tmsg__fine { margin: 4px 0 0; }
 
 /* --- drop-downs (listbox) --- */
 
@@ -352,7 +320,7 @@
 
 .tmsg__remove:hover { border-color: var(--tmsg-crit); background: var(--tmsg-crit-soft); }
 
-/* --- centred controls: tick box, Generate --- */
+/* --- centred controls: Generate --- */
 
 .tmsg__center {
   display: flex;
@@ -506,6 +474,87 @@
 }
 
 .tmsg__run:has(.tmsg__status:empty):has(.tmsg__error[hidden]) { display: none; }
+
+/* --- In front of the results: the panda box ---
+   Until there's copy, one box stands in for the editors — the same 452px
+   as the other modules' first screen. While a run drafts (.is-running) it
+   shows the forging panda with the progress under him. */
+
+.tmsg__idle { display: none; }
+
+.tmsg__stage.is-idle > .tmsg__results { display: none; }
+
+.tmsg__stage.is-idle > .tmsg__idle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 452px;
+  padding: 32px 40px;
+}
+
+.tmsg__intro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  max-width: 860px;
+}
+
+.tmsg__intro-img { flex: none; width: 300px; height: auto; }
+
+.tmsg__intro-copy { flex: 0 1 460px; min-width: 0; }
+
+.tmsg__intro-title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.tmsg__intro-text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.tmsg__idle-loading { display: none; }
+
+.tmsg__stage.is-running .tmsg__intro { display: none; }
+.tmsg__stage.is-running .tmsg__idle-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* The loop and its ending share one spot; only one is visible at a time.
+   Opacity (not display) keeps the hidden one decoded, so the swap has no
+   blank frame. Multiply drops the clip's white into the box. */
+.tmsg__forge-stage { display: grid; }
+
+.tmsg__forge {
+  grid-area: 1 / 1;
+  display: block;
+  height: 310px;
+  width: auto;
+  max-width: 100%;
+  mix-blend-mode: multiply;
+}
+
+.tmsg__forge.is-off,
+.tmsg__forge--end { opacity: 0; }
+
+.tmsg__forge--end.is-on { opacity: 1; }
+
+.tmsg__progress {
+  margin: 0;
+  min-height: 1.5em;
+  font-size: 15px;
+  text-align: center;
+  color: var(--ink-soft);
+}
 
 /* --- results: two editors --- */
 

@@ -6,16 +6,18 @@
    Page, top to bottom:
      1. "Define Your Customer", two tabs:
         By Job Title  — Job Title (My Company's target titles), then Messaging
-                        Sources: a Draft Messaging file, an imported file, or a
-                        drag-and-drop upload (imported to My Company too). All
-                        three feed one table of what goes with the run. Then
-                        "Use company website to supplement messaging." and
-                        Generate Messaging (needs a job title plus a file or
-                        the website box).
+                        Sources on one line: a Draft Messaging file, an
+                        imported file (both feed one table of what goes with
+                        the run), and "Use current website copy and
+                        messaging" — ticked by default, and unticked and
+                        locked only while My Company has no Company URL.
+                        Generate Messaging needs a job title plus a file or
+                        the website.
         By Individual — needs HubSpot on this company (Connect button if not).
                         Type a name or email, pick one contact; it sits as a
                         tag under Targeted Contact. Generate Messaging.
-     2. Results: Draft Email / Draft Landing Page tabs, each a small rich-text
+     2. Results: until there's copy, a panda box in their place (the forging
+        panda while a run drafts). Then Draft Email / Draft Landing Page tabs, each a small rich-text
         editor (bold, italic, lists, links). What's in them is saved to the
         company as it's edited, and stays until edited again or a new run
         overwrites it (after a confirm).
@@ -225,15 +227,13 @@
       tab: 'job-title',          // 'job-title' | 'individual'
       jobTitle: '',
       picked: [],                // [{ id, name }] — the name is kept to report a deleted file
-      useWebsite: false,
+      useSite: true,             // "Use current website copy and messaging" (needs a Company URL)
       contact: null,             // { id, name, email }
       editorTab: 'email',
 
       profile: null,
       files: null,
       filesError: '',
-      uploads: [],
-      pumping: false,
       menu: '',                  // 'title' | 'generated' | 'imported' | ''
 
       hs: null,                  // HubSpot status, null until checked
@@ -252,7 +252,7 @@
       note: '',
       activity: { busy: false, failed: false }
     }),
-    held: ['tab', 'jobTitle', 'picked', 'useWebsite', 'contact', 'editorTab'],
+    held: ['tab', 'jobTitle', 'picked', 'useSite', 'contact', 'editorTab'],
     snapshot: ['status', 'error'],
     onLeave(st) {
       st.activity = { busy: false, failed: false };
@@ -303,7 +303,7 @@
         </div>
 
         <h3 class="tmsg__h3">Messaging Sources</h3>
-        <p class="tmsg__sub">Select or upload one or more sources to use to draft messaging</p>
+        <p class="tmsg__sub">Select one or more sources to use to draft messaging</p>
 
         <div class="tmsg__sources">
           <div class="tmsg__source">
@@ -314,26 +314,19 @@
             <p class="tmsg__source-label">Select an imported file</p>
             <div class="tmsg__select" data-el="imported-select"></div>
           </div>
-          <div class="tmsg__source tmsg__import" data-el="import-zone">
-            <p class="tmsg__source-label">Upload a file</p>
-            <input type="file" multiple hidden data-el="import-input" accept="${window.MktforgeExtract ? window.MktforgeExtract.ACCEPT : ''}">
-            <div class="tmsg__drop" data-el="drop">
-              <p class="tmsg__drop-main"><strong>Drag and drop</strong> or
-                <button type="button" class="tmsg__link" data-el="import-link">browse</button></p>
-              <p class="tmsg__drop-sub">Word, PDF or slide deck · up to 15 MB. Also added to My Company.</p>
-            </div>
-            <ul class="tmsg__uploads" data-el="uploads" aria-live="polite"></ul>
+          <div class="tmsg__source">
+            <p class="tmsg__source-label">Company website</p>
+            <label class="tmsg__check tmsg__check--site">
+              <input type="checkbox" data-el="use-website">
+              <span>Use current website copy and messaging</span>
+            </label>
+            <p class="tmsg__fine" data-el="website-note"></p>
           </div>
         </div>
 
         <div data-el="picked"></div>
 
         <div class="tmsg__center">
-          <label class="tmsg__check">
-            <input type="checkbox" data-el="use-website">
-            <span>Use company website to supplement messaging.</span>
-          </label>
-          <p class="tmsg__fine" data-el="website-note"></p>
           <button type="button" class="tmsg__btn tmsg__btn--lg" data-generate="job-title" disabled>Generate Messaging</button>
           <p class="tmsg__hint" data-hint="job-title" aria-live="polite"></p>
         </div>
@@ -346,6 +339,35 @@
       <div class="tmsg__run">
         <p class="tmsg__status" data-el="status" aria-live="polite"></p>
         <p class="tmsg__error" data-el="error" role="alert" hidden></p>
+      </div>
+    </section>
+
+    <div class="tmsg__stage is-idle" data-el="stage">
+    <section class="tmsg__card tmsg__idle" aria-label="Drafted messaging">
+      <div class="tmsg__intro">
+        <img class="tmsg__intro-img" src="modules/target-messaging/target-messaging-panda.png"
+          alt="" width="640" height="601">
+        <div class="tmsg__intro-copy">
+          <p class="tmsg__intro-title">Let's tailor your message!</p>
+          <p class="tmsg__intro-text">Select your desired job title and one or more sources for messaging,
+            and we'll craft copy designed to better resonate with your target. Alternatively, you can
+            select a contact from your connected CRM and we'll write something based on the data in
+            their profile.</p>
+        </div>
+      </div>
+      <div class="tmsg__idle-loading">
+        <!-- The forging clips are shared with Find My Customer. -->
+        <div class="tmsg__forge-stage" aria-hidden="true">
+          <video class="tmsg__forge" data-el="forge" muted loop playsinline preload="auto" width="660" height="540">
+            <source src="modules/find-my-customer/find-customer-forge.webm" type="video/webm">
+            <source src="modules/find-my-customer/find-customer-forge.mp4" type="video/mp4">
+          </video>
+          <video class="tmsg__forge tmsg__forge--end" data-el="forgeEnd" muted playsinline preload="auto" width="660" height="540">
+            <source src="modules/find-my-customer/find-customer-forge-end.webm" type="video/webm">
+            <source src="modules/find-my-customer/find-customer-forge-end.mp4" type="video/mp4">
+          </video>
+        </div>
+        <p class="tmsg__progress" data-el="progress" aria-live="polite"></p>
       </div>
     </section>
 
@@ -375,6 +397,7 @@
           data-editor="${e.key}" contenteditable="true" spellcheck="true" aria-multiline="true"
           aria-label="${e.label}" data-placeholder="Generated ${e.key === 'email' ? 'email copy and talking points' : 'landing page messaging'} will appear here. You can edit it, then copy it wherever you need it."></div>`).join('')}
     </section>
+    </div>
   </div>`;
 
   const el = (name) => root.querySelector(`[data-el="${name}"]`);
@@ -516,15 +539,19 @@
       </div>`;
   }
 
+  /* Ticked unless the person unticked it — but never ticked (and locked)
+     while My Company has no Company URL, since there'd be nothing to read. */
+  const usingWebsite = (st = state) => !!st.useSite && !!companyUrl(st);
+
   function renderWebsite() {
     if (!mounted) return;
     const box = el('use-website');
-    box.checked = !!state.useWebsite;
+    const noUrl = !!state.profile && !companyUrl();
+    box.checked = usingWebsite();
+    box.disabled = !state.profile || noUrl;
     const note = el('website-note');
-    note.textContent = state.useWebsite && state.profile && !companyUrl()
-      ? 'My Company has no Company URL yet, so the website can’t be used. Add it in My Company.'
-      : (state.useWebsite && companyUrl() ? `Using ${companyUrl()}` : '');
-    note.classList.toggle('is-warn', !!(state.useWebsite && state.profile && !companyUrl()));
+    note.textContent = noUrl ? 'Add a Company URL in My Company to use your website.' : '';
+    note.classList.toggle('is-warn', noUrl);
   }
 
   function closeMenu() {
@@ -570,116 +597,6 @@
       renderFileSelects();
       updateGenerate();
     }
-  }
-
-  /* ---------- importing ----------
-     The same pipeline My Company uses, so a dropped file lands in the
-     account's Imported Materials and in this run's table. */
-
-  let uploadSeq = 0;
-
-  function renderUploads() {
-    if (!mounted) return;
-    const ul = el('uploads');
-    const words = { queued: 'Waiting…', reading: 'Reading…', saving: 'Saving…', done: 'Imported' };
-    ul.innerHTML = state.uploads.map((u) => `
-      <li class="tmsg__upload is-${u.status}">
-        <span class="tmsg__upload-name">${esc(u.name)}</span>
-        <span class="tmsg__upload-status">${esc(u.status === 'error' ? u.message : (u.note || words[u.status]))}</span>
-        ${u.status === 'error' ? `<button type="button" class="tmsg__upload-x" data-dismiss="${u.id}" aria-label="Dismiss">×</button>` : ''}
-      </li>`).join('');
-    ul.hidden = !state.uploads.length;
-  }
-
-  function addUploads(fileList) {
-    const X = window.MktforgeExtract;
-    Array.from(fileList || []).forEach((file) => {
-      const u = { id: ++uploadSeq, name: file.name, file, status: 'queued', message: '' };
-      if (X && !X.supported(file.name, file.type)) {
-        Object.assign(u, { status: 'error', message: X.unsupportedReason(file.name) });
-      } else if (file.size > Data().MAX_FILE_BYTES) {
-        Object.assign(u, { status: 'error', message: `Larger than ${Data().MAX_FILE_BYTES / (1024 * 1024)} MB.` });
-      } else if (!file.size) {
-        Object.assign(u, { status: 'error', message: 'This file is empty.' });
-      }
-      state.uploads.push(u);
-    });
-    renderUploads();
-    pump(state);
-  }
-
-  async function pump(st) {
-    if (st.pumping) return;
-    st.pumping = true;
-    const D = dataOf(st);
-    const paint = () => { if (onScreen(st)) renderUploads(); };
-    try {
-      for (;;) {
-        const u = st.uploads.find((x) => x.status === 'queued');
-        if (!u) break;
-        try {
-          const res = await D.importFile(u.file, { onStage: (stage) => { u.status = stage; paint(); } });
-          u.status = 'done';
-          u.note = res.empty ? 'Imported — no readable text found'
-            : res.truncated ? 'Imported — only the first part could be read' : 'Imported — added to the table';
-          if (!st.picked.some((p) => p.id === res.id)) {
-            st.picked.push({ id: res.id, name: `${res.name}${res.ext || ''}` });
-            pc.hold(st);
-          }
-          const id = u.id;
-          setTimeout(() => { st.uploads = st.uploads.filter((x) => x.id !== id); paint(); }, 5000);
-        } catch (err) {
-          console.error('[Target Messaging] import failed', err);
-          u.status = 'error';
-          u.message = err && err.code ? err.message : 'Couldn’t import this file. Check your connection and try again.';
-        }
-        u.file = null;
-        paint();
-      }
-    } finally {
-      st.pumping = false;
-      // The file list listener repaints the table; this covers a list that
-      // hasn't refreshed yet.
-      if (onScreen(st)) { renderPicked(); renderFileSelects(); updateGenerate(); }
-    }
-  }
-
-  function wireImport() {
-    const zone = el('import-zone');
-    const input = el('import-input');
-    el('import-link').addEventListener('click', () => input.click());
-    input.addEventListener('change', () => { addUploads(input.files); input.value = ''; });
-
-    let depth = 0;
-    const hasFiles = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).includes('Files');
-    zone.addEventListener('dragenter', (e) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      depth += 1;
-      zone.classList.add('is-dragging');
-    });
-    zone.addEventListener('dragover', (e) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-    });
-    zone.addEventListener('dragleave', () => {
-      depth = Math.max(0, depth - 1);
-      if (!depth) zone.classList.remove('is-dragging');
-    });
-    zone.addEventListener('drop', (e) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      depth = 0;
-      zone.classList.remove('is-dragging');
-      addUploads(e.dataTransfer.files);
-    });
-    el('uploads').addEventListener('click', (e) => {
-      const x = e.target.closest('[data-dismiss]');
-      if (!x) return;
-      state.uploads = state.uploads.filter((u) => String(u.id) !== x.dataset.dismiss);
-      renderUploads();
-    });
   }
 
   /* ---------- Individual tab (HubSpot) ---------- */
@@ -1108,7 +1025,7 @@
 
   function jobTitleReady(st = state) {
     const titleOk = !!st.jobTitle && titles(st).includes(st.jobTitle);
-    const sourceOk = st.picked.length > 0 || (st.useWebsite && !!companyUrl(st));
+    const sourceOk = st.picked.length > 0 || usingWebsite(st);
     return { ok: titleOk && sourceOk, titleOk, sourceOk };
   }
 
@@ -1124,9 +1041,9 @@
     jBtn.textContent = state.running && state.runMode === 'job-title' ? 'Generating…' : 'Generate Messaging';
     const jHint = root.querySelector('[data-hint="job-title"]');
     jHint.textContent = state.running || jt.ok ? ''
-      : !jt.titleOk && !jt.sourceOk ? 'Choose a job title and at least one source (or use your company website).'
+      : !jt.titleOk && !jt.sourceOk ? 'Choose a job title and at least one source.'
       : !jt.titleOk ? 'Choose a job title to target.'
-      : 'Add at least one source, or tick “Use company website to supplement messaging.”';
+      : 'Add at least one source, or tick “Use current website copy and messaging.”';
 
     const iBtn = root.querySelector('[data-generate="individual"]');
     if (iBtn) {
@@ -1139,12 +1056,103 @@
 
   function paintRun() {
     if (!mounted) return;
-    el('status').textContent = state.status;
+    paintStatus();
+    paintStage();
     const err = el('error');
     err.textContent = state.error || state.note;
     err.hidden = !(state.error || state.note);
     paintEditors();
     updateGenerate();
+  }
+
+  /* ---------- the box in front of the results ----------
+       'intro'   — no copy yet and nothing running: the panda + copy
+       'loading' — a run is drafting: the forging panda + progress
+       'results' — the editors */
+
+  function stageView(st = state) {
+    if (st.running) return 'loading';
+    return st.editorsLoaded && !editorsHaveCopy(st) ? 'intro' : 'results';
+  }
+
+  function paintStage() {
+    if (!mounted) return;
+    const view = stageView();
+    const stage = el('stage');
+    stage.classList.toggle('is-idle', view !== 'results');
+    stage.classList.toggle('is-running', view === 'loading');
+    playForge(view === 'loading');
+  }
+
+  /* While running, the progress sits under the panda; afterwards, the
+     finished message sits under Generate Messaging as before. */
+  function paintStatus() {
+    if (!mounted) return;
+    el('progress').textContent = state.running ? state.status : '';
+    el('status').textContent = state.running ? '' : state.status;
+  }
+
+  const reducedMotion = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let forgeDone = null;   // settles a finishForge() still waiting, if any
+  let forgeOn = false;
+
+  function playForge(on) {
+    const loop = el('forge'), end = el('forgeEnd');
+    if (!loop || !end) return;
+    if (on && forgeOn) return;            // already swinging; don't restart him
+    forgeOn = on;
+    if (forgeDone) forgeDone();
+    end.pause();
+    end.currentTime = 0;
+    end.classList.remove('is-on');
+    loop.classList.remove('is-off');
+    loop.loop = true;
+    loop.currentTime = 0;
+    if (on && !reducedMotion) {
+      const p = loop.play();
+      if (p && p.catch) p.catch(() => {});   // autoplay refused: first frame stays up
+    } else {
+      loop.pause();
+    }
+  }
+
+  /* Lets the current pass of the loop finish, plays the ending, holds its
+     last frame for a beat, then resolves. Resolves at once if the loop
+     isn't actually playing, and never waits longer than both clips take. */
+  function finishForge() {
+    const loop = mounted && el('forge'), end = mounted && el('forgeEnd');
+    if (!loop || !end || reducedMotion || loop.paused) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const clipMs = (v, fallback) => (isFinite(v.duration) ? v.duration : fallback) * 1000;
+      const timer = setTimeout(() => done(), clipMs(loop, 5) + clipMs(end, 4) + 2000);
+
+      function done() {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        loop.removeEventListener('ended', onLoopEnd);
+        end.removeEventListener('ended', onEndEnd);
+        if (forgeDone === done) forgeDone = null;
+        resolve();
+      }
+      function onLoopEnd() {
+        end.currentTime = 0;
+        end.classList.add('is-on');
+        loop.classList.add('is-off');
+        const p = end.play();
+        if (p && p.catch) p.catch(done);
+      }
+      function onEndEnd() { setTimeout(done, 600); }
+
+      forgeDone = done;
+      loop.addEventListener('ended', onLoopEnd);
+      end.addEventListener('ended', onEndEnd);
+      loop.loop = false;   // finish this pass, then fire 'ended'
+    });
   }
 
   /* ---------- the run ---------- */
@@ -1289,7 +1297,7 @@
     syncActivity(false, st);
     paintRun();
 
-    const setStatus = (t) => { if (!live()) return; st.status = t; if (onScreen(st)) el('status').textContent = t; };
+    const setStatus = (t) => { if (!live()) return; st.status = t; if (onScreen(st)) paintStatus(); };
     let result = null;
 
     try {
@@ -1309,8 +1317,8 @@
         const files = await readSources(st, setStatus);
         if (!live()) return;
         if (onScreen(st)) renderPicked();
-        body = { ...base, jobTitle: st.jobTitle, files, useWebsite: !!st.useWebsite };
-        if (!st.useWebsite) body.companyUrl = '';
+        body = { ...base, jobTitle: st.jobTitle, files, useWebsite: usingWebsite(st) };
+        if (!usingWebsite(st)) body.companyUrl = '';
       } else {
         const files = await readIndividualSources(st, setStatus);
         if (!live()) return;
@@ -1341,6 +1349,13 @@
       if (!result) throw new Error('The connection closed before the run finished. Please try again.');
 
       st.editors = { email: mdToHtml(result.email), landingPage: mdToHtml(result.landingPage) };
+      // The panda finishes his pass and puts the hammer down before the
+      // drafts are shown.
+      if (onScreen(st)) {
+        setStatus('Messaging drafted.');
+        await finishForge();
+        if (!live()) return;
+      }
       st.status = 'Messaging drafted. Review and edit it below, then copy it wherever you need it.';
     } catch (err) {
       if (!live()) return;
@@ -1409,7 +1424,7 @@
       if (onScreen(st)) notify('Couldn’t load your saved drafts. Refresh to try again.', 'error');
     }
     st.editorsLoaded = true;
-    if (onScreen(st)) paintEditors();
+    if (onScreen(st)) { paintEditors(); paintStage(); }
   }
 
   function loadAll() {
@@ -1425,7 +1440,6 @@
     renderTitleSelect();
     renderFileSelects();
     renderPicked();
-    renderUploads();
     renderWebsite();
     renderIndividual();
     paintRun();
@@ -1438,7 +1452,10 @@
     label:  MODULE_NAME,
     icon:   'pin',
     companyAware: true,
-    styles: 'modules/target-messaging/target-messaging.css',
+    // The ?v= changes whenever this stylesheet does, so a browser holding the
+    // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
+    // new one instead of pairing new markup with old styles.
+    styles: 'modules/target-messaging/target-messaging.css?v=2026-09-26a',
 
     mount(container) {
       mounted = true;
@@ -1455,7 +1472,7 @@
       root.querySelector('[data-panel="job-title"]').addEventListener('click', handleJobTitleClick);
       el('individual').addEventListener('click', handleIndividualClick);
       el('use-website').addEventListener('change', (e) => {
-        state.useWebsite = e.target.checked;
+        state.useSite = e.target.checked;
         pc.hold();
         renderWebsite();
         updateGenerate();
@@ -1464,7 +1481,6 @@
         const g = e.target.closest('[data-generate]');
         if (g && !g.disabled) handleGenerate(g.dataset.generate);
       });
-      wireImport();
 
       const results = root.querySelector('.tmsg__results');
       results.addEventListener('input', onEditorInput);
@@ -1490,6 +1506,9 @@
 
     unmount() {
       flushSaves();
+      if (forgeDone) forgeDone();       // a waiting finish shows the drafts on the way back
+      forgeOn = false;
+      root.querySelectorAll('video').forEach((v) => v.pause());
       pc.hold(state);
       mounted = false;
       state.menu = '';
