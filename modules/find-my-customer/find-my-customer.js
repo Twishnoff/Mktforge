@@ -98,7 +98,7 @@
         <div class="fmc__box-body is-placeholder" data-box="competitorsToWatch">No Data</div></article>
     </section>
 
-    <div class="fmc__pdf-row" data-el="pdfRow" hidden>
+    <div class="fmc__pdf-row" data-el="pdfRow" hidden style="display:none">
       <button type="button" class="fmc__btn" data-el="pdf" disabled title="Run a search first">Save as PDF</button>
     </div>
 
@@ -210,7 +210,10 @@
   function setView(view) {
     el.grid.classList.toggle('is-idle', view !== 'results');
     el.grid.classList.toggle('is-running', view === 'loading');
-    el.pdfRow.hidden = view !== 'results';     // nothing to save until there are results
+    // Nothing to save until there are results. Set inline too, so no
+    // stylesheet (even a stale cached one) can bring the button back early.
+    el.pdfRow.hidden = view !== 'results';
+    el.pdfRow.style.display = view === 'results' ? '' : 'none';
     playForge(view === 'loading');
   }
 
@@ -722,7 +725,10 @@
     label:  'Find My Customer',
     icon:   'crosshair',
     companyAware: true,
-    styles: 'modules/find-my-customer/find-my-customer.css',
+    // The ?v= changes whenever this stylesheet does, so a browser holding the
+    // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
+    // new one instead of pairing new markup with old styles.
+    styles: 'modules/find-my-customer/find-my-customer.css?v=2026-09-26b',
 
     mount(container) {
       container.innerHTML = MARKUP;
