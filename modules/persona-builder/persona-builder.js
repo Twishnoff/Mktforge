@@ -23,10 +23,7 @@
   <div class="pb">
 
     <header class="pb__head">
-      <p class="pb__eyebrow">Persona Builder</p>
-      <h1 class="pb__title">Create a buyer persona</h1>
-      <p class="pb__dek">Better know your customer&rsquo;s challenges and needs so you can craft
-        messaging that resonates and build more engaging GTM strategies.</p>
+      <h1 class="pb__eyebrow">Persona Builder</h1>
     </header>
 
     <section class="pb__submit" aria-label="Target persona inputs">
@@ -623,7 +620,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/persona-builder/persona-builder.css?v=2026-09-26b',
+    styles: 'modules/persona-builder/persona-builder.css?v=2026-09-27h',
 
     mount(container) {
       container.innerHTML = MARKUP;

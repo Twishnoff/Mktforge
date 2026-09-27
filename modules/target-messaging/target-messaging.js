@@ -278,10 +278,7 @@
   const MARKUP = `
   <div class="tmsg">
     <header class="tmsg__head">
-      <p class="tmsg__eyebrow">Target Messaging</p>
-      <h1 class="tmsg__title">Refine your messaging for any customer</h1>
-      <p class="tmsg__dek">Draft email copy and talking points or landing page messaging to better resonate
-        with a given job title or specific customer in your CRM.</p>
+      <h1 class="tmsg__eyebrow">Target Messaging</h1>
     </header>
 
     <section class="tmsg__card" aria-labelledby="tmsg-define-title">
@@ -1457,7 +1454,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/target-messaging/target-messaging.css?v=2026-09-26b',
+    styles: 'modules/target-messaging/target-messaging.css?v=2026-09-27h',
 
     mount(container) {
       mounted = true;

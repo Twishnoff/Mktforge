@@ -27,24 +27,15 @@
 
 /* --- header --- */
 
+/* The module's name is its only heading: green, in the display serif. */
 .tmsg__eyebrow {
-  margin: 0 0 8px;
-  font-family: var(--font-body);
-  font-size: 13.5px;
-  font-weight: 600;
-  letter-spacing: .02em;
-  color: var(--accent);
-}
-
-.tmsg__title {
-  margin: 0 0 10px;
+  margin: 0 0 28px;
   font-family: var(--font-display);
   font-size: 32px;
   font-weight: 600;
   line-height: 1.15;
+  color: var(--accent);
 }
-
-.tmsg__dek { margin: 0 0 28px; max-width: 70ch; color: var(--ink-soft); }
 
 .tmsg__h2 {
   margin: 0 0 14px;

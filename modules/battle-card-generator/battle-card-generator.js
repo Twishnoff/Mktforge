@@ -141,11 +141,7 @@ window.MktforgeBattleCardText = (function () {
   <div class="bcg">
 
     <header class="bcg__head">
-      <p class="bcg__eyebrow">Battle Card Generator</p>
-      <h1 class="bcg__title">Draft competitor-specific battle cards</h1>
-      <p class="bcg__dek">Better prepare yourself for competitive deals by aligning your
-        messaging and product to stand out against specific competitors when selling into
-        specific job titles.</p>
+      <h1 class="bcg__eyebrow">Battle Card Generator</h1>
     </header>
 
     <section class="bcg__submit" aria-label="Battle card inputs">
@@ -726,7 +722,7 @@ window.MktforgeBattleCardText = (function () {
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/battle-card-generator/battle-card-generator.css?v=2026-09-27b',
+    styles: 'modules/battle-card-generator/battle-card-generator.css?v=2026-09-27h',
 
     mount(container) {
       container.innerHTML = MARKUP;

@@ -862,11 +862,7 @@
   const MARKUP = `
   <div class="mtrk">
     <header class="mtrk__head">
-      <p class="mtrk__eyebrow">${MODULE_NAME}</p>
-      <h1 class="mtrk__title">Hear what buyers and competitors are saying</h1>
-      <p class="mtrk__dek">Track what potential buyers and competitors are saying about the challenges you
-        can solve, your company and products, and other market news. Each refresh reports what’s
-        turned up in the last 30 days that you haven’t already been shown.</p>
+      <h1 class="mtrk__eyebrow">${MODULE_NAME}</h1>
     </header>
 
     <section class="mtrk__card" aria-label="Track a job title or a competitor">
@@ -1525,7 +1521,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/market-tracker/market-tracker.css?v=2026-09-26a',
+    styles: 'modules/market-tracker/market-tracker.css?v=2026-09-27h',
 
     mount(container) {
       mounted = true;

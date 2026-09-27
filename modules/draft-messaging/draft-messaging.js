@@ -142,11 +142,7 @@
   const MARKUP = `
   <div class="dmsg">
     <header class="dmsg__head">
-      <p class="dmsg__eyebrow">Draft Messaging</p>
-      <h1 class="dmsg__title">Start Drafting Marketing Copy</h1>
-      <p class="dmsg__dek">Use your positioning research and any other notes you’ve collected to craft a
-        customized messaging hierarchy and homepage copy ideas that can serve as a foundation for
-        everything you write.</p>
+      <h1 class="dmsg__eyebrow">Draft Messaging</h1>
     </header>
 
     <!-- One box for everything a run needs: both pickers on the left, the
@@ -1054,7 +1050,7 @@
     companyAware: true,
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/draft-messaging/draft-messaging.css?v=2026-09-27c',
+    styles: 'modules/draft-messaging/draft-messaging.css?v=2026-09-27h',
 
     mount(container) {
       mounted = true;

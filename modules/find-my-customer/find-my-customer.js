@@ -36,10 +36,7 @@
   <div class="fmc">
 
     <header class="fmc__head">
-      <p class="fmc__eyebrow">Find My Customer</p>
-      <h1 class="fmc__title">Discover your ideal job titles</h1>
-      <p class="fmc__dek">Use the information on your website to quickly find and define the
-        job titles you should be selling into.</p>
+      <h1 class="fmc__eyebrow">Find My Customer</h1>
     </header>
 
     <section class="fmc__submit" aria-label="Company inputs">
@@ -728,7 +725,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/find-my-customer/find-my-customer.css?v=2026-09-26b',
+    styles: 'modules/find-my-customer/find-my-customer.css?v=2026-09-27h',
 
     mount(container) {
       container.innerHTML = MARKUP;

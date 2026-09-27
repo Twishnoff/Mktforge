@@ -356,13 +356,7 @@
   const MARKUP = `
   <div class="bpos">
     <header class="bpos__head">
-      <p class="bpos__eyebrow">Build Positioning</p>
-      <h1 class="bpos__title">Get started with positioning</h1>
-      <p class="bpos__dek">Quickly build a foundation for explaining how you position your company
-        in the market. This positioning drafter takes your uploaded files, anything you’ve created
-        and saved with Mktforge, and external data to research your product, target buyer, key
-        competitor, and additional input from you to answer key questions you’ll need to figure
-        out for drafting messaging and copy that resonates.</p>
+      <h1 class="bpos__eyebrow">Build Positioning</h1>
     </header>
 
     <section class="bpos__card" aria-label="Run inputs">
@@ -1781,7 +1775,7 @@
     companyAware: true,
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-27a',
+    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-27h',
 
     mount(container) {
       mounted = true;
