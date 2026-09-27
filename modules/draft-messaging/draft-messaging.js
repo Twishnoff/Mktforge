@@ -149,31 +149,42 @@
         everything you write.</p>
     </header>
 
-    <div class="dmsg__columns">
-      <section class="dmsg__card" aria-labelledby="dmsg-doc-title">
-        <h2 class="dmsg__h2" id="dmsg-doc-title">Select your positioning document</h2>
-        <p class="dmsg__card-dek">The run is built on this: the champion, alternatives, differentiators and
-          category you already reviewed in Build Positioning.</p>
-        <div class="dmsg__select" data-el="doc-select"></div>
-        <div data-el="doc-empty"></div>
-      </section>
+    <!-- One box for everything a run needs: both pickers on the left, the
+         research files chosen so far on the right, and Draft Messaging centred
+         along the bottom once a positioning document is chosen. -->
+    <section class="dmsg__card dmsg__inputs" aria-label="Draft messaging inputs">
+      <div class="dmsg__columns">
+        <div class="dmsg__pane dmsg__pane--pickers">
+          <div class="dmsg__pick" role="group" aria-labelledby="dmsg-doc-title">
+            <h2 class="dmsg__h2" id="dmsg-doc-title">Select your positioning document</h2>
+            <p class="dmsg__card-dek">We’ll use the positioning document you created as a foundation for our messaging.</p>
+            <div class="dmsg__select" data-el="doc-select"></div>
+            <div data-el="doc-empty"></div>
+          </div>
 
-      <section class="dmsg__card" aria-labelledby="dmsg-research-title">
-        <h2 class="dmsg__h2" id="dmsg-research-title">Provide additional research <span class="dmsg__optional">(optional)</span></h2>
-        <p class="dmsg__card-dek">Call notes, customer interviews, sales decks, competitor teardowns — anything
-          you want the agent to refer to for guidance.</p>
+          <div class="dmsg__pick" role="group" aria-labelledby="dmsg-research-title">
+            <h2 class="dmsg__h2" id="dmsg-research-title">Provide additional research <span class="dmsg__optional">(optional)</span></h2>
+            <p class="dmsg__card-dek">Anything else you’ve collected to guide our messaging.</p>
+            <div class="dmsg__select" data-el="files-select"></div>
+          </div>
+        </div>
 
-        <div class="dmsg__select" data-el="files-select"></div>
-        <div data-el="picked"></div>
-      </section>
-    </div>
+        <div class="dmsg__pane dmsg__pane--picked" role="group" aria-labelledby="dmsg-picked-title">
+          <h2 class="dmsg__h2" id="dmsg-picked-title">Selected research</h2>
+          <div data-el="picked"></div>
+        </div>
+      </div>
 
-    <section class="dmsg__run" aria-label="Draft messaging">
-      <div class="dmsg__run-row">
+      <div class="dmsg__inputs-foot" data-el="inputs-foot" hidden>
         <button type="button" class="dmsg__btn dmsg__btn--lg" data-el="generate" disabled>Draft Messaging</button>
+        <p class="dmsg__hint" data-el="hint" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="dmsg__run" aria-label="Draft messaging status">
+      <div class="dmsg__run-row">
         <button type="button" class="dmsg__btn dmsg__btn--lg" data-el="pdf-top" disabled hidden title="Draft messaging first">Create Messaging PDF</button>
       </div>
-      <p class="dmsg__hint" data-el="hint" aria-live="polite"></p>
       <p class="dmsg__status" data-el="status" aria-live="polite"></p>
       <p class="dmsg__error" data-el="error" role="alert" hidden></p>
     </section>
@@ -325,7 +336,11 @@
     if (!mounted) return;
     const box = el('picked');
     const files = pickedFiles();
-    if (!files.length) { box.innerHTML = ''; return; }
+    if (!files.length) {
+      box.innerHTML = `<p class="dmsg__picked-empty">No additional research selected. Files you choose
+        on the left appear here; the run can also go ahead with just your positioning document.</p>`;
+      return;
+    }
     box.innerHTML = `
       <div class="dmsg__table-wrap">
         <table class="dmsg__table">
@@ -520,6 +535,9 @@
   function updateGenerate() {
     if (!mounted) return;
     const ready = !!byId(state.positioningId);
+    // The button (and the strip of the box it sits in) only appears once a
+    // positioning document is chosen; a run in progress keeps it showing.
+    el('inputs-foot').hidden = !ready && !state.running;
     el('generate').disabled = state.running || !ready;
     el('generate').textContent = state.running ? 'Drafting…' : 'Draft Messaging';
     let hint = '';
@@ -1023,7 +1041,7 @@
     companyAware: true,
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/draft-messaging/draft-messaging.css?v=2026-09-26b',
+    styles: 'modules/draft-messaging/draft-messaging.css?v=2026-09-27b',
 
     mount(container) {
       mounted = true;

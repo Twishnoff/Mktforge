@@ -58,14 +58,45 @@
 
 /* --- the two input columns --- */
 
-/* auto-fit rather than a media query: the display field changes width when
-   the nav is minimized, which a viewport query can't see. */
+/* The inputs box: both pickers on the left, the chosen research files on the
+   right with a rule between, and Draft Messaging centred in a strip across
+   the bottom that only appears once a positioning document is chosen. Sized
+   by the box's own width, so it stacks whether the nav is open or minimized. */
+.dmsg__inputs { margin: 28px 0; container-type: inline-size; }
+
 .dmsg__columns {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
-  gap: 18px;
-  margin: 28px 0;
-  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+.dmsg__pane { min-width: 0; }
+.dmsg__pane:first-child { padding-right: 24px; }
+.dmsg__pane + .dmsg__pane { padding-left: 24px; border-left: 1px solid var(--paper-dim); }
+
+.dmsg__pick + .dmsg__pick { margin-top: 26px; }
+
+.dmsg__pane--picked .dmsg__h2 { margin-bottom: 4px; }
+.dmsg__picked-empty { margin: 10px 0 0; font-size: 15px; color: var(--ink-soft); }
+
+.dmsg__inputs-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--paper-dim);
+  text-align: center;
+}
+.dmsg__inputs-foot[hidden] { display: none; }
+
+@container (max-width: 680px) {
+  .dmsg__columns { grid-template-columns: minmax(0, 1fr); }
+  .dmsg__pane:first-child { padding-right: 0; }
+  .dmsg__pane + .dmsg__pane {
+    padding-left: 0; border-left: 0;
+    margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--paper-dim);
+  }
 }
 
 .dmsg__card {
@@ -282,6 +313,11 @@
 
 /* Draft Messaging sits alone and centred until there are results; the second
    Create Messaging PDF button then joins it and the pair stays centred. */
+/* Below the inputs box: the second Create Messaging PDF button (with
+   results) and any status or error. Takes no space while there's none. */
+.dmsg__run-row:not(:has(> :not([hidden]))) { display: none; }
+.dmsg__run:not(:has(:not([hidden]):not(:empty):not(.dmsg__run-row))) { display: none; }
+
 .dmsg__run-row {
   display: flex;
   flex-wrap: wrap;
