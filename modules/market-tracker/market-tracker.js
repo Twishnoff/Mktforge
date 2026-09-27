@@ -899,8 +899,8 @@
   const INTRO = `
     <section class="mtrk__intro-box" aria-label="Nothing tracked yet">
       <div class="mtrk__intro">
-        <img class="mtrk__intro-img" src="modules/market-tracker/market-tracker-panda.png"
-          alt="" width="640" height="549">
+        <img class="mtrk__intro-img" src="modules/market-tracker/market-tracker-panda.png?v=2"
+          alt="" width="640" height="504">
         <div class="mtrk__intro-copy">
           <p class="mtrk__intro-title">Let's listen in!</p>
           <p class="mtrk__intro-text">Choose a job title or competitor and we'll create a tracker that
