@@ -60,7 +60,7 @@
 
 /* The inputs box: both pickers on the left, the chosen research files on the
    right with a rule between, and Draft Messaging centred in a strip across
-   the bottom that only appears once a positioning document is chosen. Sized
+   the bottom, greyed out until a positioning document is chosen. Sized
    by the box's own width, so it stacks whether the nav is open or minimized. */
 .dmsg__inputs { margin: 28px 0; container-type: inline-size; }
 
@@ -76,6 +76,7 @@
 .dmsg__pick + .dmsg__pick { margin-top: 26px; }
 
 .dmsg__pane--picked .dmsg__h2 { margin-bottom: 4px; }
+.dmsg__table tr.is-positioning .dmsg__file { color: var(--accent); }
 .dmsg__picked-empty { margin: 10px 0 0; font-size: 15px; color: var(--ink-soft); }
 
 .dmsg__inputs-foot {

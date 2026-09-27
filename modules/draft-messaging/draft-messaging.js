@@ -151,7 +151,7 @@
 
     <!-- One box for everything a run needs: both pickers on the left, the
          research files chosen so far on the right, and Draft Messaging centred
-         along the bottom once a positioning document is chosen. -->
+         along the bottom (greyed out until a positioning document is chosen). -->
     <section class="dmsg__card dmsg__inputs" aria-label="Draft messaging inputs">
       <div class="dmsg__columns">
         <div class="dmsg__pane dmsg__pane--pickers">
@@ -170,12 +170,12 @@
         </div>
 
         <div class="dmsg__pane dmsg__pane--picked" role="group" aria-labelledby="dmsg-picked-title">
-          <h2 class="dmsg__h2" id="dmsg-picked-title">Selected research</h2>
+          <h2 class="dmsg__h2" id="dmsg-picked-title">Selected files</h2>
           <div data-el="picked"></div>
         </div>
       </div>
 
-      <div class="dmsg__inputs-foot" data-el="inputs-foot" hidden>
+      <div class="dmsg__inputs-foot" data-el="inputs-foot">
         <button type="button" class="dmsg__btn dmsg__btn--lg" data-el="generate" disabled>Draft Messaging</button>
         <p class="dmsg__hint" data-el="hint" aria-live="polite"></p>
       </div>
@@ -332,33 +332,40 @@
     });
   }
 
+  /* The chosen positioning document leads the table, then the research files
+     in the order they were picked. Removing the positioning document here
+     clears the drop-down back to "Select your positioning document". */
   function renderPicked() {
     if (!mounted) return;
     const box = el('picked');
-    const files = pickedFiles();
-    if (!files.length) {
-      box.innerHTML = `<p class="dmsg__picked-empty">No additional research selected. Files you choose
-        on the left appear here; the run can also go ahead with just your positioning document.</p>`;
+    const doc = byId(state.positioningId);
+    const rows = [
+      ...(doc ? [{ f: doc, type: 'Positioning', remove: 'data-remove-doc="1"' }] : []),
+      ...pickedFiles().map((f) => ({ f, type: kindLabel(f), remove: `data-remove="${esc(f.id)}"` }))
+    ];
+    if (!rows.length) {
+      box.innerHTML = `<p class="dmsg__picked-empty">Nothing selected yet. Your positioning document and
+        any research you choose on the left appear here.</p>`;
       return;
     }
     box.innerHTML = `
       <div class="dmsg__table-wrap">
         <table class="dmsg__table">
           <thead><tr>
-            <th scope="col">File</th><th scope="col">Type</th><th scope="col">Imported</th>
+            <th scope="col">File</th><th scope="col">Type</th><th scope="col">Date</th>
             <th scope="col"><span class="dmsg__sr">Remove</span></th>
           </tr></thead>
-          <tbody>${files.map((f) => `
-            <tr data-file="${esc(f.id)}">
+          <tbody>${rows.map(({ f, type, remove }) => `
+            <tr data-file="${esc(f.id)}"${remove.startsWith('data-remove-doc') ? ' class="is-positioning"' : ''}>
               <td class="dmsg__cell-name">
                 <span class="dmsg__file">${esc(fullName(f))}</span>
                 <span class="dmsg__meta">${esc(formatSize(f.size))}</span>
                 ${fileNote(f)}
               </td>
-              <td>${esc(kindLabel(f))}</td>
+              <td>${esc(type)}</td>
               <td>${esc(formatDate(f.createdAt))}</td>
               <td class="dmsg__cell-action">
-                <button type="button" class="dmsg__remove" data-remove="${esc(f.id)}"
+                <button type="button" class="dmsg__remove" ${remove}
                   title="Remove from this run" aria-label="Remove ${esc(fullName(f))} from this run">×</button>
               </td>
             </tr>`).join('')}
@@ -395,6 +402,7 @@
     if (opt.closest('[data-el="doc-select"]')) {
       state.positioningId = id;
       closeMenu();
+      renderPicked();
       updateGenerate();
     } else {
       if (!state.picked.includes(id)) state.picked.push(id);
@@ -404,6 +412,13 @@
   }
 
   function handlePickedClick(e) {
+    if (e.target.closest('button[data-remove-doc]')) {
+      state.positioningId = '';            // drop-down goes back to its default
+      renderDocSelect();
+      renderPicked();
+      updateGenerate();
+      return;
+    }
     const x = e.target.closest('button[data-remove]');
     if (!x) return;
     state.picked = state.picked.filter((id) => id !== x.dataset.remove);
@@ -535,9 +550,7 @@
   function updateGenerate() {
     if (!mounted) return;
     const ready = !!byId(state.positioningId);
-    // The button (and the strip of the box it sits in) only appears once a
-    // positioning document is chosen; a run in progress keeps it showing.
-    el('inputs-foot').hidden = !ready && !state.running;
+    // Always shown; greyed out until a positioning document is chosen.
     el('generate').disabled = state.running || !ready;
     el('generate').textContent = state.running ? 'Drafting…' : 'Draft Messaging';
     let hint = '';
@@ -1041,7 +1054,7 @@
     companyAware: true,
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/draft-messaging/draft-messaging.css?v=2026-09-27b',
+    styles: 'modules/draft-messaging/draft-messaging.css?v=2026-09-27c',
 
     mount(container) {
       mounted = true;
