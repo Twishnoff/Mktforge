@@ -347,8 +347,8 @@
     <div class="tmsg__stage is-idle" data-el="stage">
     <section class="tmsg__card tmsg__idle" aria-label="Drafted messaging">
       <div class="tmsg__intro">
-        <img class="tmsg__intro-img" src="modules/target-messaging/target-messaging-panda.png"
-          alt="" width="640" height="601">
+        <img class="tmsg__intro-img" src="modules/target-messaging/target-messaging-panda.png?v=2"
+          alt="" width="640" height="526">
         <div class="tmsg__intro-copy">
           <p class="tmsg__intro-title">Let's tailor your message!</p>
           <p class="tmsg__intro-text">Select your desired job title and one or more sources for messaging,
