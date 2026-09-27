@@ -7,18 +7,24 @@
      1. Run inputs: Company URL, Primary Champion, Closest Competitor,
         Target Industry (optional). Drop-downs come from My Company; anything
         can be typed. A typed industry is matched to the shared industry list.
-     2. "Fill in the blanks": one row per question — question on the left,
-        text box, then its buttons. Draft Answer / Edit / Save behave like
-        My Company (see "Row states" below). Answers are saved to the account:
+        The first three are all a run needs.
+     2. "Assumptions": hidden until the first run has drafted them, then shown
+        minimized. One row per question — question on the left, text box,
+        then its buttons. Draft Answer / Edit / Save behave like My Company
+        (see "Row states" below). Answers are saved to the account:
           company questions     once for the account
           competitor questions  once per Closest Competitor
           champion questions    once per Primary Champion
-        The whole card minimizes like a result box, and folds itself away
-        when a run starts so the stage boxes sit above the fold.
-     3. Generate Positioning: streams stages 0–5 into the result boxes. Once a
-        run starts, a second Create Positioning PDF button appears beside it.
-     4. Create Positioning PDF: downloads it and saves it to My Company, where
-        the next module can pick it up.
+     3. Generate Positioning: first drafts every assumption that has no saved
+        answer (exactly what Draft Answer does, all at once) and saves them,
+        then streams stages 0–5. Typed-but-unsaved text is saved as is rather
+        than drafted over.
+     4. Results: until a run finishes, one panel stands in for the result
+        boxes — the panda and intro copy, then the forging panda while a run
+        works (same clips as Find My Customer). Stage 0 (Input Audit) is never
+        shown on screen; it is still in the PDF.
+     5. Create Positioning PDF: downloads it and saves it to My Company, where
+        the next module can pick it up. Hidden until there are results.
 
    Screen vs. PDF
      The PDF is the full record and is unchanged; the screen is organised for
@@ -108,7 +114,7 @@
      DISPLAY_BOXES is the on-screen layout only. It reorganises the same data:
        - the positioning statement that used to close Market Category leads as
          "Draft", so the answer is readable without scrolling
-       - Stage 0 arrives minimized (`collapsed`)
+       - Stage 0 (Input Audit) isn't shown at all; it's only in the PDF
        - Stages 2 and 3 are merged into one "Differentiators and Value" box
        - `needs` lists the stage keys a box can show something from (any one is
          enough, so a run that stops halfway still shows what it reached)
@@ -126,8 +132,6 @@
   const DISPLAY_BOXES = [
     { key: 'draft',           stage: 'Draft',       title: 'Initial Positioning Statement',
       needs: ['category'],                    pick: (st) => st.category },
-    { key: 'audit',           stage: 'Stage 0',     title: 'Input Audit',
-      needs: ['audit'], collapsed: true,      pick: (st) => st.audit },
     { key: 'alternatives',    stage: 'Stage 1',     title: 'Competitive Alternatives',
       needs: ['alternatives'],                pick: (st) => st.alternatives },
     { key: 'differentiators', stage: 'Stage 2 & 3', title: 'Differentiators and Value',
@@ -297,7 +301,8 @@
     run: null,
     running: false,
     collapsed: DEFAULT_COLLAPSED(),   // display box keys currently minimized
-    qaCollapsed: false,               // "Fill in the blanks" card minimized
+    qaCollapsed: true,                // "Assumptions" card minimized
+    qaShown: false,                   // Assumptions card revealed (after a run drafted them)
     innerOpen: new Set(),             // ids of nested boxes the user opened
     status: '',
     error: '',
@@ -308,7 +313,7 @@
     draftCtl: new Map()               // key -> AbortController for each Draft Answer
     }),
     held: ['form', 'drafts', 'editing'],
-    snapshot: ['run', 'status', 'error', 'contextNote', 'collapsed', 'innerOpen', 'qaCollapsed'],
+    snapshot: ['run', 'status', 'error', 'contextNote', 'collapsed', 'innerOpen', 'qaCollapsed', 'qaShown'],
     // Draft Answer rows still going for the company being left: stop them.
     onLeave(st) {
       st.draftCtl.forEach((ctl, key) => {
@@ -377,19 +382,18 @@
       <p class="bpos__resources" data-el="resources"></p>
     </section>
 
-    <section class="bpos__card bpos__card--qa" aria-labelledby="bpos-qa-title">
+    <section class="bpos__card bpos__card--qa is-collapsed" data-el="qa-card" aria-labelledby="bpos-qa-title" hidden>
       <div class="bpos__qa-head">
         <div class="bpos__qa-headline">
-          <h2 class="bpos__h2" id="bpos-qa-title">Fill in the blanks</h2>
+          <h2 class="bpos__h2" id="bpos-qa-title">Assumptions</h2>
           <button type="button" class="bpos__collapse" data-el="qa-collapse"
-            aria-expanded="true" aria-controls="bpos-qa-body"
-            title="Minimize" aria-label="Minimize Fill in the blanks">
+            aria-expanded="false" aria-controls="bpos-qa-body"
+            title="Maximize" aria-label="Maximize Assumptions">
             <span class="bpos__collapse-min" aria-hidden="true">&#8722;</span><span class="bpos__collapse-max" aria-hidden="true">+</span>
           </button>
         </div>
-        <p class="bpos__qa-dek">Research can’t see inside your business. Answer what you can —
-          or press <strong>Draft Answer</strong> to have a first pass written from your website
-          and saved reports, then check it. Lines marked “Assumption:” need your review.</p>
+        <p class="bpos__qa-dek">Additional assumptions were made when building positioning.
+          Further refine your results by editing the assumptions where appropriate.</p>
       </div>
       <div class="bpos__qa-body" id="bpos-qa-body">
         <div data-el="qa"><p class="bpos__loading">Loading your answers…</p></div>
@@ -410,7 +414,35 @@
       <p class="bpos__error" data-el="error" role="alert" hidden></p>
     </section>
 
-    <section class="bpos__grid" data-el="results" aria-label="Positioning results">
+    <section class="bpos__grid is-idle" data-el="results" aria-label="Positioning results">
+      <div class="bpos__idle">
+        <div class="bpos__intro">
+          <img class="bpos__intro-img" src="modules/build-positioning/build-positioning-panda.png"
+            alt="" width="640" height="605">
+          <div class="bpos__intro-copy">
+            <p class="bpos__intro-title">Let's build your positioning!</p>
+            <p class="bpos__intro-text">We'll need to draft positioning before we craft your messaging.
+              Provide your company URL, the primary buyer you want to go after, the competitor you're
+              most likely to go against, and a specific industry (optional). We'll make some
+              assumptions you can update after we've made a first pass at your positioning.</p>
+          </div>
+        </div>
+        <div class="bpos__idle-loading">
+          <div class="bpos__forge-stage" aria-hidden="true">
+            <video class="bpos__forge" data-el="forge" muted loop playsinline preload="auto"
+              width="660" height="540" aria-hidden="true">
+              <source src="modules/find-my-customer/find-customer-forge.webm" type="video/webm">
+              <source src="modules/find-my-customer/find-customer-forge.mp4" type="video/mp4">
+            </video>
+            <video class="bpos__forge bpos__forge--end" data-el="forgeEnd" muted playsinline preload="auto"
+              width="660" height="540" aria-hidden="true">
+              <source src="modules/find-my-customer/find-customer-forge-end.webm" type="video/webm">
+              <source src="modules/find-my-customer/find-customer-forge-end.mp4" type="video/mp4">
+            </video>
+          </div>
+          <p class="bpos__forge-status" data-el="forge-status" aria-live="polite"></p>
+        </div>
+      </div>
       ${DISPLAY_BOXES.map((b) => `
         <article class="bpos__box${b.collapsed ? ' is-collapsed' : ''}" data-box-wrap="${b.key}">
           <h2>
@@ -427,7 +459,7 @@
         </article>`).join('')}
     </section>
 
-    <div class="bpos__pdf-row">
+    <div class="bpos__pdf-row" data-el="pdf-row" hidden>
       <button type="button" class="bpos__btn" data-el="pdf" disabled title="Generate positioning first">Create Positioning PDF</button>
       <p class="bpos__status" data-el="pdf-status" aria-live="polite"></p>
     </div>
@@ -495,7 +527,6 @@
         <th scope="row" class="bpos__q">
           <label for="${id}">${esc(questionText(qn, s))}</label>
           ${qn.hint ? `<span class="bpos__q-hint">${esc(qn.hint)}</span>` : ''}
-          ${qn.required ? '<span class="bpos__req">Required</span>' : ''}
         </th>
         <td class="bpos__a">
           <div class="bpos__a-box"${readOnly ? ` data-clamp="1" data-key="${esc(key)}"` : ''}>
@@ -750,11 +781,11 @@
 
   /* ---------- saved answers for the current selections ---------- */
 
-  function answersFor(s = sel()) {
+  function answersFor(s = sel(), st = state) {
     const out = {};
     QUESTIONS.forEach((x) => {
       const key = keyFor(x, s);
-      const v = key && state.answers && state.answers[key];
+      const v = key && st.answers && st.answers[key];
       if (v) out[x.id] = v;
     });
     return out;
@@ -884,25 +915,18 @@
     if (!validUrl(s.companyUrl)) missing.push('Company URL');
     if (!s.champion) missing.push('Primary Champion');
     if (!s.competitorUrl) missing.push('Closest Competitor');
-    const saved = answersFor(s);
-    REQUIRED_IDS.forEach((id) => {
-      if (!saved[id]) {
-        const qn = QUESTIONS.find((x) => x.id === id);
-        missing.push(id === 'summary' ? 'a saved product summary' : `a saved answer to “${qn.text.replace(/\?$/, '')}”`);
-      }
-    });
     return missing;
   }
 
   function updateGenerate() {
     if (!mounted) return;
     const s = sel();
-    const missing = state.answers ? missingForRun(s) : ['your answers'];
+    const missing = missingForRun(s);
     el('generate').disabled = state.running || missing.length > 0;
     let hint = '';
     if (!state.running) {
       if (missing.length) hint = `Still needed: ${missing.join(', ')}.`;
-      else if (state.answers) {
+      else if (state.answers && qaVisible()) {
         const unsaved = QUESTIONS.some((x) => {
           const { key, mode } = rowState(x, s);
           return (mode === 'open' || mode === 'editing') && key in state.drafts
@@ -952,18 +976,23 @@
     paintCollapse(key);
   }
 
-  // The "Fill in the blanks" card minimizes the same way a result box does. It
-  // folds itself away when a run starts so the stage boxes come up the page.
+  // The "Assumptions" card stays hidden until a run has drafted the
+  // assumptions (or, for a company that already has results from before this
+  // change, once there is a finished run). It then shows minimized, and
+  // minimizes the same way a result box does.
+  const qaVisible = (st = state) => !!(st.qaShown || (st.run && st.run.complete));
+
   function paintQaCollapse() {
     if (!root) return;
-    const card = q('.bpos__card--qa');
+    const card = el('qa-card');
     const btn = el('qa-collapse');
     if (!card || !btn) return;
+    card.hidden = !qaVisible();
     const open = !state.qaCollapsed;
     card.classList.toggle('is-collapsed', !open);
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     btn.title = open ? 'Minimize' : 'Maximize';
-    btn.setAttribute('aria-label', `${open ? 'Minimize' : 'Maximize'} Fill in the blanks`);
+    btn.setAttribute('aria-label', `${open ? 'Minimize' : 'Maximize'} Assumptions`);
   }
 
   function toggleQa() {
@@ -990,9 +1019,106 @@
     if (innerBtn) toggleInner(innerBtn.dataset.inner, innerBtn.closest('[data-inner-wrap]'));
   }
 
+  /* ---------- results panel ----------
+     Until a run has something to show, one panel stands in for the result
+     boxes (same as Find My Customer):
+       'intro'   — before a run, or after one that failed with nothing to show
+       'loading' — while a run drafts assumptions and builds positioning
+       'results' — the result boxes */
+
+  function viewFor(st = state) {
+    if (st.running) return 'loading';
+    const run = st.run;
+    return run && Object.keys(run.stages || {}).length ? 'results' : 'intro';
+  }
+
+  function setView(view) {
+    const grid = el('results');
+    grid.classList.toggle('is-idle', view !== 'results');
+    grid.classList.toggle('is-running', view === 'loading');
+    playForge(view === 'loading');
+  }
+
+  /* The forging panda: two clips stacked in one spot. `forge` loops while a
+     run works; `forgeEnd` (the last strike, then the hammer goes down) plays
+     once when results arrive, before they're shown. Nothing plays for anyone
+     who has asked their system for reduced motion. */
+  const reducedMotion = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let forgeDone = null;   // settles a finishForge() still waiting, if any
+
+  function playForge(on) {
+    const loop = el('forge');
+    const end = el('forgeEnd');
+    if (!loop || !end) return;
+    if (on && !loop.paused && !end.classList.contains('is-on')) return;   // already looping
+    if (forgeDone) forgeDone();
+    end.pause();
+    end.currentTime = 0;
+    end.classList.remove('is-on');
+    loop.classList.remove('is-off');
+    loop.loop = true;
+    loop.currentTime = 0;
+    if (on && !reducedMotion) {
+      const p = loop.play();
+      if (p && p.catch) p.catch(() => {});   // autoplay refused: first frame stays up
+    } else {
+      loop.pause();
+    }
+  }
+
+  /* Lets the current pass of the loop finish, plays the ending, holds its
+     last frame for a beat, then resolves. Resolves at once if the loop isn't
+     actually playing, and never waits longer than both clips should take. */
+  function finishForge() {
+    const loop = root && el('forge');
+    const end = root && el('forgeEnd');
+    if (!loop || !end || reducedMotion || loop.paused) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const clipMs = (v, fallback) => (isFinite(v.duration) ? v.duration : fallback) * 1000;
+      const timer = setTimeout(() => done(), clipMs(loop, 5) + clipMs(end, 4) + 2000);
+
+      function done() {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        loop.removeEventListener('ended', onLoopEnd);
+        end.removeEventListener('ended', onEndEnd);
+        if (forgeDone === done) forgeDone = null;
+        resolve();
+      }
+      function onLoopEnd() {
+        end.currentTime = 0;
+        end.classList.add('is-on');
+        loop.classList.add('is-off');
+        const p = end.play();
+        if (p && p.catch) p.catch(done);
+      }
+      function onEndEnd() { setTimeout(done, 600); }
+
+      forgeDone = done;
+      loop.addEventListener('ended', onLoopEnd);
+      end.addEventListener('ended', onEndEnd);
+      loop.loop = false;   // finish this pass, then fire 'ended'
+    });
+  }
+
+  // Progress sits under the forging panda while a run works, and under the
+  // Generate button once it's done.
+  function paintStatus() {
+    if (!mounted) return;
+    el('forge-status').textContent = state.running ? state.status : '';
+    el('status').textContent = state.running ? '' : state.status;
+  }
+
   function paintRun() {
     if (!mounted) return;
     const run = state.run;
+    const view = viewFor();
+    setView(view);
     DISPLAY_BOXES.forEach((box) => {
       const b = q(`[data-box="${box.key}"]`);
       if (!b) return;
@@ -1007,7 +1133,7 @@
       }
       paintCollapse(box.key);
     });
-    el('status').textContent = state.status;
+    paintStatus();
     const err = el('error');
     err.textContent = state.error || state.note;
     err.hidden = !(state.error || state.note);
@@ -1019,12 +1145,119 @@
   function paintPdfButtons() {
     if (!mounted) return;
     const complete = !!(state.run && state.run.complete);
+    const shown = viewFor() === 'results';
     const top = el('pdf-top');
-    top.hidden = !state.run;
+    top.hidden = !shown;
+    el('pdf-row').hidden = !shown;
     [el('pdf'), top].forEach((btn) => {
       btn.disabled = !complete;
       btn.title = complete ? '' : 'Generate positioning first';
     });
+  }
+
+  /* ---------- drafting the assumptions for a run ----------
+     Drafts every question that has no saved answer for the current Company /
+     Champion / Competitor, using the saved-materials context the run already
+     built. The two core company questions go first so the rest can draw on
+     them. Text someone typed but didn't save is kept and saved instead of
+     drafted over. A question that fails keeps its row error and is left for
+     the user; the run only stops if the product summary or live features
+     couldn't be drafted. */
+
+  const DRAFT_LIMIT = 3;   // Draft Answer requests in flight at once
+
+  async function draftAssumptions(st, s, context, live, setStatus) {
+    if (!st.answers) st.answers = await dataOf(st).getPositioningAnswers();
+    if (!live()) return;
+
+    const changes = {};
+    const todo = [];
+    QUESTIONS.forEach((qn) => {
+      const key = keyFor(qn, s);
+      if (!key || st.answers[key] || st.drafting.has(key)) return;
+      const typed = String(st.drafts[key] ?? '').trim();
+      if (typed) changes[key] = typed;
+      else todo.push(qn);
+    });
+
+    let done = 0;
+    const total = todo.length;
+    const tick = () => setStatus(`Drafting assumptions — ${done} of ${total} done…`);
+
+    const draftOne = async (qn) => {
+      const key = keyFor(qn, s);
+      st.drafting.add(key);
+      st.progress[key] = 'Drafting an answer…';
+      delete st.rowErrors[key];
+      if (onScreen(st)) renderRow(qn);
+      try {
+        const payload = await apiJson('/api/draft-answer', {
+          questionId: qn.id,
+          companyUrl: s.companyUrl,
+          champion: s.champion,
+          competitorUrl: s.competitorUrl,
+          industry: s.industry,
+          today: new Date().toISOString().slice(0, 10),
+          answers: { ...answersFor(s, st), ...draftedSoFar() },
+          context: context.context
+        }, { signal: st.controller.signal });
+        if (!live()) return;
+        const sources = (payload.sources || []).filter(Boolean);
+        changes[key] = `${payload.answer}${sources.length ? `\n\nSources: ${sources.join('; ')}` : ''}`;
+      } catch (err) {
+        if (!live()) return;
+        console.error('[Build Positioning] assumption draft failed', qn.id, err);
+        st.rowErrors[key] = err && err.message && !/fetch/i.test(err.message)
+          ? err.message : 'Couldn’t draft this assumption. Draft it again or type your own.';
+      } finally {
+        if (live()) {
+          st.drafting.delete(key);
+          delete st.progress[key];
+          done += 1;
+          tick();
+          if (onScreen(st)) renderRow(qn);
+        }
+      }
+    };
+
+    // Answers drafted earlier in this run, by question id, for later drafts.
+    function draftedSoFar() {
+      const out = {};
+      QUESTIONS.forEach((x) => {
+        const k = keyFor(x, s);
+        if (k && changes[k]) out[x.id] = changes[k];
+      });
+      return out;
+    }
+
+    if (total) {
+      tick();
+      const first = todo.filter((x) => REQUIRED_IDS.includes(x.id));
+      const rest = todo.filter((x) => !REQUIRED_IDS.includes(x.id));
+      await pool(first, DRAFT_LIMIT, draftOne);
+      if (!live()) return;
+      await pool(rest, DRAFT_LIMIT, draftOne);
+      if (!live()) return;
+    }
+
+    const keys = Object.keys(changes);
+    if (keys.length) {
+      setStatus('Saving your assumptions…');
+      keys.forEach((k) => { delete st.drafts[k]; });
+      st.answers = await dataOf(st).savePositioningAnswers(changes);
+      if (!live()) return;
+      pc.hold(st);
+    }
+
+    // From here on the Assumptions card is part of the page (minimized).
+    st.qaShown = true;
+    if (onScreen(st)) { paintQaCollapse(); renderQa(); }
+
+    const saved = answersFor(s, st);
+    const missing = REQUIRED_IDS.filter((id) => !saved[id]);
+    if (missing.length) {
+      throw new Error('Couldn’t draft the core assumptions about your product. Open Assumptions below the inputs, answer or redraft the ones marked, then generate again.');
+    }
   }
 
   async function handleGenerate() {
@@ -1045,7 +1278,7 @@
     st.innerOpen = new Set();
     st.run = {
       input: { ...s, companyName: '', competitorName: '' },
-      answers: answersFor(s),
+      answers: {},
       stages: {},
       complete: false,
       contextNote: ''
@@ -1055,7 +1288,7 @@
     paintRun();
     updateGenerate();
 
-    const setStatus = (t) => { if (!live()) return; st.status = t; if (onScreen(st)) el('status').textContent = t; };
+    const setStatus = (t) => { if (!live()) return; st.status = t; if (onScreen(st)) paintStatus(); };
 
     try {
       const context = await buildContext(s, st, setStatus);
@@ -1063,6 +1296,13 @@
       run.contextNote = contextSummary(context, s);
       st.contextNote = run.contextNote;
       if (onScreen(st)) paintResources();
+
+      // Every assumption without a saved answer is drafted now, the same way
+      // its Draft Answer button would, and saved, so the run has them all.
+      await draftAssumptions(st, s, context, live, setStatus);
+      if (!live()) return;
+      run.answers = answersFor(s, st);
+      setStatus('Building your positioning…');
 
       const res = await api('/api/positioning', {
         companyUrl: s.companyUrl,
@@ -1105,6 +1345,14 @@
 
       if (!run.complete) throw new Error('The connection closed before the run finished. Please try again.');
       st.status = 'Positioning drafted. Review it, then create the PDF to use it in the next module.';
+
+      // The panda finishes his pass and puts the hammer down before the
+      // results replace him.
+      if (onScreen(st)) {
+        el('forge-status').textContent = 'Positioning drafted.';
+        await finishForge();
+        if (!live()) return;
+      }
     } catch (err) {
       if (!live()) return;
       console.error('[Build Positioning] run failed', err);
@@ -1115,7 +1363,7 @@
       if (pc.end(st, runId)) {             // false: cancelled by a company switch
         st.running = false;
         syncActivity(!!st.error, st);
-        if (onScreen(st)) { paintRun(); updateGenerate(); }
+        if (onScreen(st)) { paintRun(); paintQaCollapse(); renderQa(); updateGenerate(); }
       }
     }
   }
@@ -1143,8 +1391,6 @@
   }
 
   /* ---------- result renderers ---------- */
-
-  const PRIORITY_SOURCE = { imported: 'From your imported files', saved_resource: 'From a saved report', research: 'Researched' };
 
   const SOURCE_LABELS = {
     imported: 'Your imported file',
@@ -1260,31 +1506,6 @@
         ? `<p class="bpos__label">What to Validate With Real Buyers</p>${list(d.next_questions)}` : '';
       if (!summary && !validate) return '<p class="bpos__empty">No positioning statement returned.</p>';
       return summary + validate;
-    },
-
-    audit(d) {
-      const cp = d.company_profile || {};
-      const xp = d.competitor_profile || {};
-      return `
-        <div class="bpos__sub">
-          <h3>${esc(d.company_name || 'Your company')}</h3>
-          ${kv('What it is', cp.what_it_is)}${kv('Who it serves', cp.who_it_serves)}
-        </div>
-        <div class="bpos__sub">
-          <h3>${esc(d.competitor_name || 'Closest competitor')}</h3>
-          ${kv('What it is', xp.what_it_is)}${kv('Who it serves', xp.who_it_serves)}
-        </div>
-        <div class="bpos__sub">
-          <h3>Champion priorities ${chip(PRIORITY_SOURCE[d.title_priorities_source] || 'Researched', d.title_priorities_source === 'research' ? 'warn' : 'good')}</h3>
-          ${(d.title_priorities || []).length ? `<ol class="bpos__list">${d.title_priorities.map((p) => `<li>${esc(p)}</li>`).join('')}</ol>` : '<p class="bpos__empty">None found.</p>'}
-        </div>
-        <div class="bpos__sub">
-          <h3>Input gaps ${chip(`Overall confidence: ${d.overall_confidence}`, d.overall_confidence === 'high' ? 'good' : d.overall_confidence === 'low' ? 'bad' : 'warn')}</h3>
-          ${(d.input_gaps || []).length ? `<ul class="bpos__list">${d.input_gaps.map((g) =>
-            `<li>${esc(g.input)}${g.impact ? ` <span class="bpos__muted">— ${esc(g.impact)}</span>` : ''} ${chip(g.confidence, g.confidence === 'high' ? 'good' : g.confidence === 'low' ? 'bad' : 'warn')}</li>`).join('')}</ul>`
-            : '<p class="bpos__empty">No major gaps.</p>'}
-          ${d.confidence_note ? `<p class="bpos__muted">${esc(d.confidence_note)}</p>` : ''}
-        </div>`;
     },
 
     alternatives(d) {
@@ -1531,7 +1752,9 @@
     label:  MODULE_NAME,
     icon:   'crane',
     companyAware: true,
-    styles: 'modules/build-positioning/build-positioning.css',
+    // The ?v= changes whenever this stylesheet does, so a browser holding the
+    // old copy fetches the new one instead of pairing new markup with old styles.
+    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-26a',
 
     mount(container) {
       mounted = true;
@@ -1574,6 +1797,8 @@
 
     unmount() {
       pc.hold(state);
+      if (root) { el('forge').pause(); el('forgeEnd').pause(); }
+      if (forgeDone) forgeDone();       // a waiting finish shows results on the way back
       mounted = false;
       clearTimeout(scopeTimer);
       if (unsubFiles) { unsubFiles(); unsubFiles = null; }

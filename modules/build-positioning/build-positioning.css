@@ -381,6 +381,98 @@
 .bpos__hint, .bpos__status { margin: 0; font-size: 15px; color: var(--ink-soft); }
 .bpos__hint:empty, .bpos__status:empty { display: none; }
 
+/* --- results panel ---
+   Until a run has results, one box stands in for the result boxes (same
+   pattern and clips as Find My Customer). Before a run it shows the panda
+   and intro copy; while a run works (.is-running) the forging panda. */
+
+.bpos__idle { display: none; }
+
+.bpos__grid.is-idle > .bpos__box { display: none; }
+
+.bpos__grid.is-idle > .bpos__idle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 452px;
+  padding: 32px 40px;
+  background: var(--bpos-surface);
+  border: 1px solid var(--bpos-line);
+  border-radius: var(--bpos-radius);
+  box-shadow: var(--bpos-shadow);
+}
+
+.bpos__intro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  max-width: 900px;
+}
+
+/* The image has a white background; multiply drops it into the box. */
+.bpos__intro-img {
+  flex: none;
+  width: 300px;
+  height: auto;
+  mix-blend-mode: multiply;
+}
+
+.bpos__intro-copy { flex: 0 1 480px; min-width: 0; }
+
+.bpos__intro-title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.bpos__intro-text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.bpos__idle-loading { display: none; }
+
+.bpos__grid.is-running .bpos__intro { display: none; }
+.bpos__grid.is-running .bpos__idle-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* The loop and its ending share one spot; only one is visible at a time. */
+.bpos__forge-stage { display: grid; }
+
+.bpos__forge {
+  grid-area: 1 / 1;
+  display: block;
+  height: 310px;
+  width: auto;
+  max-width: 100%;
+  mix-blend-mode: multiply;
+}
+
+.bpos__forge.is-off,
+.bpos__forge--end { opacity: 0; }
+
+.bpos__forge--end.is-on { opacity: 1; }
+
+.bpos__forge-status {
+  margin: 0;
+  min-height: 1.5em;
+  font-size: 15px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.bpos__card[hidden],
+.bpos__pdf-row[hidden] { display: none; }
+
 /* --- result boxes --- */
 
 /* One full-width column: the same width as the "Fill in the blanks" card. */
@@ -679,6 +771,9 @@
 @media (max-width: 900px) {
   .bpos { padding: 28px 18px 56px; }
   .bpos__themes { grid-template-columns: 1fr; }
+  .bpos__intro { flex-direction: column; text-align: center; gap: 20px; }
+  .bpos__intro-img { width: 220px; }
+  .bpos__grid.is-idle > .bpos__idle { padding: 28px 20px; }
   .bpos__qa, .bpos__qa tbody, .bpos__qa tr, .bpos__qa th, .bpos__qa td { display: block; width: 100%; }
   .bpos__qa thead, .bpos__qa colgroup { display: none; }
   .bpos__row > th, .bpos__row > td { border-bottom: none; padding: 6px 0; }
