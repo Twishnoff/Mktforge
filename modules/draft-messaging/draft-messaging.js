@@ -8,16 +8,19 @@
         left  — "Select your positioning document": every PDF the Build
                 Positioning module has saved to the account, newest first. With
                 none saved, a button goes to that module instead.
-        right — "Provide additional research (optional)": the same drag-and-drop
-                import as My Company (anything dropped here is imported to the
-                account too), plus a drop-down of files already in My Company.
-                Chosen files sit in a table; the × takes one back out and it
-                returns to the drop-down.
+        right — "Provide additional research (optional)": a drop-down of the
+                company's Imported Materials. Files are only added through My
+                Company. Chosen files sit in a table; the × takes one back out
+                and it returns to the drop-down.
      2. Draft Messaging: disabled until a positioning document is chosen.
         Streams the run and fills the two boxes when it finishes.
-     3. Messaging Hierarchy (stage 7) and Drafted Homepage Copy (stage 8),
-        each minimizing to its title line like Build Positioning's boxes.
+     3. Results: until a run finishes, one panel stands in for the result
+        boxes — the panda and intro copy, then the forging panda while a run
+        works (same clips as Find My Customer). Then Messaging Hierarchy
+        (stage 7) and Drafted Homepage Copy (stage 8), each minimizing to its
+        title line like Build Positioning's boxes.
      4. Create Messaging PDF: downloads it and saves a copy to My Company.
+        Hidden until there are results.
 
    What the agent gets
      The positioning document is the spine of the run — it carries the champion,
@@ -110,7 +113,6 @@
     filesError: '',
     positioningId: '',       // the chosen positioning document
     picked: [],              // ids of the extra files chosen for this run
-    uploads: [],             // the import queue
     menu: '',                // which drop-down is open: 'doc' | 'files' | ''
     run: null,
     running: false,
@@ -119,7 +121,6 @@
     collapsed: new Set(),    // boxes minimized (both start open)
     innerOpen: new Set(),    // nested boxes the user opened this run
     note: '',
-    pumping: false,
     activity: { busy: false, failed: false }
     }),
     held: ['positioningId', 'picked'],
@@ -160,19 +161,8 @@
       <section class="dmsg__card" aria-labelledby="dmsg-research-title">
         <h2 class="dmsg__h2" id="dmsg-research-title">Provide additional research <span class="dmsg__optional">(optional)</span></h2>
         <p class="dmsg__card-dek">Call notes, customer interviews, sales decks, competitor teardowns — anything
-          you want the agent to write from. Files added here are imported to My Company too.</p>
+          you want the agent to refer to for guidance.</p>
 
-        <div class="dmsg__import" data-el="import-zone">
-          <input type="file" multiple hidden data-el="import-input" accept="${window.MktforgeExtract ? window.MktforgeExtract.ACCEPT : ''}">
-          <div class="dmsg__drop" data-el="drop">
-            <p class="dmsg__drop-main"><strong>Drag and drop files here</strong> or
-              <button type="button" class="dmsg__link" data-el="import-link">browse your computer</button></p>
-            <p class="dmsg__drop-sub">PDF, Word, PowerPoint, Excel, CSV, text, Markdown, JSON or HTML · up to 15 MB each</p>
-          </div>
-          <ul class="dmsg__uploads" data-el="uploads" aria-live="polite"></ul>
-        </div>
-
-        <p class="dmsg__pick-label" id="dmsg-files-label">You can also choose files already uploaded to Mktforge</p>
         <div class="dmsg__select" data-el="files-select"></div>
         <div data-el="picked"></div>
       </section>
@@ -188,7 +178,34 @@
       <p class="dmsg__error" data-el="error" role="alert" hidden></p>
     </section>
 
-    <section class="dmsg__grid" data-el="results" aria-label="Drafted messaging">
+    <section class="dmsg__grid is-idle" data-el="results" aria-label="Drafted messaging">
+      <div class="dmsg__idle">
+        <div class="dmsg__intro">
+          <img class="dmsg__intro-img" src="modules/draft-messaging/draft-messaging-panda.png"
+            alt="" width="640" height="504">
+          <div class="dmsg__intro-copy">
+            <p class="dmsg__intro-title">Let's draft your messaging!</p>
+            <p class="dmsg__intro-text">We'll use your materials created from the Build Positioning
+              module and any other relevant documents you choose to transform your positioning into
+              marketing messaging you can refine and use on your website and other materials.</p>
+          </div>
+        </div>
+        <div class="dmsg__idle-loading">
+          <div class="dmsg__forge-stage" aria-hidden="true">
+            <video class="dmsg__forge" data-el="forge" muted loop playsinline preload="auto"
+              width="660" height="540" aria-hidden="true">
+              <source src="modules/find-my-customer/find-customer-forge.webm" type="video/webm">
+              <source src="modules/find-my-customer/find-customer-forge.mp4" type="video/mp4">
+            </video>
+            <video class="dmsg__forge dmsg__forge--end" data-el="forgeEnd" muted playsinline preload="auto"
+              width="660" height="540" aria-hidden="true">
+              <source src="modules/find-my-customer/find-customer-forge-end.webm" type="video/webm">
+              <source src="modules/find-my-customer/find-customer-forge-end.mp4" type="video/mp4">
+            </video>
+          </div>
+          <p class="dmsg__forge-status" data-el="forge-status" aria-live="polite"></p>
+        </div>
+      </div>
       ${BOXES.map((b) => `
         <article class="dmsg__box" data-box-wrap="${b.key}">
           <h2>
@@ -204,7 +221,7 @@
         </article>`).join('')}
     </section>
 
-    <div class="dmsg__pdf-row">
+    <div class="dmsg__pdf-row" data-el="pdf-row" hidden>
       <button type="button" class="dmsg__btn" data-el="pdf" disabled title="Draft messaging first">Create Messaging PDF</button>
       <p class="dmsg__status" data-el="pdf-status" aria-live="polite"></p>
     </div>
@@ -252,7 +269,7 @@
         <span class="dmsg__select-caret" aria-hidden="true"></span>
       </button>
       <ul class="dmsg__options" id="dmsg-${name}-list" role="listbox" ${open ? '' : 'hidden'}
-        aria-label="${name === 'doc' ? 'Positioning documents' : 'Files already uploaded to Mktforge'}">
+        aria-label="${name === 'doc' ? 'Positioning documents' : 'Your imported files'}">
         ${options.length ? opts : `<li class="dmsg__option is-empty" role="presentation">${esc(empty)}</li>`}
       </ul>`;
   }
@@ -300,7 +317,7 @@
       label: 'Select files',
       open: state.menu === 'files',
       options: available.map((f) => ({ id: f.id, name: fullName(f), meta: `${kindLabel(f)} · ${formatDate(f.createdAt)}` })),
-      empty: importedFiles().length ? 'Every imported file is already added.' : 'No imported files yet.'
+      empty: importedFiles().length ? 'Every imported file is already added.' : 'No imported files yet. Add them in My Company.'
     });
   }
 
@@ -377,120 +394,6 @@
     state.picked = state.picked.filter((id) => id !== x.dataset.remove);
     renderPicked();
     renderFilesSelect();
-  }
-
-  /* ---------- importing ----------
-     The same pipeline My Company uses, so a file dropped here lands in the
-     account's Imported Materials as well. A file that imports cleanly is
-     added to this run straight away. */
-
-  let uploadSeq = 0;
-
-  function renderUploads() {
-    if (!mounted) return;
-    const ul = el('uploads');
-    const words = { queued: 'Waiting…', reading: 'Reading…', saving: 'Saving…', done: 'Imported' };
-    ul.innerHTML = state.uploads.map((u) => `
-      <li class="dmsg__upload is-${u.status}">
-        <span class="dmsg__upload-name">${esc(u.name)}</span>
-        <span class="dmsg__upload-status">${esc(u.status === 'error' ? u.message : (u.note || words[u.status]))}</span>
-        ${u.status === 'error' ? `<button type="button" class="dmsg__upload-x" data-dismiss="${u.id}" aria-label="Dismiss">×</button>` : ''}
-      </li>`).join('');
-    ul.hidden = !state.uploads.length;
-  }
-
-  function addUploads(fileList) {
-    const X = window.MktforgeExtract;
-    Array.from(fileList || []).forEach((file) => {
-      const u = { id: ++uploadSeq, name: file.name, file, status: 'queued', message: '' };
-      if (X && !X.supported(file.name, file.type)) {
-        Object.assign(u, { status: 'error', message: X.unsupportedReason(file.name) });
-      } else if (file.size > Data().MAX_FILE_BYTES) {
-        Object.assign(u, { status: 'error', message: `Larger than ${Data().MAX_FILE_BYTES / (1024 * 1024)} MB.` });
-      } else if (!file.size) {
-        Object.assign(u, { status: 'error', message: 'This file is empty.' });
-      }
-      state.uploads.push(u);
-    });
-    renderUploads();
-    pump(state);
-  }
-
-  /* Imports finish into the company they were dropped into, even if the
-     person switches part-way. */
-  async function pump(st) {
-    if (st.pumping) return;
-    st.pumping = true;
-    const D = dataOf(st);
-    const paint = () => { if (onScreen(st)) renderUploads(); };
-    try {
-      for (;;) {
-        const u = st.uploads.find((x) => x.status === 'queued');
-        if (!u) break;
-        try {
-          const res = await D.importFile(u.file, {
-            onStage: (stage) => { u.status = stage; paint(); }
-          });
-          u.status = 'done';
-          u.note = res.empty ? 'Imported — no readable text found'
-            : res.truncated ? 'Imported — only the first part could be read' : 'Imported — added below';
-          if (res.name !== u.name.replace(/\.[^.]+$/, '')) u.note += ` as “${res.name}${res.ext}”`;
-          if (!st.picked.includes(res.id)) st.picked.push(res.id);
-          pc.hold(st);
-          const id = u.id;
-          setTimeout(() => {
-            st.uploads = st.uploads.filter((x) => x.id !== id);
-            paint();
-          }, 5000);
-        } catch (err) {
-          console.error('[Draft Messaging] import failed', err);
-          u.status = 'error';
-          u.message = err && err.code ? err.message : 'Couldn’t import this file. Check your connection and try again.';
-        }
-        u.file = null;
-        paint();
-      }
-    } finally {
-      st.pumping = false;
-    }
-  }
-
-  function wireImport() {
-    const zone = el('import-zone');
-    const input = el('import-input');
-    el('import-link').addEventListener('click', () => input.click());
-    input.addEventListener('change', () => { addUploads(input.files); input.value = ''; });
-
-    let depth = 0;
-    const hasFiles = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).includes('Files');
-    zone.addEventListener('dragenter', (e) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      depth += 1;
-      zone.classList.add('is-dragging');
-    });
-    zone.addEventListener('dragover', (e) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-    });
-    zone.addEventListener('dragleave', () => {
-      depth = Math.max(0, depth - 1);
-      if (!depth) zone.classList.remove('is-dragging');
-    });
-    zone.addEventListener('drop', (e) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      depth = 0;
-      zone.classList.remove('is-dragging');
-      addUploads(e.dataTransfer.files);
-    });
-    el('uploads').addEventListener('click', (e) => {
-      const x = e.target.closest('[data-dismiss]');
-      if (!x) return;
-      state.uploads = state.uploads.filter((u) => String(u.id) !== x.dataset.dismiss);
-      renderUploads();
-    });
   }
 
   /* ---------- nav light ---------- */
@@ -637,9 +540,101 @@
     });
   }
 
+  /* ---------- results panel ----------
+     Until a run has something to show, one panel stands in for the result
+     boxes (same as Find My Customer and Build Positioning):
+       'intro'   — before a run, or after one that failed with nothing to show
+       'loading' — while a run works
+       'results' — the result boxes */
+
+  function viewFor(st = state) {
+    if (st.running) return 'loading';
+    const run = st.run;
+    return run && Object.keys(run.stages || {}).length ? 'results' : 'intro';
+  }
+
+  function setView(view) {
+    const grid = el('results');
+    grid.classList.toggle('is-idle', view !== 'results');
+    grid.classList.toggle('is-running', view === 'loading');
+    playForge(view === 'loading');
+  }
+
+  /* The forging panda: `forge` loops while a run works; `forgeEnd` (the last
+     strike, then the hammer goes down) plays once before results show.
+     Nothing plays for anyone who has asked for reduced motion. */
+  const reducedMotion = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let forgeDone = null;   // settles a finishForge() still waiting, if any
+
+  function playForge(on) {
+    const loop = el('forge');
+    const end = el('forgeEnd');
+    if (!loop || !end) return;
+    if (on && !loop.paused && !end.classList.contains('is-on')) return;   // already looping
+    if (forgeDone) forgeDone();
+    end.pause();
+    end.currentTime = 0;
+    end.classList.remove('is-on');
+    loop.classList.remove('is-off');
+    loop.loop = true;
+    loop.currentTime = 0;
+    if (on && !reducedMotion) {
+      const p = loop.play();
+      if (p && p.catch) p.catch(() => {});   // autoplay refused: first frame stays up
+    } else {
+      loop.pause();
+    }
+  }
+
+  function finishForge() {
+    const loop = root && el('forge');
+    const end = root && el('forgeEnd');
+    if (!loop || !end || reducedMotion || loop.paused) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const clipMs = (v, fallback) => (isFinite(v.duration) ? v.duration : fallback) * 1000;
+      const timer = setTimeout(() => done(), clipMs(loop, 5) + clipMs(end, 4) + 2000);
+
+      function done() {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        loop.removeEventListener('ended', onLoopEnd);
+        end.removeEventListener('ended', onEndEnd);
+        if (forgeDone === done) forgeDone = null;
+        resolve();
+      }
+      function onLoopEnd() {
+        end.currentTime = 0;
+        end.classList.add('is-on');
+        loop.classList.add('is-off');
+        const p = end.play();
+        if (p && p.catch) p.catch(done);
+      }
+      function onEndEnd() { setTimeout(done, 600); }
+
+      forgeDone = done;
+      loop.addEventListener('ended', onLoopEnd);
+      end.addEventListener('ended', onEndEnd);
+      loop.loop = false;   // finish this pass, then fire 'ended'
+    });
+  }
+
+  // Progress sits under the forging panda while a run works, and under the
+  // Draft Messaging button once it's done.
+  function paintStatus() {
+    if (!mounted) return;
+    el('forge-status').textContent = state.running ? state.status : '';
+    el('status').textContent = state.running ? '' : state.status;
+  }
+
   function paintRun() {
     if (!mounted) return;
     const run = state.run;
+    setView(viewFor());
     BOXES.forEach((b) => {
       const box = q(`[data-box="${b.key}"]`);
       if (!box) return;
@@ -656,7 +651,7 @@
       }
       paintCollapse(b.key);
     });
-    el('status').textContent = state.status;
+    paintStatus();
     const err = el('error');
     err.textContent = state.error || state.note;
     err.hidden = !(state.error || state.note);
@@ -666,8 +661,10 @@
   function paintPdfButtons() {
     if (!mounted) return;
     const complete = !!(state.run && state.run.complete);
+    const shown = viewFor() === 'results';
     const top = el('pdf-top');
-    top.hidden = !state.run;
+    top.hidden = !shown;
+    el('pdf-row').hidden = !shown;
     [el('pdf'), top].forEach((btn) => {
       btn.disabled = !complete;
       btn.title = complete ? '' : 'Draft messaging first';
@@ -693,7 +690,7 @@
     paintRun();
     updateGenerate();
 
-    const setStatus = (t) => { if (!live()) return; st.status = t; if (onScreen(st)) el('status').textContent = t; };
+    const setStatus = (t) => { if (!live()) return; st.status = t; if (onScreen(st)) paintStatus(); };
 
     try {
       const pickedNames = st.picked.map((id) => (st.files || []).find((f) => f.id === id)).filter(Boolean).map(fullName);
@@ -756,6 +753,14 @@
         : run.checked === false
           ? 'Messaging drafted, but the quality check didn’t finish, so it hasn’t been checked. Read it closely, or run again for a checked version.'
           : 'Messaging drafted. The quality check still had notes after three passes — read it closely before you use it.';
+
+      // The panda finishes his pass and puts the hammer down before the
+      // results replace him.
+      if (onScreen(st)) {
+        el('forge-status').textContent = 'Messaging drafted.';
+        await finishForge();
+        if (!live()) return;
+      }
     } catch (err) {
       if (!live()) return;
       console.error('[Draft Messaging] run failed', err);
@@ -1016,7 +1021,9 @@
     label:  MODULE_NAME,
     icon:   'doc',
     companyAware: true,
-    styles: 'modules/draft-messaging/draft-messaging.css',
+    // The ?v= changes whenever this stylesheet does, so a browser holding the
+    // old copy fetches the new one instead of pairing new markup with old styles.
+    styles: 'modules/draft-messaging/draft-messaging.css?v=2026-09-26b',
 
     mount(container) {
       mounted = true;
@@ -1024,7 +1031,6 @@
       container.innerHTML = MARKUP;
       root = container.firstElementChild;
 
-      wireImport();
       el('doc-select').addEventListener('click', handleSelectClick);
       el('files-select').addEventListener('click', handleSelectClick);
       el('picked').addEventListener('click', handlePickedClick);
@@ -1037,7 +1043,6 @@
       // Chosen documents are held per company (survive a refresh).
       root.addEventListener('click', () => setTimeout(() => pc.hold(state), 0));
 
-      renderUploads();
       renderDocSelect();
       renderFilesSelect();
       renderPicked();
@@ -1049,6 +1054,8 @@
 
     unmount() {
       pc.hold(state);
+      if (root) { el('forge').pause(); el('forgeEnd').pause(); }
+      if (forgeDone) forgeDone();       // a waiting finish shows results on the way back
       mounted = false;
       state.menu = '';
       document.removeEventListener('click', onDocumentClick, true);

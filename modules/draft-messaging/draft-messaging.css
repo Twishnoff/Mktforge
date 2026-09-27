@@ -87,63 +87,6 @@
 
 .dmsg__fine { font-size: 14px; }
 
-/* --- import --- */
-
-.dmsg__drop {
-  padding: 18px;
-  border: 1px dashed var(--dmsg-line);
-  border-radius: var(--dmsg-radius);
-  background: var(--paper);
-  text-align: center;
-}
-
-.dmsg__import.is-dragging .dmsg__drop {
-  border-color: var(--accent);
-  background: var(--accent-tint);
-}
-
-.dmsg__drop-main { margin: 0 0 4px; font-size: 15px; }
-.dmsg__drop-sub { margin: 0; font-size: 13.5px; color: var(--muted); }
-
-.dmsg__uploads { list-style: none; margin: 10px 0 0; padding: 0; }
-.dmsg__uploads[hidden] { display: none; }
-
-.dmsg__upload {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid var(--dmsg-line);
-  border-radius: 6px;
-  background: var(--paper);
-  font-size: 14px;
-}
-
-.dmsg__upload + .dmsg__upload { margin-top: 6px; }
-.dmsg__upload-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.dmsg__upload-status { margin-left: auto; color: var(--muted); text-align: right; }
-.dmsg__upload.is-done { border-color: #BDD2C8; background: var(--accent-tint); }
-.dmsg__upload.is-done .dmsg__upload-status { color: var(--accent); }
-.dmsg__upload.is-error { border-color: #E5BDB3; background: var(--dmsg-crit-soft); }
-.dmsg__upload.is-error .dmsg__upload-status { color: var(--dmsg-crit); }
-
-.dmsg__upload-x {
-  flex: none;
-  padding: 0 4px;
-  border: none;
-  background: none;
-  color: var(--dmsg-crit);
-  font-size: 17px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.dmsg__pick-label {
-  margin: 18px 0 8px;
-  font-size: 14.5px;
-  font-weight: 600;
-}
-
 /* --- drop-downs ---
    A listbox, not a <select>: each row carries a second line (the created
    date, or the file type) under the name. */
@@ -357,6 +300,97 @@
   grid-template-columns: 1fr;
   gap: 18px;
 }
+
+/* --- results panel ---
+   Until a run has results, one box stands in for the result boxes (same
+   pattern and clips as Find My Customer). Before a run it shows the panda
+   and intro copy; while a run works (.is-running) the forging panda. */
+
+.dmsg__idle { display: none; }
+
+.dmsg__grid.is-idle > .dmsg__box { display: none; }
+
+.dmsg__grid.is-idle > .dmsg__idle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 452px;
+  padding: 32px 40px;
+  background: var(--dmsg-surface);
+  border: 1px solid var(--dmsg-line);
+  border-radius: var(--dmsg-radius);
+  box-shadow: var(--dmsg-shadow);
+}
+
+.dmsg__intro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  max-width: 900px;
+}
+
+/* The image has a white background; multiply drops it into the box. */
+.dmsg__intro-img {
+  flex: none;
+  width: 300px;
+  height: auto;
+  mix-blend-mode: multiply;
+}
+
+.dmsg__intro-copy { flex: 0 1 480px; min-width: 0; }
+
+.dmsg__intro-title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.dmsg__intro-text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.dmsg__idle-loading { display: none; }
+
+.dmsg__grid.is-running .dmsg__intro { display: none; }
+.dmsg__grid.is-running .dmsg__idle-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* The loop and its ending share one spot; only one is visible at a time. */
+.dmsg__forge-stage { display: grid; }
+
+.dmsg__forge {
+  grid-area: 1 / 1;
+  display: block;
+  height: 310px;
+  width: auto;
+  max-width: 100%;
+  mix-blend-mode: multiply;
+}
+
+.dmsg__forge.is-off,
+.dmsg__forge--end { opacity: 0; }
+
+.dmsg__forge--end.is-on { opacity: 1; }
+
+.dmsg__forge-status {
+  margin: 0;
+  min-height: 1.5em;
+  font-size: 15px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.dmsg__pdf-row[hidden] { display: none; }
 
 .dmsg__box {
   display: flex;
@@ -646,4 +680,7 @@
 @media (max-width: 900px) {
   .dmsg { padding: 28px 18px 56px; }
   .dmsg__pillars { grid-template-columns: 1fr; }
+  .dmsg__intro { flex-direction: column; text-align: center; gap: 20px; }
+  .dmsg__intro-img { width: 220px; }
+  .dmsg__grid.is-idle > .dmsg__idle { padding: 28px 20px; }
 }
