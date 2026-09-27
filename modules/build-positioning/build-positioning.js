@@ -4,10 +4,12 @@
    differentiators → value ladder → champion → market category).
 
    Page, top to bottom:
-     1. Run inputs: Company URL, Primary Champion, Closest Competitor,
-        Target Industry (optional). Drop-downs come from My Company; anything
-        can be typed. A typed industry is matched to the shared industry list.
-        The first three are all a run needs.
+     1. Run inputs: Primary Champion, Closest Competitor, Target Industry
+        (optional), with Generate Positioning on the same row. Drop-downs come
+        from My Company; anything can be typed. A typed industry is matched to
+        the shared industry list. There's no Company URL field: the URL saved
+        in My Company is used, and until it has one a note says so and
+        Generate / Draft Answer stay off.
      2. "Assumptions": hidden until the first run has drafted them, then shown
         minimized. One row per question — question on the left, text box,
         then its buttons. Draft Answer / Edit / Save behave like My Company
@@ -15,7 +17,7 @@
           company questions     once for the account
           competitor questions  once per Closest Competitor
           champion questions    once per Primary Champion
-     3. Generate Positioning: first drafts every assumption that has no saved
+     3. Generate Positioning (in the inputs box): first drafts every assumption that has no saved
         answer (exactly what Draft Answer does, all at once) and saves them,
         then streams stages 0–5. Typed-but-unsaved text is saved as is rather
         than drafted over.
@@ -169,13 +171,20 @@
     const f = state.form;
     const competitorOk = validUrl(f.competitor);
     return {
-      companyUrl: f.companyUrl.trim(),
+      companyUrl: myCompanyUrl(),
       champion: f.champion.trim(),
       competitorUrl: competitorOk ? Data().util.normalizeUrl(f.competitor) : '',
       competitorHost: competitorOk ? hostOf(f.competitor) : '',
       industry: industryMatch(f.industry).value
     };
   }
+
+  /* Company URL always comes from My Company (profileCache is the active
+     company's profile; null until it has loaded). */
+  function myCompanyUrl() {
+    return String((profileCache && profileCache.companyUrl) || '').trim();
+  }
+  const NO_COMPANY_URL = 'Company URL required. Please add your company’s URL in the My Company module before building positioning.';
 
   function keyFor(q, s = sel()) {
     if (q.scope === 'company') return `company__${q.id}`;
@@ -284,8 +293,7 @@
   const DRAFT_STOPPED = 'Draft stopped when you switched companies. Draft again.';
   const pc = window.MktforgeKit.perCompany(MODULE_ID, {
     create: () => ({
-    form: { companyUrl: '', champion: '', competitor: '', industry: '' },
-    urlSeed: { seeded: false },
+    form: { champion: '', competitor: '', industry: '' },
     answers: null,          // saved answers { key: text }
     answersError: '',
     drafts: {},             // unsaved text per key
@@ -360,11 +368,6 @@
     <section class="bpos__card" aria-label="Run inputs">
       <div class="bpos__fields">
         <div class="bpos__field">
-          <label for="bpos-company">Company URL</label>
-          <input type="text" id="bpos-company" data-el="companyUrl" placeholder="yourcompany.com" inputmode="url" spellcheck="false">
-          <p class="bpos__field-note is-error" data-note="companyUrl" hidden></p>
-        </div>
-        <div class="bpos__field">
           <label for="bpos-champion">Primary Champion</label>
           <input type="text" id="bpos-champion" data-el="champion" placeholder="Job title, e.g. Head of RevOps">
         </div>
@@ -378,7 +381,17 @@
           <input type="text" id="bpos-industry" data-el="industry" placeholder="e.g. Financial Services">
           <p class="bpos__field-note" data-note="industry" hidden></p>
         </div>
+        <div class="bpos__field bpos__field--action">
+          <span class="bpos__label-spacer" aria-hidden="true">&nbsp;</span>
+          <button type="button" class="bpos__btn" data-el="generate" disabled>Generate Positioning</button>
+        </div>
       </div>
+      <!-- Company URL comes from My Company; this says so when it's missing. -->
+      <p class="bpos__error bpos__url-note" data-el="url-note" role="alert" hidden>
+        Company URL required. Please add your company’s URL in the
+        <a href="#/my-company">My Company</a> module before building positioning.
+      </p>
+      <p class="bpos__hint bpos__hint--inputs" data-el="hint" aria-live="polite"></p>
       <p class="bpos__resources" data-el="resources"></p>
     </section>
 
@@ -406,10 +419,8 @@
 
     <section class="bpos__generate" aria-label="Generate positioning">
       <div class="bpos__gen-row">
-        <button type="button" class="bpos__btn bpos__btn--lg" data-el="generate" disabled>Generate Positioning</button>
         <button type="button" class="bpos__btn bpos__btn--lg" data-el="pdf-top" disabled hidden title="Generate positioning first">Create Positioning PDF</button>
       </div>
-      <p class="bpos__hint" data-el="hint" aria-live="polite"></p>
       <p class="bpos__status" data-el="status" aria-live="polite"></p>
       <p class="bpos__error" data-el="error" role="alert" hidden></p>
     </section>
@@ -422,7 +433,7 @@
           <div class="bpos__intro-copy">
             <p class="bpos__intro-title">Let's build your positioning!</p>
             <p class="bpos__intro-text">We'll need to draft positioning before we craft your messaging.
-              Provide your company URL, the primary buyer you want to go after, the competitor you're
+              Using your company URL from My Company, tell us the primary buyer you want to go after, the competitor you're
               most likely to go against, and a specific industry (optional). We'll make some
               assumptions you can update after we've made a first pass at your positioning.</p>
           </div>
@@ -850,7 +861,7 @@
     delete st.rowErrors[key];
 
     if (!validUrl(s.companyUrl)) {
-      st.rowErrors[key] = 'Add a valid Company URL above first.';
+      st.rowErrors[key] = 'Add your company’s URL in the My Company module first.';
       renderRow(qn);
       return;
     }
@@ -922,10 +933,15 @@
     if (!mounted) return;
     const s = sel();
     const missing = missingForRun(s);
+    // The Company URL gets its own note (it's fixed in My Company, not here);
+    // only once the profile has loaded, so it doesn't flash on the way in.
+    const noUrl = !!profileCache && !validUrl(s.companyUrl);
+    el('url-note').hidden = !noUrl;
     el('generate').disabled = state.running || missing.length > 0;
+    const rest = missing.filter((m) => m !== 'Company URL');
     let hint = '';
     if (!state.running) {
-      if (missing.length) hint = `Still needed: ${missing.join(', ')}.`;
+      if (rest.length) hint = `Still needed: ${rest.join(', ')}.`;
       else if (state.answers && qaVisible()) {
         const unsaved = QUESTIONS.some((x) => {
           const { key, mode } = rowState(x, s);
@@ -1260,12 +1276,28 @@
     }
   }
 
+  let checkingUrl = false;
   async function handleGenerate() {
     const st = state;
-    if (st.running) return;
+    if (st.running || checkingUrl) return;
+    // Re-read My Company so the run uses the URL saved there right now.
+    checkingUrl = true;
+    try {
+      const p = await dataOf(st).getProfile();
+      if (st === state) { profileCache = p; industryMemo.clear(); }
+    } catch (err) {
+      console.warn('[Build Positioning] could not re-read My Company', err);
+    } finally {
+      checkingUrl = false;
+    }
+    if (!mounted || st !== state || st.running) return;
     const s = sel();
     const missing = missingForRun(s);
-    if (missing.length) { updateGenerate(); return; }
+    if (missing.length) {
+      updateGenerate();
+      if (!validUrl(s.companyUrl)) notify(NO_COMPANY_URL, 'error');
+      return;
+    }
 
     const runId = pc.begin(st);
     const live = () => pc.live(st, runId);
@@ -1652,10 +1684,6 @@
     const compBad = f.competitor.trim() && !validUrl(f.competitor) && document.activeElement !== input;
     set('competitor', compBad ? 'Enter a valid website address, like rival.com.' : '');
     input.setAttribute('aria-invalid', compBad ? 'true' : 'false');
-    const cu = el('companyUrl');
-    const cuBad = f.companyUrl.trim() && !validUrl(f.companyUrl) && document.activeElement !== cu;
-    set('companyUrl', cuBad ? 'Enter a valid website address, like yourcompany.com.' : '');
-    cu.setAttribute('aria-invalid', cuBad ? 'true' : 'false');
   }
 
   function onFieldInput(name) {
@@ -1678,13 +1706,12 @@
   }
 
   function wireInputs() {
-    ['companyUrl', 'champion', 'competitor', 'industry'].forEach((name) => {
+    ['champion', 'competitor', 'industry'].forEach((name) => {
       const input = el(name);
       input.value = state.form[name];
       input.addEventListener('input', () => onFieldInput(name));
       input.addEventListener('blur', () => setTimeout(() => { if (mounted) paintFieldNotes(); }, 0));
     });
-    Kit().seedCompanyUrl(el('companyUrl'), state.urlSeed);
     Kit().attachPicker(el('champion'), (p) => p.targetTitles);
     Kit().attachPicker(el('competitor'), (p) => p.competitors);
     Kit().attachPicker(el('industry'), (p) => p.targetIndustries);
@@ -1754,7 +1781,7 @@
     companyAware: true,
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-26a',
+    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-27a',
 
     mount(container) {
       mounted = true;
@@ -1769,7 +1796,11 @@
         industryMemo.clear();
         if (onScreen(st)) { paintFieldNotes(); updateGenerate(); }
       }).catch(() => {});
-      unsubProfile = Data().onProfile((p) => { profileCache = p; industryMemo.clear(); });
+      unsubProfile = Data().onProfile((p) => {
+        profileCache = p;
+        industryMemo.clear();
+        if (mounted) updateGenerate();       // a URL added in My Company switches Generate on
+      });
 
       wireInputs();
       el('qa').addEventListener('input', handleQaInput);

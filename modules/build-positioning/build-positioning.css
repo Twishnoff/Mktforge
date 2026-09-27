@@ -64,10 +64,28 @@
   box-shadow: var(--bpos-shadow);
 }
 
+/* Primary Champion, Closest Competitor, Target Industry and the Generate
+   Positioning button on one line (Company URL comes from My Company, so it
+   has no field). Aligned to the top so a field note under one input doesn't
+   push the others around; the spacer lines the button up with the inputs. */
 .bpos__fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: start;
   gap: 16px 18px;
+}
+.bpos__label-spacer { display: block; font-size: 14.5px; font-weight: 600; visibility: hidden; }
+.bpos__field--action .bpos__btn { padding-top: 11px; padding-bottom: 11px; line-height: 23px; }
+
+.bpos__error.bpos__url-note { margin-top: 16px; text-align: center; }
+.bpos__url-note a { color: inherit; font-weight: 600; text-decoration: underline; }
+.bpos__hint.bpos__hint--inputs { margin-top: 12px; }
+
+/* Narrow display fields: two inputs per line, then the button on its own. */
+@media (max-width: 900px) {
+  .bpos__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bpos__field--action { grid-column: 1 / -1; align-items: center; }
+  .bpos__field--action .bpos__label-spacer { display: none; }
 }
 
 .bpos__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -370,6 +388,10 @@
 /* Generate Positioning sits alone and centred until there are results; the
    second Create Positioning PDF button then joins it and the pair stays
    centred together. */
+/* Now just the second Create Positioning PDF button, shown with results. */
+.bpos__gen-row:not(:has(> :not([hidden]))) { display: none; }
+.bpos__generate:not(:has(:not([hidden]):not(:empty):not(.bpos__gen-row))) { display: none; }
+
 .bpos__gen-row {
   display: flex;
   flex-wrap: wrap;
