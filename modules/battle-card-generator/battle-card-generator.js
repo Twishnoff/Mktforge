@@ -9,6 +9,8 @@
      - jsPDF and the PDF engine (battle-card-pdf.js) load on first PDF click
      - results, form values and an in-flight run survive navigating away
        (same pattern as Persona Builder / Find My Customer)
+     - there's no Company URL field: the URL saved in My Company is sent,
+       and Generate stays off (with a note) until My Company has one
 
    Request:  POST { email, companyUrl, competitorUrl, jobTitle, industry, today }
    Response: { status, companyName, competitorName, generatedAt,
@@ -150,27 +152,28 @@ window.MktforgeBattleCardText = (function () {
       <form class="bcg__form" data-el="form" autocomplete="off" novalidate>
         <div class="bcg__fields">
           <div class="bcg__field">
-            <label for="bcg-company">Company URL</label>
-            <input type="text" id="bcg-company" data-el="companyUrl" placeholder="yourcompany.com">
+            <label for="bcg-jobTitle">Target Job Title</label>
+            <input type="text" id="bcg-jobTitle" data-el="jobTitle" placeholder="e.g. VP of Sales">
           </div>
           <div class="bcg__field">
             <label for="bcg-competitor">Competitor URL</label>
             <input type="text" id="bcg-competitor" data-el="competitorUrl" placeholder="competitor.com">
           </div>
           <div class="bcg__field">
-            <label for="bcg-jobTitle">Job Title</label>
-            <input type="text" id="bcg-jobTitle" data-el="jobTitle" placeholder="e.g. VP of Sales">
-          </div>
-          <div class="bcg__field">
             <label for="bcg-industry">Industry <span class="bcg__optional">(optional)</span></label>
             <input type="text" id="bcg-industry" data-el="industry" placeholder="e.g. Healthcare">
           </div>
+          <div class="bcg__field bcg__field--action">
+            <button type="submit" class="bcg__btn" data-el="generate" disabled>Generate Battle Card</button>
+          </div>
         </div>
 
-        <div class="bcg__submit-row">
-          <button type="submit" class="bcg__btn" data-el="generate" disabled>Generate Battle Card</button>
-          <p class="bcg__hint" data-el="hint" aria-live="polite"></p>
-        </div>
+        <!-- Company URL comes from My Company; this says so when it's missing. -->
+        <p class="bcg__url-note" data-el="urlNote" role="alert" hidden>
+          Company URL required. Please add your company's URL in the
+          <a href="#/my-company">My Company</a> module before generating a battle card.
+        </p>
+        <p class="bcg__hint" data-el="hint" aria-live="polite"></p>
       </form>
       <p class="bcg__error" data-el="error" role="alert" hidden></p>
     </section>
@@ -220,13 +223,18 @@ window.MktforgeBattleCardText = (function () {
   let cfg = {};
   let mounted = false;
 
+  /* Company URL is always My Company's (there's no field for it here).
+     undefined = still loading, '' = My Company has none. */
+  let companyUrl;
+  let unsubProfile = null;
+  const NO_COMPANY_URL = 'Company URL required. Please add your company’s URL in the My Company module before generating a battle card.';
+
   /* One per company (MktforgeKit.perCompany), kept across navigation for the
      life of the page; typed input also survives a refresh. A run takes 30–90
      seconds, so surviving a module switch matters here. */
   const pc = window.MktforgeKit.perCompany('battle-card-generator', {
     create: () => ({
-      form:    { companyUrl: '', competitorUrl: '', jobTitle: '', industry: '' },
-      urlSeed: { seeded: false },   // My Company URL default, once per company
+      form:    { competitorUrl: '', jobTitle: '', industry: '' },
       run:     null,     // everything the page and the PDF need from the last success
       status:  '',
       error:   '',
@@ -370,13 +378,11 @@ window.MktforgeBattleCardText = (function () {
   /* ---------- validation ---------- */
 
   const REQUIRED = [
-    ['companyUrl', 'company URL'],
-    ['competitorUrl', 'competitor URL'], ['jobTitle', 'job title']
+    ['jobTitle', 'target job title'], ['competitorUrl', 'competitor URL']
   ];
 
   function readForm() {
     return {
-      companyUrl:    el.companyUrl.value.trim(),
       competitorUrl: el.competitorUrl.value.trim(),
       jobTitle:      el.jobTitle.value.trim(),
       industry:      el.industry.value.trim()
@@ -387,8 +393,32 @@ window.MktforgeBattleCardText = (function () {
     if (!mounted) return;
     const f = readForm();
     const missing = REQUIRED.filter(([k]) => !f[k]).map(([, label]) => label);
-    el.generate.disabled = state.running || missing.length > 0;
+    const noUrl = companyUrl === '';
+    el.urlNote.hidden = !noUrl;
+    el.generate.disabled = state.running || missing.length > 0 || !companyUrl;
     el.hint.textContent = !state.running && missing.length ? `Still needed: ${missing.join(', ')}.` : '';
+  }
+
+  /* Reads the active company's URL from My Company, and keeps it current if
+     My Company is saved (in this tab or another) while this module is open. */
+  function watchCompanyUrl() {
+    const D = window.MktforgeData;
+    if (!D) { companyUrl = ''; updateGenerateEnabled(); return; }
+    D.getProfile().then((p) => {
+      if (!mounted) return;
+      companyUrl = String((p && p.companyUrl) || '').trim();
+      updateGenerateEnabled();
+    }).catch((err) => {
+      console.warn('[Battle Card Generator] profile unavailable for Company URL', err);
+      if (!mounted) return;
+      companyUrl = '';
+      updateGenerateEnabled();
+    });
+    unsubProfile = D.onProfile((p) => {
+      if (!mounted) return;
+      companyUrl = String((p && p.companyUrl) || '').trim();
+      updateGenerateEnabled();
+    });
   }
 
   // Same messages as the standalone app (and the Worker).
@@ -397,9 +427,8 @@ window.MktforgeBattleCardText = (function () {
     if (missing.length === 0) return null;
     if (missing.length >= 2) return 'Please Provide Required Information';
     return {
-      companyUrl: 'Company URL Is Required',
       competitorUrl: 'Competitor URL Is Required',
-      jobTitle: 'Job Title Is Required'
+      jobTitle: 'Target Job Title Is Required'
     }[missing[0]];
   }
 
@@ -432,6 +461,22 @@ window.MktforgeBattleCardText = (function () {
     const f = readForm();
     const problem = validate(f);
     if (problem) { showError(problem); return; }
+
+    // Always the URL saved in My Company for the company this run belongs to.
+    try {
+      const p = await window.MktforgeData.company(st._cid).getProfile();
+      f.companyUrl = String((p && p.companyUrl) || '').trim();
+    } catch (err) {
+      console.warn('[Battle Card Generator] could not read My Company', err);
+      f.companyUrl = companyUrl || '';
+    }
+    if (!mounted || st !== state || st.running) return;   // left, switched company, or clicked twice meanwhile
+    if (!f.companyUrl) {
+      companyUrl = '';
+      updateGenerateEnabled();
+      showError(NO_COMPANY_URL);
+      return;
+    }
 
     const noAccess = window.MktforgeKit.accessProblem();
     if (noAccess) { showError(noAccess); return; }
@@ -645,7 +690,6 @@ window.MktforgeBattleCardText = (function () {
 
   function restore() {
     const f = state.form;
-    el.companyUrl.value    = f.companyUrl;
     el.competitorUrl.value = f.competitorUrl;
     el.jobTitle.value      = f.jobTitle;
     el.industry.value      = f.industry;
@@ -667,7 +711,6 @@ window.MktforgeBattleCardText = (function () {
   /* My Company defaults and drop-down choices (assets/js/module-kit.js). */
   function autofill() {
     if (!window.MktforgeKit) return;
-    window.MktforgeKit.seedCompanyUrl(el.companyUrl, state.urlSeed);
     window.MktforgeKit.attachPicker(el.competitorUrl, (p) => p.competitors);
     window.MktforgeKit.attachPicker(el.jobTitle,      (p) => p.targetTitles);
     window.MktforgeKit.attachPicker(el.industry,      (p) => p.targetIndustries);
@@ -683,7 +726,7 @@ window.MktforgeBattleCardText = (function () {
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/battle-card-generator/battle-card-generator.css?v=2026-09-26a',
+    styles: 'modules/battle-card-generator/battle-card-generator.css?v=2026-09-27b',
 
     mount(container) {
       container.innerHTML = MARKUP;
@@ -692,7 +735,7 @@ window.MktforgeBattleCardText = (function () {
 
       const q = (name) => container.querySelector(`[data-el="${name}"]`);
       el = {
-        form: q('form'), companyUrl: q('companyUrl'),
+        form: q('form'), urlNote: q('urlNote'),
         competitorUrl: q('competitorUrl'), jobTitle: q('jobTitle'), industry: q('industry'),
         generate: q('generate'), hint: q('hint'), error: q('error'),
         pdf: q('pdf'), status: q('status'),
@@ -703,7 +746,7 @@ window.MktforgeBattleCardText = (function () {
       boxes = {};
       container.querySelectorAll('[data-box]').forEach((b) => { boxes[b.dataset.box] = b; });
 
-      ['companyUrl', 'competitorUrl', 'jobTitle'].forEach((k) =>
+      ['competitorUrl', 'jobTitle'].forEach((k) =>
         el[k].addEventListener('input', updateGenerateEnabled));
       el.form.addEventListener('submit', handleSubmit);
       el.pdf.addEventListener('click', handlePdf);
@@ -713,15 +756,18 @@ window.MktforgeBattleCardText = (function () {
       container.addEventListener('input', hold);
       container.addEventListener('change', hold);
 
+      companyUrl = undefined;
       restore();
       updateGenerateEnabled();
       autofill();
+      watchCompanyUrl();
     },
 
     unmount() {
       captureForm();
       pc.hold(state);                   // keeps any "Run stopped" note
       mounted = false;
+      if (unsubProfile) { unsubProfile(); unsubProfile = null; }
       if (el && el.forge) { el.forge.pause(); el.forgeEnd.pause(); }
       if (forgeDone) forgeDone();       // a waiting finish shows results on the way back
       // A run in flight is deliberately NOT aborted; it finishes into state.

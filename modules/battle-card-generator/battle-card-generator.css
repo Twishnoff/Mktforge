@@ -59,10 +59,22 @@
   margin: 28px 0;
 }
 
+/* Competitor URL, Job Title, Industry and the Generate button on one line
+   (Company URL comes from My Company, so there's no field for it). */
 .bcg__fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
   gap: 16px 18px;
+}
+.bcg__field--action { justify-content: flex-end; }
+.bcg__field--action .bcg__btn { padding-top: 12px; padding-bottom: 12px; line-height: 23px; }
+
+/* Narrow display fields (e.g. nav expanded on a small laptop): two fields
+   per line, then the button across the bottom. */
+@media (max-width: 900px) {
+  .bcg__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bcg__field--action { grid-column: 1 / -1; align-items: center; }
 }
 
 .bcg__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -88,15 +100,6 @@
   outline-offset: 1px;
 }
 
-.bcg__submit-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  margin-top: 20px;
-}
-
 .bcg__btn {
   font: inherit;
   font-weight: 600;
@@ -119,7 +122,20 @@
   cursor: not-allowed;
 }
 
-.bcg__hint { margin: 0; font-size: 14px; color: var(--bcg-faint); }
+.bcg__hint { margin: 12px 0 0; font-size: 14px; color: var(--bcg-faint); }
+.bcg__hint:empty { display: none; }
+
+.bcg__url-note {
+  margin: 16px 0 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--bcg-crit-soft);
+  color: var(--bcg-crit);
+  font-size: 15px;
+  text-align: center;
+}
+.bcg__url-note[hidden] { display: none; }
+.bcg__url-note a { color: inherit; font-weight: 600; text-decoration: underline; }
 
 .bcg__error {
   margin: 16px 0 0;
