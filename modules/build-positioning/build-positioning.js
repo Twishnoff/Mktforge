@@ -417,8 +417,8 @@
     <section class="bpos__grid is-idle" data-el="results" aria-label="Positioning results">
       <div class="bpos__idle">
         <div class="bpos__intro">
-          <img class="bpos__intro-img" src="modules/build-positioning/build-positioning-panda.png"
-            alt="" width="640" height="605">
+          <img class="bpos__intro-img" src="modules/build-positioning/build-positioning-panda.png?v=2"
+            alt="" width="640" height="543">
           <div class="bpos__intro-copy">
             <p class="bpos__intro-title">Let's build your positioning!</p>
             <p class="bpos__intro-text">We'll need to draft positioning before we craft your messaging.
