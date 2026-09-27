@@ -136,6 +136,7 @@
 
   function shell() {
     return `
+      <div class="mc-stage">
       <div class="mc">
         <header class="mc__head">
           <div class="mc__title-row">
@@ -145,7 +146,9 @@
           <p class="mc__dek">Provide what information you have about your business below. It’s ok if you don’t have much, your profile will get fleshed out as time goes on.</p>
         </header>
 
-        <section class="mc__card" aria-label="Company profile">
+        <section class="mc__card mc__card--profile" aria-label="Company profile">
+          <img class="mc__panda" src="modules/my-company/my-company-panda.png"
+            alt="" width="361" height="424" aria-hidden="true">
           <form class="mc__form" data-el="form" novalidate>
             <div class="mc__rows" data-el="rows"><p class="mc__loading">Loading your profile…</p></div>
             <div class="mc__actions">
@@ -187,6 +190,7 @@
             <div data-el="files-imported"><p class="mc__loading">Loading…</p></div>
           </div>
         </section>
+      </div>
       </div>`;
   }
 
@@ -1099,7 +1103,9 @@
     id:     'my-company',
     label:  'My Company',
     icon:   'factory',
-    styles: 'modules/my-company/my-company.css',
+    // The ?v= changes whenever this stylesheet does, so a browser holding the
+    // old copy fetches the new one instead of pairing new markup with old styles.
+    styles: 'modules/my-company/my-company.css?v=2026-09-26a',
     companyAware: true,
 
     mount(container) {

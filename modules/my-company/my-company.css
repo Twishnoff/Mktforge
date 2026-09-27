@@ -54,6 +54,37 @@
 
 /* --- profile card --- */
 
+/* The panda hanging off the profile card's top-right corner: his head and
+   paws sit in front of the card, his body and tail behind its right edge.
+   The image is cut so that everything over the card is only paws and face,
+   so it simply sits on top. Sizes and offsets come from the mockup, scaled
+   to the 856px card. He needs ~195px free to the right of the page column,
+   so he only shows when the display field is wide enough, and the column
+   then shifts left so column + panda stay centred together. */
+
+.mc-stage { container: mc-stage / inline-size; }
+
+.mc__card--profile { position: relative; }
+
+.mc__panda {
+  display: none;
+  position: absolute;
+  z-index: 2;
+  top: -132.5px;
+  left: calc(100% - 135px);
+  width: 361px;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+}
+
+@container mc-stage (min-width: 1120px) {
+  .mc { margin-left: max(0px, calc((100% - 1113px) / 2)); margin-right: auto; }
+  .mc__panda { display: block; }
+  /* His face covers this corner; a rounded one would leave a gap. */
+  .mc__card.mc__card--profile { border-top-right-radius: 0; }
+}
+
 .mc__card {
   margin: 28px 0 44px;
   padding: 8px 24px 24px;
