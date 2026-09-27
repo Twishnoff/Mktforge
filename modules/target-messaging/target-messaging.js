@@ -279,6 +279,7 @@
   <div class="tmsg">
     <header class="tmsg__head">
       <h1 class="tmsg__eyebrow">Target Messaging</h1>
+      <p class="tmsg__dek">Craft unique copy for any job title or individual buyer.</p>
     </header>
 
     <section class="tmsg__card" aria-labelledby="tmsg-define-title">
@@ -1454,7 +1455,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/target-messaging/target-messaging.css?v=2026-09-27h',
+    styles: 'modules/target-messaging/target-messaging.css?v=2026-09-27i',
 
     mount(container) {
       mounted = true;

@@ -24,6 +24,7 @@
 
     <header class="pb__head">
       <h1 class="pb__eyebrow">Persona Builder</h1>
+      <p class="pb__dek">Better understand your target job titles.</p>
     </header>
 
     <section class="pb__submit" aria-label="Target persona inputs">
@@ -620,7 +621,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/persona-builder/persona-builder.css?v=2026-09-27h',
+    styles: 'modules/persona-builder/persona-builder.css?v=2026-09-27i',
 
     mount(container) {
       container.innerHTML = MARKUP;

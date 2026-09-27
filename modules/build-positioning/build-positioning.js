@@ -357,6 +357,7 @@
   <div class="bpos">
     <header class="bpos__head">
       <h1 class="bpos__eyebrow">Build Positioning</h1>
+      <p class="bpos__dek">Create a foundation for your messaging.</p>
     </header>
 
     <section class="bpos__card" aria-label="Run inputs">
@@ -1775,7 +1776,7 @@
     companyAware: true,
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-27h',
+    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-27i',
 
     mount(container) {
       mounted = true;

@@ -65,6 +65,7 @@
 
     <header class="mo__head">
       <h1 class="mo__eyebrow">Marketing Opportunities</h1>
+      <p class="mo__dek">Find events and other channels to reach the job titles you care about.</p>
     </header>
 
     <section class="mo__submit" aria-label="Search inputs">
@@ -746,7 +747,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/marketing-opportunities/marketing-opportunities.css?v=2026-09-27h',
+    styles: 'modules/marketing-opportunities/marketing-opportunities.css?v=2026-09-27i',
 
     mount(container) {
       container.innerHTML = MARKUP;

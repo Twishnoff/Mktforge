@@ -25,6 +25,7 @@
   font-size: 32px;
   font-weight: 600;
   line-height: 1.15;
+  color: var(--accent);          /* green, like every other module's name */
 }
 
 .mc__dek { margin: 0; max-width: 64ch; color: var(--ink-soft); }
@@ -33,9 +34,9 @@
 .mc__title-row .mc__title { margin: 0; }
 
 .mc__delete-company {
-  padding: 7px 14px;
+  padding: 7px 16px;
   border: 1px solid var(--mc-crit);
-  border-radius: var(--radius);
+  border-radius: 999px;          /* pill, like the other buttons */
   background: var(--mc-crit);
   color: #fff;
   font: 500 13px var(--font-body);

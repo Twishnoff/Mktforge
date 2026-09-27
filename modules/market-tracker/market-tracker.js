@@ -863,6 +863,7 @@
   <div class="mtrk">
     <header class="mtrk__head">
       <h1 class="mtrk__eyebrow">${MODULE_NAME}</h1>
+      <p class="mtrk__dek">Keep tabs on what your market is talking about.</p>
     </header>
 
     <section class="mtrk__card" aria-label="Track a job title or a competitor">
@@ -1521,7 +1522,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/market-tracker/market-tracker.css?v=2026-09-27h',
+    styles: 'modules/market-tracker/market-tracker.css?v=2026-09-27i',
 
     mount(container) {
       mounted = true;

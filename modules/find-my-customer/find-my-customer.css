@@ -29,15 +29,17 @@
 
 /* --- Module header --- */
 
-/* The module's name is its only heading: green, in the display serif. */
+/* The module's name, green in the display serif, with one line under it. */
 .fmc__eyebrow {
-  margin: 0;
+  margin: 0 0 6px;
   font-family: var(--font-display);
   font-size: 32px;
   font-weight: 600;
   line-height: 1.15;
   color: var(--fmc-accent);
 }
+
+.fmc__dek { margin: 0 0 0; max-width: 70ch; font-size: 16px; color: var(--fmc-soft); }
 
 /* --- Submission box --- */
 

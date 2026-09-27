@@ -1105,7 +1105,7 @@
     icon:   'factory',
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/my-company/my-company.css?v=2026-09-26a',
+    styles: 'modules/my-company/my-company.css?v=2026-09-27i',
     companyAware: true,
 
     mount(container) {

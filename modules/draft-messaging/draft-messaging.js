@@ -143,6 +143,7 @@
   <div class="dmsg">
     <header class="dmsg__head">
       <h1 class="dmsg__eyebrow">Draft Messaging</h1>
+      <p class="dmsg__dek">Get started writing copy that resonates with customers.</p>
     </header>
 
     <!-- One box for everything a run needs: both pickers on the left, the
@@ -1050,7 +1051,7 @@
     companyAware: true,
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/draft-messaging/draft-messaging.css?v=2026-09-27h',
+    styles: 'modules/draft-messaging/draft-messaging.css?v=2026-09-27i',
 
     mount(container) {
       mounted = true;
