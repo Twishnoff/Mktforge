@@ -63,7 +63,25 @@
    so he only shows when the display field is wide enough, and the column
    then shifts left so column + panda stay centred together. */
 
-.mc-stage { container: mc-stage / inline-size; }
+.mc-stage { container: mc-stage / inline-size; position: relative; }
+
+/* The butterfly panda: bottom of the page, in the gutter left of the column.
+   The stage starts at the nav's edge, so `left` is his distance from the nav
+   whether it's open or minimized. He grows with the gutter (up to 300px) and
+   only appears once there's room for him beside the column, never over it. */
+.mc__butterfly {
+  display: none;
+  position: absolute;
+  left: 32px;
+  bottom: 0;
+  width: min(300px, calc((100cqw - 1113px) / 2 - 56px));
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+}
+@container mc-stage (min-width: 1560px) {
+  .mc__butterfly { display: block; }
+}
 
 .mc__card--profile { position: relative; }
 

@@ -191,6 +191,11 @@
           </div>
         </section>
       </div>
+        <!-- Sits at the very bottom of the page in the empty space left of the
+             column, a fixed distance from the nav, so it follows the nav when it
+             is minimized or opened. Decorative only. -->
+        <img class="mc__butterfly" src="modules/my-company/my-company-butterfly-panda.png"
+          alt="" width="600" height="716" aria-hidden="true" loading="lazy">
       </div>`;
   }
 
@@ -1105,7 +1110,7 @@
     icon:   'factory',
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/my-company/my-company.css?v=2026-09-27i',
+    styles: 'modules/my-company/my-company.css?v=2026-09-27k',
     companyAware: true,
 
     mount(container) {
