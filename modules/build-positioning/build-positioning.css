@@ -119,6 +119,9 @@
   outline-offset: 1px;
 }
 
+/* Hidden: the saved-materials summary stays in the page (and the PDF), not on screen. */
+.bpos__resources[hidden] { display: none; }
+
 .bpos__resources {
   margin: 16px 0 0;
   padding-top: 14px;

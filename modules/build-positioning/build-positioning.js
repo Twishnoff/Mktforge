@@ -387,7 +387,7 @@
         <a href="#/my-company">My Company</a> module before building positioning.
       </p>
       <p class="bpos__hint bpos__hint--inputs" data-el="hint" aria-live="polite"></p>
-      <p class="bpos__resources" data-el="resources"></p>
+      <p class="bpos__resources" data-el="resources" hidden></p>
     </section>
 
     <section class="bpos__card bpos__card--qa is-collapsed" data-el="qa-card" aria-labelledby="bpos-qa-title" hidden>
@@ -1661,8 +1661,10 @@
     else if (n == null) text = '';
     else if (!n) text = 'No saved materials yet, so drafts will use your website and web research. For better results, import your own research in My Company, or run Persona Builder and Battle Card Generator first.';
     else text = `${n} saved material${n === 1 ? '' : 's'} will be read. Your imported files are trusted first (newest first), then generated reports; reports about your Primary Champion and Closest Competitor are read in full.`;
+    // Kept up to date on the page but never shown: the summary of saved
+    // materials is background detail (the run's own note still goes in the PDF).
     p.textContent = text;
-    p.hidden = !text;
+    p.hidden = true;
   }
 
   function paintFieldNotes() {
@@ -1776,7 +1778,7 @@
     companyAware: true,
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-27i',
+    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-27j',
 
     mount(container) {
       mounted = true;
