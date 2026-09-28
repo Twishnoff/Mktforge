@@ -336,7 +336,12 @@
 
   const TRACK_ADD = 'Add To Tracked Titles';
   const TRACK_REMOVE = 'Remove From Tracked Titles';
-  const sameTitle = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+  /* Two titles are the same title when they differ only in case, spacing
+     or punctuation: "Founder/CEO", "Founder / CEO" and "Founder & CEO" all
+     compare equal, as do "Sr. Data Engineer" and "Sr Data Engineer".
+     A plain lowercase compare used to let the first two sit side by side. */
+  const titleKey = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const sameTitle = (a, b) => titleKey(a) === titleKey(b);
   let trackBusy = false;
 
   function paintTrackButtons(tracked) {

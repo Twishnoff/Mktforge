@@ -610,9 +610,15 @@
       return false;
     }
     const clean = f.url ? Data().util.normalizeUrl(value) : value;
+    /* Titles and industries match on their letters and digits alone, so
+       "Founder/CEO" can't be added beside "Founder / CEO". URLs keep their
+       own comparison. */
+    const tagKey = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const same = f.key === 'trackedChannels'
       ? (t) => Data().util.sameChannel(t, clean)
-      : (t) => t.toLowerCase() === clean.toLowerCase();
+      : f.url
+        ? (t) => t.toLowerCase() === clean.toLowerCase()
+        : (t) => tagKey(t) === tagKey(clean);
     if (!d.tags.some(same)) d.tags.push(clean);
     state.drafts[f.key] = { tags: d.tags, text: '' };
     return true;
