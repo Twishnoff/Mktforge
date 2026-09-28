@@ -371,14 +371,35 @@
   padding: 0 18px 16px;
 }
 
-.mtrk__note {
+.mtrk__foot-left {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-self: flex-end;
+}
+
+.mtrk__note {
   margin: 0;
   font-size: 14px;
   color: var(--ink-soft);
 }
 
-.mtrk__note:empty { visibility: hidden; }
+.mtrk__note:empty { display: none; }
+
+/* The run summary: small, light, and out of the way in the bottom-left
+   corner. Hover for the full account of what the agent did. */
+.mtrk__stats-compact {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+  opacity: 0.75;
+  text-align: left;
+  cursor: default;
+}
 
 /* --- states --- */
 
@@ -396,6 +417,15 @@
 .mtrk__state.is-loading { font-style: normal; color: var(--ink-soft); }
 .mtrk__state:not(.is-loading) { flex-direction: column; gap: 6px; }
 .mtrk__state p { margin: 0; }
+
+/* An empty box: the one line that matters, centred in the box, a step
+   larger and darker than the old note so it reads as the answer rather
+   than a caption. */
+.mtrk__state--quiet { min-height: 120px; }
+.mtrk__quiet-note {
+  font-size: 17px;
+  color: var(--ink);
+}
 
 .mtrk__stats {
   margin: 8px 0 0;

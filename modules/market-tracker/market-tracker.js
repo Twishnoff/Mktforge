@@ -1376,6 +1376,31 @@
       : 'No new activity found since your last refresh.';
   }
 
+  /* The one-line summary shown small in the box's bottom-left corner:
+     searches, posts read (Reddit/HN plus tracked channels, added together),
+     posts judged against the filters, and how many were shown. The full
+     account of the run (statsText + guideText) is kept as the line's tooltip
+     rather than printed, so an empty box stays quiet. */
+  function compactStats(box) {
+    const stats = box.stats;
+    if (!stats || typeof stats !== 'object') return '';
+    const n = (v) => Number(v) || 0;
+    const plural = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+    const t = stats.tracked && typeof stats.tracked === 'object' ? stats.tracked : {};
+    const parts = [plural(n(stats.searched), 'search', 'searches')];
+    if (box.kind === 'competitor') {
+      if (n(stats.pagesRead)) parts.push(plural(n(stats.pagesRead), 'page read', 'pages read'));
+      parts.push(`${n(stats.found)} judged against filters`);
+    } else {
+      const read = n(stats.fetched) + n(t.items);
+      const judged = n(stats.judged) + n(t.judged);
+      parts.push(plural(read, 'post read', 'posts read'));
+      parts.push(`${judged} judged against filters`);
+    }
+    parts.push(`${n(stats.kept)} shown`);
+    return parts.join(' · ');
+  }
+
   function bodyHtml(box) {
     if (box.running) {
       return `<div class="mtrk__working">
@@ -1390,18 +1415,14 @@
       return parts.join('');
     }
     const competitor = box.kind === 'competitor';
-    const stats = statsText(box);
-    const guide = guideText(box);
     const baseline = competitor && box.runs === 1
       ? `<p class="mtrk__stats">First run — this competitor’s existing pages were recorded as a baseline, so later refreshes can show what’s changed.</p>`
       : '';
 
     if (!box.rows.length) {
-      parts.push(`<div class="mtrk__state">
-          <p>${esc(quietNote(box))}</p>
+      parts.push(`<div class="mtrk__state mtrk__state--quiet">
+          <p class="mtrk__quiet-note">${esc(quietNote(box))}</p>
           ${baseline}
-          ${guide ? `<p class="mtrk__stats">${esc(guide)}</p>` : ''}
-          ${stats ? `<p class="mtrk__stats">${esc(stats)}</p>` : ''}
         </div>`);
       return parts.join('');
     }
@@ -1418,8 +1439,6 @@
     const quiet = quietNote(box);
     if (quiet) parts.push(`<p class="mtrk__quiet">${esc(quiet)}</p>`);
     if (baseline) parts.push(baseline);
-    if (guide) parts.push(`<p class="mtrk__stats">${esc(guide)}</p>`);
-    if (stats) parts.push(`<p class="mtrk__stats">${esc(stats)}</p>`);
     return parts.join('');
   }
 
@@ -1446,7 +1465,12 @@
         </header>
         <div class="mtrk__box-body">${bodyHtml(box)}</div>
         <footer class="mtrk__box-foot">
-          <p class="mtrk__note">${box.note && !box.running ? esc(box.note) : ''}</p>
+          <div class="mtrk__foot-left">
+            <p class="mtrk__note">${box.note && !box.running ? esc(box.note) : ''}</p>
+            ${!box.running && box.lastRefreshed && compactStats(box)
+              ? `<p class="mtrk__stats-compact" title="${esc([guideText(box), statsText(box)].filter(Boolean).join(' '))}">${esc(compactStats(box))}</p>`
+              : ''}
+          </div>
           <button type="button" class="mtrk__btn mtrk__btn--ghost" data-act="refresh"${box.running ? ' disabled' : ''}>Refresh Data</button>
         </footer>
       </section>`;
