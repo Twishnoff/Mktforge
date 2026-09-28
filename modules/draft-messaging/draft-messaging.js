@@ -307,8 +307,7 @@
       empty: 'No positioning documents found.'
     });
     empty.innerHTML = docs.length ? '' : `
-      <p class="dmsg__note">No positioning documents found. Generate one in the Build Positioning module to continue.</p>
-      <button type="button" class="dmsg__btn dmsg__btn--sm" data-el="go-positioning">Build Positioning Document</button>`;
+      <p class="dmsg__note">No positioning documents found. <button type="button" class="dmsg__link" data-el="go-positioning">Build Positioning Document</button></p>`;
     const go = el('go-positioning');
     if (go) go.addEventListener('click', () => Mktforge.go(POSITIONING_ID));
   }
