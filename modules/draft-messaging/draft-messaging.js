@@ -1050,7 +1050,7 @@
     companyAware: true,
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/draft-messaging/draft-messaging.css?v=2026-09-27i',
+    styles: 'modules/draft-messaging/draft-messaging.css?v=2026-09-27m',
 
     mount(container) {
       mounted = true;
