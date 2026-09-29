@@ -770,6 +770,98 @@
 
 .bpos__option.is-picked { border-color: var(--accent); background: var(--accent-tint); }
 
+/* --- category choice ---
+   The Market Category options are buttons that share one selection with the
+   cards at the top of the Draft box. Selected = accent border and tint;
+   the "Recommended" chip never moves. */
+
+.bpos__option--pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  background: var(--paper);
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .12s, background-color .12s;
+}
+
+.bpos__option--pick:hover { border-color: var(--accent); }
+.bpos__option--pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bpos__option--pick .bpos__item-head { margin: 0; }
+.bpos__option-line { display: block; }
+
+.bpos__chip.is-sel { border-color: var(--accent); background: var(--accent); color: #fff; }
+
+.bpos__choose {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--paper-dim);
+}
+
+.bpos__choose-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bpos__choose-head .bpos__label { margin-top: 0 !important; }
+.bpos__choose-hint { margin: 0 0 6px; font-size: 13.5px; color: var(--muted); }
+
+.bpos__cats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.bpos__cat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--bpos-line);
+  border-radius: 8px;
+  background: var(--paper);
+  font: inherit;
+  line-height: 1.4;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .12s, background-color .12s, box-shadow .12s;
+}
+
+.bpos__cat:hover { border-color: var(--accent); }
+.bpos__cat:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.bpos__cat.is-on {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.bpos__cat.is-on .bpos__chip { background: #fff; }
+.bpos__cat-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.bpos__cat-name { font-weight: 600; font-size: 15px; line-height: 1.3; }
+.bpos__cat-blurb { font-size: 13px; color: var(--ink-soft); }
+
+.bpos__choice-note { margin: 10px 0 0; font-size: 13.5px; color: var(--ink-soft); }
+.bpos__choice-note strong { color: var(--ink); }
+
+/* The one-sentence positioning statement for the selected category, in the
+   display serif; the fuller summary follows it in its tinted box. */
+.bpos__statement {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
 .bpos__summary {
   padding: 10px 12px;
   border-radius: 6px;
@@ -789,6 +881,7 @@
 @media (max-width: 900px) {
   .bpos { padding: 28px 18px 56px; }
   .bpos__themes { grid-template-columns: 1fr; }
+  .bpos__cats { grid-template-columns: 1fr; }
   .bpos__intro { flex-direction: column; text-align: center; gap: 20px; }
   .bpos__intro-img { width: 220px; }
   .bpos__grid.is-idle > .bpos__idle { padding: 28px 20px; }

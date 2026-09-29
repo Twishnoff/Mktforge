@@ -4,7 +4,16 @@
    Everything on the page is real text, so later modules can read it back
    out of Saved Resources.
 
-   MktforgePositioningPdf.build(run, { questions, boxes, sourceLabels })
+   MktforgePositioningPdf.build(run, { questions, boxes, sourceLabels, category })
+
+   `category` is the market-category decision from the page (categoryView +
+   statementFor in build-positioning.js): which option the user is
+   positioning in, its statement, summary and buyer questions, and the other
+   options. The PDF records the decision, not the deliberation — "Market
+   category: X" — and never says which option the agent recommended or why,
+   because Draft Messaging reads this PDF as its spine and must build on the
+   category the user chose, not one they rejected. The rationale stays on
+   screen only.
    ========================================================================== */
 
 window.MktforgePositioningPdf = (function () {
@@ -26,7 +35,28 @@ window.MktforgePositioningPdf = (function () {
       .split('').filter((ch) => ch.charCodeAt(0) < 256 || WIN1252_EXTRA.includes(ch)).join('');
   }
 
-  function build(run, { questions, boxes, sourceLabels }) {
+  /* Falls back to the run's own data for a PDF made without the page's
+     decision (older callers): the recommended option, top-level statement. */
+  function decision(run, category) {
+    const cat = (run.stages && run.stages.category) || {};
+    if (category && category.selected) return category;
+    const options = cat.category_options || [];
+    const rec = cat.category_recommendation || {};
+    const idx = Math.max(0, options.findIndex((o) => rec.name && o.name.toLowerCase() === rec.name.toLowerCase()));
+    return {
+      options,
+      selIdx: idx,
+      selected: options[idx] || null,
+      statement: {
+        statement: cat.positioning_statement || '',
+        summary: cat.positioning_summary || '',
+        questions: cat.next_questions || []
+      },
+      typeNames: {}
+    };
+  }
+
+  function build(run, { questions, boxes, sourceLabels, category }) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
     const W = doc.internal.pageSize.getWidth();
@@ -101,14 +131,17 @@ window.MktforgePositioningPdf = (function () {
     const stages = {};
     boxes.forEach((b) => { titles[b.key] = b.title; stages[b.key] = b.stage; });
 
-    /* --- summary first, so a reader (or the next module) gets the answer --- */
+    /* --- summary first, so a reader (or the next module) gets the answer ---
+       The chosen category leads as the decision; its statement and summary
+       follow. Nothing here says what was recommended. */
     const cat = st.category || {};
-    if (cat.positioning_summary) {
+    const dec = decision(run, category);
+    const typeName = (o) => (o && ((dec.typeNames && dec.typeNames[o.type]) || o.type)) || '';
+    if (dec.selected || dec.statement.summary) {
       heading('Positioning Summary');
-      text(cat.positioning_summary, { size: 11 });
-      if (cat.category_recommendation && cat.category_recommendation.name) {
-        text(`Recommended category: ${cat.category_recommendation.name} (${cat.category_recommendation.type})`, { bold: true });
-      }
+      if (dec.selected) text(`Market category: ${dec.selected.name} (${typeName(dec.selected)})`, { bold: true });
+      if (dec.statement.statement) text(`Positioning statement: ${dec.statement.statement}`, { size: 11 });
+      if (dec.statement.summary) text(dec.statement.summary, { size: 11 });
     }
 
     /* --- Stage 0 --- */
@@ -197,17 +230,25 @@ window.MktforgePositioningPdf = (function () {
     if (st.category) {
       heading(titles.category, stages.category);
       if (cat.first_glance_comparison) text(cat.first_glance_comparison);
-      (cat.category_options || []).forEach((o) => {
-        const picked = cat.category_recommendation && cat.category_recommendation.name === o.name;
-        text(`${o.name} — ${o.type}${picked ? ' (recommended)' : ''}`, { size: 11, bold: true, gap: 2 });
+      const option = (o) => {
+        text(`${o.name} — ${typeName(o)}`, { size: 11, bold: true, gap: 2 });
         if (o.helps) text(`Helps: ${o.helps}`, { indent: 10, gap: 1 });
         if (o.hurts) text(`Hurts: ${o.hurts}`, { indent: 10, gap: 6 });
-      });
-      if (cat.category_recommendation && cat.category_recommendation.rationale) {
-        label('Why');
-        text(cat.category_recommendation.rationale);
+      };
+      // The decision, then the options set aside. No recommendation, no
+      // rationale: the next module must not see a category the user rejected
+      // presented as the better one.
+      if (dec.selected) {
+        label('Market category');
+        option(dec.selected);
+        if (dec.statement.statement) text(`Positioning statement: ${dec.statement.statement}`, { gap: 6 });
       }
-      if ((cat.next_questions || []).length) { label('Check with real buyers'); bullets(cat.next_questions); }
+      const others = (dec.options || []).filter((o, i) => i !== dec.selIdx);
+      if (others.length) {
+        label('Other categories considered');
+        others.forEach(option);
+      }
+      if (dec.statement.questions.length) { label('Check with real buyers'); bullets(dec.statement.questions); }
     }
 
     /* --- the answers the run used --- */

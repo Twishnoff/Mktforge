@@ -28,6 +28,21 @@
      5. Create Positioning PDF: downloads it and saves it to My Company, where
         the next module can pick it up. Hidden until there are results.
 
+   Category choice
+     Stage 5 offers three market categories and recommends one. The user can
+     position in a different one: the three cards at the top of the Initial
+     Positioning Statement box (and the same options in the Market Category
+     box) are selectable and share one selection. The Worker writes a
+     positioning statement and summary for every option at the end of the
+     run, so switching is instant. The agent's pick keeps its "Recommended"
+     badge; "Selected" follows the choice. Only an override is stored — under
+     the company's positioning answers as CHOICE_KEY — so it comes back after
+     a refresh and pre-selects the same category on the next run when that
+     category is offered again; choosing the recommended card clears it. The
+     PDF records the chosen category as the decision and never says which one
+     was recommended (see positioning-pdf.js), so Draft Messaging builds on
+     the choice.
+
    Screen vs. PDF
      The PDF is the full record and is unchanged; the screen is organised for
      reading. BOXES is the stage list the Worker streams and the order the PDF
@@ -57,7 +72,7 @@
   const MODULE_ID = 'build-positioning';
   const MODULE_NAME = 'Build Positioning';
   const JSPDF_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-  const PDF_SRC = 'modules/build-positioning/positioning-pdf.js';
+  const PDF_SRC = 'modules/build-positioning/positioning-pdf.js?v=2026-09-29a';
 
   const Data = () => window.MktforgeData;
   const Kit = () => window.MktforgeKit;
@@ -107,6 +122,11 @@
   ];
 
   const REQUIRED_IDS = QUESTIONS.filter((q) => q.required).map((q) => q.id);
+
+  /* The category the user chose instead of the recommended one, kept in the
+     same per-company map as the answers (company scope; never a question id,
+     so it is never shown in the table or sent as an answer). */
+  const CHOICE_KEY = 'company__category_choice';
 
   /* ---------- result boxes ----------
      BOXES is the stage list the Worker streams and the shape the PDF prints:
@@ -797,6 +817,76 @@
     return out;
   }
 
+  /* ---------- category choice ----------
+     One selection shared by the Draft box's cards and the Market Category
+     box's options. The stored override (CHOICE_KEY) wins when the run offers
+     a category of that name; otherwise the agent's recommendation; otherwise
+     the first option. */
+
+  const CATEGORY_TYPES = { existing: 'Existing category', subcategory: 'Subcategory', new: 'New category' };
+
+  function categoryView(run, st = state) {
+    const d = (run && run.stages && run.stages.category) || {};
+    const options = d.category_options || [];
+    const rec = d.category_recommendation || {};
+    const recIdx = rec.name ? options.findIndex((o) => norm(o.name) === norm(rec.name)) : -1;
+    const stored = st.answers && st.answers[CHOICE_KEY];
+    let selIdx = stored ? options.findIndex((o) => norm(o.name) === norm(stored)) : -1;
+    if (selIdx < 0) selIdx = recIdx >= 0 ? recIdx : 0;
+    return {
+      data: d,
+      options,
+      recIdx,
+      selIdx,
+      selected: options[selIdx] || null,
+      recommended: options[recIdx] || null,
+      override: recIdx >= 0 && selIdx !== recIdx
+    };
+  }
+
+  /* The statement, summary and buyer questions for the selected category.
+     Runs from before this feature only carry them at the top level (for the
+     recommended category), so that is the fallback there. */
+  function statementFor(v) {
+    const o = v.selected || {};
+    const top = v.selIdx === v.recIdx || v.recIdx < 0;
+    return {
+      statement: o.positioning_statement || (top ? v.data.positioning_statement : '') || '',
+      summary: o.positioning_summary || (top ? v.data.positioning_summary : '') || '',
+      questions: (o.next_questions && o.next_questions.length ? o.next_questions : (top ? v.data.next_questions : null)) || []
+    };
+  }
+
+  async function handleChoose(name) {
+    const st = state;
+    const v = categoryView(st.run, st);
+    const opt = v.options.find((o) => norm(o.name) === norm(name));
+    if (!opt) return;
+    const isRec = !!v.recommended && norm(opt.name) === norm(v.recommended.name);
+    const value = isRec ? null : opt.name;     // only an override is stored
+    if (!st.answers) st.answers = {};
+    if (value) st.answers[CHOICE_KEY] = value; else delete st.answers[CHOICE_KEY];
+    paintCategory();
+    try {
+      st.answers = await dataOf(st).savePositioningAnswers({ [CHOICE_KEY]: value });
+    } catch (err) {
+      console.error('[Build Positioning] could not save the category choice', err);
+      notify('Couldn’t save your category choice — it will still be used for this PDF, but may reset after a refresh.', 'error');
+    }
+  }
+
+  // Repaints only the two boxes the selection shows in.
+  function paintCategory() {
+    if (!mounted || !state.run || !state.run.stages.category) return;
+    ['draft', 'category'].forEach((key) => {
+      const box = DISPLAY_BOXES.find((b) => b.key === key);
+      const b = q(`[data-box="${key}"]`);
+      if (!box || !b) return;
+      b.className = 'bpos__box-body';
+      b.innerHTML = RENDER[key](box.pick(state.run.stages), state.run);
+    });
+  }
+
   /* ---------- Worker requests ---------- */
 
   async function api(path, body, { signal } = {}) {
@@ -1026,6 +1116,8 @@
   function handleResultsClick(e) {
     const boxBtn = e.target.closest('button[data-collapse]');
     if (boxBtn) { toggleBox(boxBtn.dataset.collapse); return; }
+    const chooseBtn = e.target.closest('button[data-choose]');
+    if (chooseBtn) { handleChoose(chooseBtn.dataset.choose); return; }
     const innerBtn = e.target.closest('button[data-inner]');
     if (innerBtn) toggleInner(innerBtn.dataset.inner, innerBtn.closest('[data-inner-wrap]'));
   }
@@ -1526,13 +1618,41 @@
   const RENDER = {
     /* Stage 5 still produces this; on screen it leads the results instead of
        closing the Market Category box. The PDF keeps it where it was. */
-    draft(d) {
-      const summary = d.positioning_summary
-        ? `<p class="bpos__summary">${esc(d.positioning_summary)}</p>` : '';
-      const validate = (d.next_questions || []).length
-        ? `<p class="bpos__label">What to Validate With Real Buyers</p>${list(d.next_questions)}` : '';
-      if (!summary && !validate) return '<p class="bpos__empty">No positioning statement returned.</p>';
-      return summary + validate;
+    draft(d, run) {
+      const v = categoryView(run);
+      const cards = v.options.length ? `
+        <div class="bpos__choose">
+          <div class="bpos__choose-head">
+            <p class="bpos__label">Market category</p>
+            <p class="bpos__choose-hint">Pick the category to position in. Details for each are in Market Category below.</p>
+          </div>
+          <div class="bpos__cats" role="group" aria-label="Market category">
+            ${v.options.map((o, i) => {
+              const on = i === v.selIdx;
+              return `
+              <button type="button" class="bpos__cat${on ? ' is-on' : ''}" data-choose="${esc(o.name)}" aria-pressed="${on ? 'true' : 'false'}">
+                <span class="bpos__cat-chips">${chip(CATEGORY_TYPES[o.type] || o.type)}${i === v.recIdx ? chip('Recommended', 'good') : ''}</span>
+                <span class="bpos__cat-name">${esc(o.name)}</span>
+                ${o.blurb ? `<span class="bpos__cat-blurb">${esc(o.blurb)}</span>` : ''}
+              </button>`;
+            }).join('')}
+          </div>
+          <p class="bpos__choice-note">Selected: <strong>${esc(v.selected.name)}</strong> — Draft Messaging will build on this category.${
+            v.override ? ` The agent recommended <strong>${esc(v.recommended.name)}</strong>; the PDF records your choice.` : ''}</p>
+        </div>` : '';
+
+      const s = statementFor(v);
+      const statement = s.statement ? `<p class="bpos__statement">${esc(s.statement)}</p>` : '';
+      const summary = s.summary ? `<p class="bpos__summary">${esc(s.summary)}</p>` : '';
+      const validate = s.questions.length
+        ? `<p class="bpos__label">What to Validate With Real Buyers</p>${list(s.questions)}` : '';
+      let missing = '';
+      if (!statement && !summary) {
+        missing = `<p class="bpos__empty">${!v.options.length ? 'No positioning statement returned.'
+          : state.running ? 'Writing the positioning for this category…'
+            : 'No positioning statement was written for this category — generate positioning again to get one.'}</p>`;
+      }
+      return cards + (cards ? '<p class="bpos__label">Positioning statement</p>' : '') + statement + summary + validate + missing;
     },
 
     alternatives(d) {
@@ -1602,24 +1722,28 @@
         <p class="bpos__label">Tasks it doesn’t touch</p>${list(c.tasks_excluded)}`;
     },
 
-    category(d) {
+    /* The same three options as the Draft box's cards, selectable here too
+       and sharing the selection. "Recommended" stays on the agent's pick;
+       "Selected" follows the choice. The rationale stays on screen only —
+       the PDF never says which category was recommended. */
+    category(d, run) {
+      const v = categoryView(run);
       const rec = d.category_recommendation || {};
-      const names = { existing: 'Existing category', subcategory: 'Subcategory', new: 'New category' };
-      const options = (d.category_options || []).map((o) => {
-        const picked = rec.name && norm(rec.name) === norm(o.name);
+      const options = v.options.map((o, i) => {
+        const on = i === v.selIdx;
         return `
-          <div class="bpos__option${picked ? ' is-picked' : ''}">
-            <p class="bpos__item-head">${chip(names[o.type] || o.type)} <strong>${esc(o.name)}</strong>${picked ? ' ' + chip('Recommended', 'good') : ''}</p>
-            ${o.helps ? `<p><span class="bpos__k">Helps</span> ${esc(o.helps)}</p>` : ''}
-            ${o.hurts ? `<p><span class="bpos__k">Hurts</span> ${esc(o.hurts)}</p>` : ''}
-          </div>`;
+          <button type="button" class="bpos__option bpos__option--pick${on ? ' is-picked' : ''}" data-choose="${esc(o.name)}" aria-pressed="${on ? 'true' : 'false'}">
+            <span class="bpos__item-head">${chip(CATEGORY_TYPES[o.type] || o.type)} <strong>${esc(o.name)}</strong>${i === v.recIdx ? ' ' + chip('Recommended', 'good') : ''}${on ? ' ' + chip('Selected', 'sel') : ''}</span>
+            ${o.helps ? `<span class="bpos__option-line"><span class="bpos__k">Helps</span> ${esc(o.helps)}</span>` : ''}
+            ${o.hurts ? `<span class="bpos__option-line"><span class="bpos__k">Hurts</span> ${esc(o.hurts)}</span>` : ''}
+          </button>`;
       }).join('');
       return `
         ${d.first_glance_comparison ? `<p class="bpos__muted">${esc(d.first_glance_comparison)}</p>` : ''}
         <div class="bpos__options">${options || '<p class="bpos__empty">No options returned.</p>'}</div>
         ${rec.name ? `<p class="bpos__label">Recommendation</p><p><strong>${esc(rec.name)}</strong> — ${esc(rec.rationale)}</p>` : ''}`;
-      // positioning_summary and next_questions are rendered by the Draft box
-      // above; they stay in the data untouched for the PDF.
+      // Each option's positioning statement and summary are rendered by the
+      // Draft box above; they stay in the data untouched for the PDF.
     }
   };
 
@@ -1638,7 +1762,13 @@
       // BOXES, not DISPLAY_BOXES: the PDF keeps the original six-stage layout.
       // Switched company while the PDF tools loaded: don't save it into the other one.
       if (state._cid !== pdfCid) return;
-      await window.MktforgePositioningPdf.build(run, { questions, boxes: BOXES, sourceLabels: SOURCE_LABELS });
+      // The chosen category is the decision the PDF records; statementFor
+      // gives its statement, summary and buyer questions.
+      const category = categoryView(run);
+      await window.MktforgePositioningPdf.build(run, {
+        questions, boxes: BOXES, sourceLabels: SOURCE_LABELS,
+        category: { ...category, statement: statementFor(category), typeNames: CATEGORY_TYPES }
+      });
     } catch (err) {
       console.error('[Build Positioning] PDF failed', err);
       if (mounted) { state.error = 'Could not generate the PDF. Please try again.'; paintRun(); }
@@ -1756,7 +1886,7 @@
       console.error('[Build Positioning] could not load answers', err);
       st.answersError = 'Couldn’t load your saved answers.';
     }
-    if (onScreen(st)) renderQa();
+    if (onScreen(st)) { renderQa(); paintCategory(); }   // a stored category choice may apply
   }
 
   async function loadFileCount() {
@@ -1778,7 +1908,7 @@
     companyAware: true,
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-27j',
+    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-29a',
 
     mount(container) {
       mounted = true;
