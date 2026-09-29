@@ -1641,18 +1641,22 @@
             v.override ? ` The agent recommended <strong>${esc(v.recommended.name)}</strong>; the PDF records your choice.` : ''}</p>
         </div>` : '';
 
+      // On screen only the one-sentence statement shows (the fuller summary
+      // repeats it); the PDF carries both, since Draft Messaging reads the
+      // summary's proof points. Runs from before statements existed fall back
+      // to the summary here.
       const s = statementFor(v);
-      const statement = s.statement ? `<p class="bpos__statement">${esc(s.statement)}</p>` : '';
-      const summary = s.summary ? `<p class="bpos__summary">${esc(s.summary)}</p>` : '';
+      const shown = s.statement || s.summary;
+      const statement = shown ? `<p class="bpos__statement">${esc(shown)}</p>` : '';
       const validate = s.questions.length
         ? `<p class="bpos__label">What to Validate With Real Buyers</p>${list(s.questions)}` : '';
       let missing = '';
-      if (!statement && !summary) {
+      if (!statement) {
         missing = `<p class="bpos__empty">${!v.options.length ? 'No positioning statement returned.'
           : state.running ? 'Writing the positioning for this category…'
             : 'No positioning statement was written for this category — generate positioning again to get one.'}</p>`;
       }
-      return cards + (cards ? '<p class="bpos__label">Positioning statement</p>' : '') + statement + summary + validate + missing;
+      return cards + (cards ? '<p class="bpos__label">Positioning statement</p>' : '') + statement + validate + missing;
     },
 
     alternatives(d) {
@@ -1908,7 +1912,7 @@
     companyAware: true,
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-29a',
+    styles: 'modules/build-positioning/build-positioning.css?v=2026-09-29b',
 
     mount(container) {
       mounted = true;

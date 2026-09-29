@@ -853,9 +853,12 @@
 .bpos__choice-note strong { color: var(--ink); }
 
 /* The one-sentence positioning statement for the selected category, in the
-   display serif; the fuller summary follows it in its tinted box. */
+   display serif, in the tinted box the summary used to sit in. */
 .bpos__statement {
   margin: 0 0 10px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: var(--accent-tint);
   font-family: var(--font-display);
   font-size: 19px;
   line-height: 1.5;
