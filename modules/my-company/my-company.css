@@ -352,6 +352,8 @@ a.mc__value:hover, .mc__chip a:hover { text-decoration: underline; }
 
 .mc__btn:hover:not(:disabled) { opacity: .9; }
 .mc__btn:disabled { opacity: .6; cursor: progress; }
+/* Nothing changed yet: greyed out, not "busy". */
+.mc__btn.is-idle:disabled { opacity: .4; cursor: default; }
 
 .mc__error {
   margin: 0;

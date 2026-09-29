@@ -214,6 +214,30 @@
     return !hasValue(f, saved) || state.editing.has(f.key);
   }
 
+  /* True when an open row holds something the saved profile doesn't: typed
+     text, a changed value, or tags added/removed. Save stays greyed out
+     until then, so an empty row on its own never offers a pointless save. */
+  function rowDirty(f) {
+    if (!rowEditing(f)) return false;
+    const saved = state.profile ? state.profile[f.key] : null;
+    const d = draftFor(f);
+    if (isArrayField(f)) {
+      if (String(d.text || '').trim()) return true;
+      const was = saved || [];
+      return d.tags.length !== was.length || d.tags.some((t, i) => t !== was[i]);
+    }
+    return String(d || '').trim() !== String(saved || '').trim();
+  }
+
+  function syncSave() {
+    const btn = q('[data-el="save"]');
+    if (!btn || btn.textContent === 'Saving…') return;
+    const dirty = FIELDS.some(rowDirty);
+    btn.disabled = !dirty;
+    btn.classList.toggle('is-idle', !dirty);
+    btn.title = dirty ? '' : 'Nothing to save yet';
+  }
+
   function draftFor(f) {
     if (f.key in state.drafts) return state.drafts[f.key];
     const saved = state.profile ? state.profile[f.key] : null;
@@ -310,6 +334,7 @@
 
     rows.innerHTML = FIELDS.map((f) => (rowEditing(f) ? editHtml(f) : savedHtml(f))).join('');
     q('[data-el="save"]').hidden = !FIELDS.some(rowEditing);
+    syncSave();
 
     FIELDS.forEach((f) => { if (rowEditing(f)) wireRow(f); });
 
@@ -648,6 +673,7 @@
     tmp.innerHTML = editHtml(f);
     row.replaceWith(tmp.firstElementChild);
     wireRow(f);
+    syncSave();
     if (focus) {
       const input = q(`[data-input="${f.key}"]`);
       if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
@@ -666,6 +692,7 @@
       setFieldError(f.key, '');
       if (isArrayField(f)) state.drafts[f.key] = { tags: draftFor(f).tags, text: input.value };
       else state.drafts[f.key] = input.value;
+      syncSave();
     });
 
     if (isArrayField(f)) {
@@ -847,8 +874,9 @@
       }
     } finally {
       if (mounted) {
-        btn.disabled = false;
         btn.textContent = 'Save';
+        btn.disabled = false;
+        syncSave();
       }
     }
   }
