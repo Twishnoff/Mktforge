@@ -48,9 +48,12 @@
      reading. BOXES is the stage list the Worker streams and the order the PDF
      prints. DISPLAY_BOXES is the on-screen layout only: one full-width column
      of boxes that each minimize to their title line, the positioning statement
-     lifted out of Market Category into a leading "Draft" box, and stages 2 and
-     3 merged into "Differentiators and Value" with each stage-3 row folded
-     under the differentiator it belongs to. None of it touches the data.
+     lifted out of Market Category into a leading "Initial Positioning" box
+     (the result the user acts on: it holds the category choice and the Create
+     Positioning PDF button, and the stage boxes sit minimized under an
+     "Additional Details" heading), and stages 2 and 3 merged into
+     "Differentiators and Value" with each stage-3 row folded under the
+     differentiator it belongs to. None of it touches the data.
 
    Saved materials: before drafting or generating, assets/js/research.js
    gathers Imported Materials (trusted most, newest first) and Generated
@@ -152,16 +155,18 @@
   ];
 
   const DISPLAY_BOXES = [
-    { key: 'draft',           stage: 'Draft',       title: 'Initial Positioning Statement',
-      needs: ['category'],                    pick: (st) => st.category },
+    { key: 'draft',           stage: 'Result',      title: 'Initial Positioning',
+      needs: ['category'],                    pick: (st) => st.category, focus: true },
+    /* The stage boxes start minimized under an "Additional Details" heading so
+       the eye stays on the Initial Positioning box and its category choice. */
     { key: 'alternatives',    stage: 'Stage 1',     title: 'Competitive Alternatives',
-      needs: ['alternatives'],                pick: (st) => st.alternatives },
+      needs: ['alternatives'],                pick: (st) => st.alternatives, collapsed: true },
     { key: 'differentiators', stage: 'Stage 2 & 3', title: 'Differentiators and Value',
-      needs: ['differentiators', 'value'],    pick: (st) => st.differentiators || {} },
+      needs: ['differentiators', 'value'],    pick: (st) => st.differentiators || {}, collapsed: true },
     { key: 'champion',        stage: 'Stage 4',     title: 'Champion & Situation',
-      needs: ['champion'],                    pick: (st) => st.champion },
+      needs: ['champion'],                    pick: (st) => st.champion, collapsed: true },
     { key: 'category',        stage: 'Stage 5',     title: 'Market Category',
-      needs: ['category'],                    pick: (st) => st.category }
+      needs: ['category'],                    pick: (st) => st.category, collapsed: true }
   ];
 
   const DEFAULT_COLLAPSED = () => new Set(DISPLAY_BOXES.filter((b) => b.collapsed).map((b) => b.key));
@@ -331,6 +336,8 @@
     collapsed: DEFAULT_COLLAPSED(),   // display box keys currently minimized
     qaCollapsed: true,                // "Assumptions" card minimized
     qaShown: false,                   // Assumptions card revealed (after a run drafted them)
+    qaEdited: false,                  // an assumption was changed by hand since the last run
+    rebuildError: '',                 // what Rebuild Positioning found missing in the inputs
     innerOpen: new Set(),             // ids of nested boxes the user opened
     status: '',
     error: '',
@@ -341,7 +348,7 @@
     draftCtl: new Map()               // key -> AbortController for each Draft Answer
     }),
     held: ['form', 'drafts', 'editing'],
-    snapshot: ['run', 'status', 'error', 'contextNote', 'collapsed', 'innerOpen', 'qaCollapsed', 'qaShown'],
+    snapshot: ['run', 'status', 'error', 'contextNote', 'collapsed', 'innerOpen', 'qaCollapsed', 'qaShown', 'qaEdited'],
     // Draft Answer rows still going for the company being left: stop them.
     onLeave(st) {
       st.draftCtl.forEach((ctl, key) => {
@@ -407,6 +414,8 @@
         <a href="#/my-company">My Company</a> module before building positioning.
       </p>
       <p class="bpos__hint bpos__hint--inputs" data-el="hint" aria-live="polite"></p>
+      <!-- Rebuild Positioning sends the user here when an input is missing. -->
+      <p class="bpos__error bpos__rebuild-error" data-el="rebuild-error" role="alert" hidden></p>
       <p class="bpos__resources" data-el="resources" hidden></p>
     </section>
 
@@ -414,29 +423,32 @@
       <div class="bpos__qa-head">
         <div class="bpos__qa-headline">
           <h2 class="bpos__h2" id="bpos-qa-title">Assumptions</h2>
+          <p class="bpos__qa-flag">(additional messaging decisions made during creation. You can review, edit, and rerun this report)</p>
           <button type="button" class="bpos__collapse" data-el="qa-collapse"
             aria-expanded="false" aria-controls="bpos-qa-body"
             title="Maximize" aria-label="Maximize Assumptions">
             <span class="bpos__collapse-min" aria-hidden="true">&#8722;</span><span class="bpos__collapse-max" aria-hidden="true">+</span>
           </button>
         </div>
-        <p class="bpos__qa-dek">Additional assumptions were made when building positioning.
-          Further refine your results by editing the assumptions where appropriate.</p>
       </div>
       <div class="bpos__qa-body" id="bpos-qa-body">
         <div data-el="qa"><p class="bpos__loading">Loading your answers…</p></div>
         <div class="bpos__qa-actions">
+          <!-- Shown once a saved edit differs from what the last run used. -->
+          <div class="bpos__rebuild" data-el="rebuild-wrap" hidden>
+            <button type="button" class="bpos__btn" data-el="rebuild">Rebuild Positioning</button>
+            <p class="bpos__rebuild-note">Assumptions changed since your positioning was built.</p>
+          </div>
           <p class="bpos__error" data-el="save-error" role="alert" hidden></p>
           <button type="button" class="bpos__btn" data-el="save-all">Save</button>
         </div>
       </div>
     </section>
 
+    <!-- Run errors only. The status line and the Create Positioning PDF button
+         live inside the Initial Positioning box, so the category choice and
+         the PDF read as one step. -->
     <section class="bpos__generate" aria-label="Generate positioning">
-      <div class="bpos__gen-row">
-        <button type="button" class="bpos__btn bpos__btn--lg" data-el="pdf-top" disabled hidden title="Generate positioning first">Create Positioning PDF</button>
-      </div>
-      <p class="bpos__status" data-el="status" aria-live="polite"></p>
       <p class="bpos__error" data-el="error" role="alert" hidden></p>
     </section>
 
@@ -469,8 +481,13 @@
           <p class="bpos__forge-status" data-el="forge-status" aria-live="polite"></p>
         </div>
       </div>
-      ${DISPLAY_BOXES.map((b) => `
-        <article class="bpos__box${b.collapsed ? ' is-collapsed' : ''}" data-box-wrap="${b.key}">
+      ${DISPLAY_BOXES.map((b, i) => `
+        ${i === 1 ? `
+        <header class="bpos__section-head">
+          <h2 class="bpos__section-title">Additional Details</h2>
+          <p class="bpos__section-dek">Dig into the rationale behind your messaging with the research organized below.</p>
+        </header>` : ''}
+        <article class="bpos__box${b.collapsed ? ' is-collapsed' : ''}${b.focus ? ' bpos__box--focus' : ''}" data-box-wrap="${b.key}">
           <h2>
             <span class="bpos__stage">${b.stage}</span>
             <span class="bpos__box-title">${b.title}</span>
@@ -482,6 +499,11 @@
             </button>
           </h2>
           <div class="bpos__box-body is-placeholder" id="bpos-box-${b.key}" data-box="${b.key}">No Data Collected</div>
+          ${b.focus ? `
+          <footer class="bpos__box-foot">
+            <button type="button" class="bpos__btn bpos__btn--lg" data-el="pdf-top" disabled title="Generate positioning first">Create Positioning PDF</button>
+            <p class="bpos__status" data-el="status" aria-live="polite"></p>
+          </footer>` : ''}
         </article>`).join('')}
     </section>
 
@@ -712,6 +734,17 @@
     const err = el('save-error');
     err.textContent = state.saveError;
     err.hidden = !state.saveError;
+    updateRebuild();
+  }
+
+  // "Rebuild Positioning" appears at the foot of Assumptions once a saved
+  // edit changed an answer the last run built on. It goes away when a run
+  // starts, since that run picks the edits up.
+  function updateRebuild() {
+    if (!mounted) return;
+    const wrap = el('rebuild-wrap');
+    wrap.hidden = !(state.qaEdited && state.run && !state.running);
+    el('rebuild').disabled = state.running || state.saving;
   }
 
   /* ---------- saving ---------- */
@@ -719,7 +752,12 @@
   async function saveKeys(st, keys) {
     const changes = {};
     keys.forEach((key) => { changes[key] = String(st.drafts[key] ?? st.answers[key] ?? '').trim() || null; });
+    const before = st.answers || {};
     st.answers = await dataOf(st).savePositioningAnswers(changes);
+    // A save that actually changed an answer after a run means the positioning
+    // on screen no longer reflects the assumptions: offer a rebuild.
+    const changed = keys.some((key) => String(changes[key] || '') !== String(before[key] || '').trim());
+    if (changed && st.run) st.qaEdited = true;
     keys.forEach((key) => {
       delete st.drafts[key];
       delete st.rowErrors[key];
@@ -818,7 +856,7 @@
   }
 
   /* ---------- category choice ----------
-     One selection shared by the Draft box's cards and the Market Category
+     One selection shared by the Initial Positioning box's cards and the Market Category
      box's options. The stored override (CHOICE_KEY) wins when the run offers
      a category of that name; otherwise the agent's recommendation; otherwise
      the first option. */
@@ -1036,7 +1074,11 @@
         if (unsaved) hint = 'Some answers aren’t saved yet — only saved answers are used.';
       }
     }
-    el('hint').textContent = hint;
+    if (state.rebuildError && !missing.length) { state.rebuildError = ''; paintRebuildError(); }
+    // The red Rebuild message says the same thing as the "Still needed" hint,
+    // so the hint steps aside while it's showing.
+    el('hint').textContent = state.rebuildError ? '' : hint;
+    updateRebuild();
   }
 
   function setBoxesLoading(keys) {
@@ -1116,7 +1158,7 @@
   function handleResultsClick(e) {
     const boxBtn = e.target.closest('button[data-collapse]');
     if (boxBtn) { toggleBox(boxBtn.dataset.collapse); return; }
-    const chooseBtn = e.target.closest('button[data-choose]');
+    const chooseBtn = e.target.closest('[data-choose]');
     if (chooseBtn) { handleChoose(chooseBtn.dataset.choose); return; }
     const innerBtn = e.target.closest('button[data-inner]');
     if (innerBtn) toggleInner(innerBtn.dataset.inner, innerBtn.closest('[data-inner-wrap]'));
@@ -1243,14 +1285,14 @@
     paintPdfButtons();
   }
 
-  // Both PDF buttons do the same thing; the top one only exists once there are
-  // results on the page, so it can be reached without scrolling to the bottom.
+  // Both PDF buttons do the same thing. The main one sits at the foot of the
+  // Initial Positioning box (so the category choice and the PDF read as one
+  // step); the box only shows with results, so it needs no hiding of its own.
   function paintPdfButtons() {
     if (!mounted) return;
     const complete = !!(state.run && state.run.complete);
     const shown = viewFor() === 'results';
     const top = el('pdf-top');
-    top.hidden = !shown;
     el('pdf-row').hidden = !shown;
     [el('pdf'), top].forEach((btn) => {
       btn.disabled = !complete;
@@ -1363,6 +1405,36 @@
     }
   }
 
+  /* ---------- Rebuild Positioning ----------
+     Same run as Generate Positioning, using whatever Primary Champion /
+     Closest Competitor / Target Industry are in the inputs right now. With a
+     required input missing, it scrolls to the inputs and says what's needed. */
+
+  function paintRebuildError() {
+    if (!mounted) return;
+    const err = el('rebuild-error');
+    err.textContent = state.rebuildError || '';
+    err.hidden = !state.rebuildError;
+  }
+
+  async function handleRebuild() {
+    const st = state;
+    if (st.running || st.saving) return;
+    const missing = missingForRun(sel());
+    if (missing.length) {
+      const one = missing.length === 1;
+      st.rebuildError = `To rebuild positioning, ${one ? 'add' : 'add the'} ${missing.join(' and ')}${
+        missing.includes('Company URL') ? ' (Company URL is set in My Company)' : ''} above.`;
+      paintRebuildError();
+      const card = q('[aria-label="Run inputs"]');
+      if (card) card.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+      return;
+    }
+    st.rebuildError = '';
+    paintRebuildError();
+    await handleGenerate();
+  }
+
   let checkingUrl = false;
   async function handleGenerate() {
     const st = state;
@@ -1391,8 +1463,11 @@
     st.running = true;
     st.error = '';
     st.status = 'Getting ready…';
+    st.qaEdited = false;
+    st.rebuildError = '';
     st.qaCollapsed = true;
     paintQaCollapse();
+    paintRebuildError();
     st.collapsed = DEFAULT_COLLAPSED();
     st.innerOpen = new Set();
     st.run = {
@@ -1624,21 +1699,23 @@
         <div class="bpos__choose">
           <div class="bpos__choose-head">
             <p class="bpos__label">Market category</p>
-            <p class="bpos__choose-hint">Pick the category to position in. Details for each are in Market Category below.</p>
+            <p class="bpos__choose-hint">Select the category to position in. Draft Messaging will build on it. Details for each are in Market Category below.</p>
           </div>
           <div class="bpos__cats" role="group" aria-label="Market category">
             ${v.options.map((o, i) => {
               const on = i === v.selIdx;
+              // The whole card is clickable; the Select button at its foot
+              // makes that obvious and shows which one is in force.
               return `
-              <button type="button" class="bpos__cat${on ? ' is-on' : ''}" data-choose="${esc(o.name)}" aria-pressed="${on ? 'true' : 'false'}">
+              <div class="bpos__cat${on ? ' is-on' : ''}" data-choose="${esc(o.name)}">
                 <span class="bpos__cat-chips">${chip(CATEGORY_TYPES[o.type] || o.type)}${i === v.recIdx ? chip('Recommended', 'good') : ''}</span>
                 <span class="bpos__cat-name">${esc(o.name)}</span>
                 ${o.blurb ? `<span class="bpos__cat-blurb">${esc(o.blurb)}</span>` : ''}
-              </button>`;
+                <button type="button" class="bpos__cat-select" data-choose="${esc(o.name)}" aria-pressed="${on ? 'true' : 'false'}"
+                  aria-label="${on ? 'Selected' : 'Select'} ${esc(o.name)}">${on ? '&#10003; Selected' : 'Select'}</button>
+              </div>`;
             }).join('')}
           </div>
-          <p class="bpos__choice-note">Selected: <strong>${esc(v.selected.name)}</strong> — Draft Messaging will build on this category.${
-            v.override ? ` The agent recommended <strong>${esc(v.recommended.name)}</strong>; the PDF records your choice.` : ''}</p>
         </div>` : '';
 
       // On screen only the one-sentence statement shows (the fuller summary
@@ -1726,7 +1803,7 @@
         <p class="bpos__label">Tasks it doesn’t touch</p>${list(c.tasks_excluded)}`;
     },
 
-    /* The same three options as the Draft box's cards, selectable here too
+    /* The same three options as the Initial Positioning box's cards, selectable here too
        and sharing the selection. "Recommended" stays on the agent's pick;
        "Selected" follows the choice. The rationale stays on screen only —
        the PDF never says which category was recommended. */
@@ -1747,7 +1824,7 @@
         <div class="bpos__options">${options || '<p class="bpos__empty">No options returned.</p>'}</div>
         ${rec.name ? `<p class="bpos__label">Recommendation</p><p><strong>${esc(rec.name)}</strong> — ${esc(rec.rationale)}</p>` : ''}`;
       // Each option's positioning statement and summary are rendered by the
-      // Draft box above; they stay in the data untouched for the PDF.
+      // Initial Positioning box above; they stay in the data untouched for the PDF.
     }
   };
 
@@ -1937,6 +2014,7 @@
       el('qa').addEventListener('input', handleQaInput);
       el('qa').addEventListener('click', handleQaClick);
       el('save-all').addEventListener('click', handleSaveAll);
+      el('rebuild').addEventListener('click', handleRebuild);
       el('qa-collapse').addEventListener('click', toggleQa);
       el('generate').addEventListener('click', handleGenerate);
       el('pdf').addEventListener('click', handlePdf);

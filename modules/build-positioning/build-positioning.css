@@ -133,7 +133,16 @@
 /* --- question table --- */
 
 .bpos__qa-head { margin-bottom: 14px; }
-.bpos__qa-dek { margin: 10px 0 0; max-width: 78ch; font-size: 15px; color: var(--ink-soft); }
+
+/* Red note beside the Assumptions title: these can be reviewed, edited and
+   rerun. Always visible, minimized or not. */
+.bpos__qa-flag {
+  margin: 0;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--bpos-crit);
+}
 
 .bpos__qa-headline {
   display: flex;
@@ -141,13 +150,12 @@
   gap: 10px;
 }
 
-.bpos__qa-headline .bpos__h2 { min-width: 0; margin: 0; }
+.bpos__qa-headline .bpos__h2 { flex: none; min-width: 0; margin: 0; }
 .bpos__qa-headline .bpos__collapse { margin-left: auto; }
 
 /* Minimized: the title line only, at the height of a collapsed result box. */
 .bpos__card--qa.is-collapsed { padding: 14px 18px; }
 .bpos__card--qa.is-collapsed .bpos__qa-head { margin-bottom: 0; }
-.bpos__card--qa.is-collapsed .bpos__qa-dek,
 .bpos__card--qa.is-collapsed .bpos__qa-body { display: none; }
 
 .bpos__qa {
@@ -324,6 +332,22 @@
   margin-top: 18px;
 }
 
+/* Rebuild Positioning: left end of the actions row, with a short note, once
+   a saved edit means the positioning on screen is out of date. */
+.bpos__rebuild {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-right: auto;
+  min-width: 0;
+}
+
+.bpos__rebuild[hidden] { display: none; }
+.bpos__rebuild-note { margin: 0; font-size: 14px; color: var(--ink-soft); }
+
+/* Under the inputs: what Rebuild Positioning still needs. */
+.bpos__rebuild-error { margin-top: 12px; }
+
 /* --- buttons, messages --- */
 
 .bpos__btn {
@@ -381,20 +405,8 @@
   text-align: center;
 }
 
-/* Generate Positioning sits alone and centred until there are results; the
-   second Create Positioning PDF button then joins it and the pair stays
-   centred together. */
-/* Now just the second Create Positioning PDF button, shown with results. */
-.bpos__gen-row:not(:has(> :not([hidden]))) { display: none; }
-.bpos__generate:not(:has(:not([hidden]):not(:empty):not(.bpos__gen-row))) { display: none; }
-
-.bpos__gen-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
+/* Only the run error lives here now; the section disappears when it's empty. */
+.bpos__generate:not(:has(:not([hidden]):not(:empty))) { display: none; }
 
 .bpos__hint, .bpos__status { margin: 0; font-size: 15px; color: var(--ink-soft); }
 .bpos__hint:empty, .bpos__status:empty { display: none; }
@@ -406,7 +418,8 @@
 
 .bpos__idle { display: none; }
 
-.bpos__grid.is-idle > .bpos__box { display: none; }
+.bpos__grid.is-idle > .bpos__box,
+.bpos__grid.is-idle > .bpos__section-head { display: none; }
 
 .bpos__grid.is-idle > .bpos__idle {
   display: flex;
@@ -509,6 +522,43 @@
   border-radius: var(--bpos-radius);
   box-shadow: var(--bpos-shadow);
 }
+
+/* The Initial Positioning box is where the user makes the category choice
+   and creates the PDF, so it gets a heavier green frame than the boxes
+   around it. */
+.bpos__box--focus {
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-tint), var(--bpos-shadow);
+}
+
+.bpos__box--focus > h2 { border-bottom-color: var(--accent-tint); }
+
+/* Create Positioning PDF and the status line, at the foot of that box. */
+.bpos__box-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 18px 22px;
+  border-top: 1px solid var(--paper-dim);
+  text-align: center;
+}
+
+.bpos__box.is-collapsed > .bpos__box-foot { display: none; }
+
+/* "Additional Details": the heading over the minimized stage boxes. */
+.bpos__section-head { margin: 10px 0 -6px; }
+
+.bpos__section-title {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--accent);
+}
+
+.bpos__section-dek { margin: 0; max-width: 70ch; font-size: 15px; color: var(--ink-soft); }
 
 .bpos__box h2 {
   display: flex;
@@ -821,9 +871,9 @@
 .bpos__cat {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
-  padding: 12px 14px;
+  padding: 12px 14px 14px;
   border: 1px solid var(--bpos-line);
   border-radius: 8px;
   background: var(--paper);
@@ -838,6 +888,27 @@
 .bpos__cat:hover { border-color: var(--accent); }
 .bpos__cat:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* The Select button at the foot of each card. Filled green once selected. */
+.bpos__cat-select {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 6px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background-color .12s, color .12s;
+}
+
+.bpos__cat-select:hover { background: var(--accent-tint); }
+.bpos__cat-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bpos__cat.is-on .bpos__cat-select { background: var(--accent); color: #fff; cursor: default; }
+
 .bpos__cat.is-on {
   border-color: var(--accent);
   background: var(--accent-tint);
@@ -848,9 +919,6 @@
 .bpos__cat-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .bpos__cat-name { font-weight: 600; font-size: 15px; line-height: 1.3; }
 .bpos__cat-blurb { font-size: 13px; color: var(--ink-soft); }
-
-.bpos__choice-note { margin: 10px 0 0; font-size: 13.5px; color: var(--ink-soft); }
-.bpos__choice-note strong { color: var(--ink); }
 
 /* The one-sentence positioning statement for the selected category, in the
    display serif, in the tinted box the summary used to sit in. */
