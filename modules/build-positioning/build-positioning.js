@@ -1119,11 +1119,13 @@
     paintCollapse(key);
   }
 
-  // The "Assumptions" card stays hidden until a run has drafted the
-  // assumptions (or, for a company that already has results from before this
-  // change, once there is a finished run). It then shows minimized, and
-  // minimizes the same way a result box does.
-  const qaVisible = (st = state) => !!(st.qaShown || (st.run && st.run.complete));
+  // The "Assumptions" card stays hidden until the first run has finished (or,
+  // for a company that already has results from before this change, once
+  // there is a finished run). Nothing in it can be edited while a run works,
+  // so it isn't shown until it can be; a run that stops early after drafting
+  // still reveals it, so the marked answers can be fixed. It then shows
+  // minimized, and minimizes the same way a result box does.
+  const qaVisible = (st = state) => !st.running && !!(st.qaShown || (st.run && st.run.complete));
 
   function paintQaCollapse() {
     if (!root) return;
@@ -1394,7 +1396,8 @@
       pc.hold(st);
     }
 
-    // From here on the Assumptions card is part of the page (minimized).
+    // From here on the Assumptions card is part of the page (minimized),
+    // shown once this run is over.
     st.qaShown = true;
     if (onScreen(st)) { paintQaCollapse(); renderQa(); }
 
@@ -1466,7 +1469,7 @@
     st.qaEdited = false;
     st.rebuildError = '';
     st.qaCollapsed = true;
-    paintQaCollapse();
+    paintQaCollapse();   // hides Assumptions for the length of the run
     paintRebuildError();
     st.collapsed = DEFAULT_COLLAPSED();
     st.innerOpen = new Set();

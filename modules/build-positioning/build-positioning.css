@@ -140,6 +140,7 @@
   margin: 0;
   min-width: 0;
   font-size: 14px;
+  font-style: italic;
   line-height: 1.4;
   color: var(--bpos-crit);
 }
