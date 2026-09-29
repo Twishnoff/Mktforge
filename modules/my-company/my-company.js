@@ -22,18 +22,22 @@
       placeholder: 'e.g. acme.com' },
     { key: 'industry', label: 'Your Industry', kind: 'industry',
       placeholder: 'Start typing, e.g. SaaS' },
-    { key: 'targetTitles', label: 'Target Job Titles', kind: 'tags',
+    { key: 'targetTitles', label: 'Target Job Titles', kind: 'tags', collapse: true,
       placeholder: 'Type a title and press Enter' },
     { key: 'targetIndustries', label: 'Target Industries', kind: 'tags', suggest: true,
       placeholder: 'Type an industry and press Enter' },
-    { key: 'competitors', label: 'Competitors', hint: 'Enter URLs', kind: 'tags', url: true,
+    { key: 'competitors', label: 'Competitors', hint: 'Enter URLs', kind: 'tags', url: true, collapse: true,
       placeholder: 'e.g. rival.com, then Enter' },
     /* Blogs, publications, channels and communities the user wants watched.
        Marketing Opportunities adds and removes these too (Track Channel), and
        Market Tracker reads every one of them in depth on each refresh. */
-    { key: 'trackedChannels', label: 'Tracked News and Media URLs', hint: 'Enter URLs', kind: 'tags', url: true,
+    { key: 'trackedChannels', label: 'Tracked News and Media URLs', hint: 'Enter URLs', kind: 'tags', url: true, collapse: true,
       placeholder: 'e.g. medium.com/@writer, then Enter' }
   ];
+
+  /* Rows marked collapse show this many saved chips, then "+ X more. Show All"
+     (same as Market Tracker's channel list). Editing always shows every tag. */
+  const CHIPS_SHOWN = 3;
 
   const isArrayField = (f) => f.kind === 'tags';
   const hasValue = (f, v) => (isArrayField(f) ? (v || []).length > 0 : !!String(v || '').trim());
@@ -107,6 +111,7 @@
       profile: null,         // last saved profile
       editing: new Set(),    // keys a person opened with Edit
       drafts: {},            // unsaved input per key, kept across navigation
+      expanded: new Set(),   // collapsed chip rows a person opened with Show All
       files: null,
       filesError: '',
       renaming: null,        // { id, value, error, saving } while a file name is being edited
@@ -219,9 +224,16 @@
     const v = state.profile[f.key];
     let body;
     if (isArrayField(f)) {
-      body = `<ul class="mc__chips" role="list">${v.map((t) => `<li class="mc__chip">${
+      const open = !f.collapse || state.expanded.has(f.key);
+      const extra = f.collapse ? Math.max(0, v.length - CHIPS_SHOWN) : 0;
+      const shown = open || !extra ? v : v.slice(0, CHIPS_SHOWN);
+      const more = !extra ? ''
+        : open
+          ? `<li class="mc__chip-more"><button type="button" class="mc__link mc__link--more" data-more="${f.key}" data-open="0">Show Less</button></li>`
+          : `<li class="mc__chip-more">+ ${extra} more. <button type="button" class="mc__link mc__link--more" data-more="${f.key}" data-open="1">Show All</button></li>`;
+      body = `<ul class="mc__chips" role="list">${shown.map((t) => `<li class="mc__chip">${
         f.url ? `<a href="${esc(hrefFor(t))}" target="_blank" rel="noopener noreferrer">${esc(t)}</a>` : esc(t)
-      }</li>`).join('')}</ul>`;
+      }</li>`).join('')}${more}</ul>`;
     } else if (f.kind === 'url') {
       body = `<a class="mc__value" href="${esc(hrefFor(v))}" target="_blank" rel="noopener noreferrer">${esc(v)}</a>`;
     } else {
@@ -1132,6 +1144,13 @@
       // Only when the account has another company to move to.
       unsubCompanies = Data().onCompanies((list) => { delBtn.hidden = list.length <= 1; });
       q('[data-el="rows"]').addEventListener('click', (e) => {
+        const more = e.target.closest('[data-more]');
+        if (more) {
+          if (more.dataset.open === '1') state.expanded.add(more.dataset.more);
+          else state.expanded.delete(more.dataset.more);
+          renderRows();
+          return;
+        }
         const btn = e.target.closest('[data-edit]');
         if (!btn) return;
         const f = FIELDS.find((x) => x.key === btn.dataset.edit);
