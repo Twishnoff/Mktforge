@@ -39,6 +39,11 @@
      (same as Market Tracker's channel list). Editing always shows every tag. */
   const CHIPS_SHOWN = 3;
 
+  /* Saved URL chips show just the address itself — no scheme, "www." or
+     trailing slash — to save space. The stored value is untouched, and the
+     chip still links to the full URL. */
+  const chipLabel = (t) => String(t).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '');
+
   const isArrayField = (f) => f.kind === 'tags';
   const hasValue = (f, v) => (isArrayField(f) ? (v || []).length > 0 : !!String(v || '').trim());
 
@@ -232,7 +237,7 @@
           ? `<li class="mc__chip-more"><button type="button" class="mc__link mc__link--more" data-more="${f.key}" data-open="0">Show Less</button></li>`
           : `<li class="mc__chip-more">+ ${extra} more. <button type="button" class="mc__link mc__link--more" data-more="${f.key}" data-open="1">Show All</button></li>`;
       body = `<ul class="mc__chips" role="list">${shown.map((t) => `<li class="mc__chip">${
-        f.url ? `<a href="${esc(hrefFor(t))}" target="_blank" rel="noopener noreferrer">${esc(t)}</a>` : esc(t)
+        f.url ? `<a href="${esc(hrefFor(t))}" target="_blank" rel="noopener noreferrer" title="${esc(t)}">${esc(chipLabel(t))}</a>` : esc(t)
       }</li>`).join('')}${more}</ul>`;
     } else if (f.kind === 'url') {
       body = `<a class="mc__value" href="${esc(hrefFor(v))}" target="_blank" rel="noopener noreferrer">${esc(v)}</a>`;
