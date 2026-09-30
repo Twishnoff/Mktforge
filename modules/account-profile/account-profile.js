@@ -26,7 +26,7 @@
 
   const ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
   // Shown until the account has a picture of its own, and again after Remove.
-  const DEFAULT_AVATAR = 'assets/img/default-avatar.jpg';
+  const DEFAULT_AVATAR = 'assets/img/default-avatar.jpg?v=2';
 
   /* ---------- state that outlives mount/unmount ----------
      Someone can wander off to another module mid-edit and come back to the
