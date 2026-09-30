@@ -1022,7 +1022,7 @@
     const head = (statusHtml) => `
       <div class="mc__hs-main">
         <div class="mc__hs-name">
-          <span class="mc__hs-logo" aria-hidden="true">HS</span>
+          <img class="mc__hs-logo" src="modules/my-company/hubspot-logo.png" alt="" width="40" height="40">
           <div>
             <h3 class="mc__h3 mc__hs-title">HubSpot</h3>
             ${statusHtml}
@@ -1039,21 +1039,26 @@
     }
 
     if (!s.connected) {
-      // Not connected yet (or disconnected): the wiring panda keeps the box
-      // company until there's a live connection to show instead.
+      // Not connected yet (or disconnected): logo, title and copy on the
+      // left; the wiring panda on the right with Connect under him. Both
+      // sides sit centred against each other.
       box.innerHTML = `<div class="mc__hs-idle">
-        <div class="mc__hs-art" aria-hidden="true">
-          <img src="modules/my-company/my-company-hubspot-panda.jpg" alt="" width="720" height="618">
-        </div>
         <div class="mc__hs-idle-main">
-        ${head(`<p class="mc__hs-status">Not connected</p>`)}
+          <div class="mc__hs-name">
+            <img class="mc__hs-logo" src="modules/my-company/hubspot-logo.png" alt="" width="40" height="40">
+            <div>
+              <h3 class="mc__h3 mc__hs-title">HubSpot</h3>
+              <p class="mc__hs-status">Not connected</p>
+            </div>
+          </div>
+          <p class="mc__hs-note">Integrating with HubSpot lets Mktforge read your contacts, companies, deals and notes.
+            Read-only: Mktforge can’t create, edit or delete anything in HubSpot.</p>
+          ${err}
+        </div>
+        <div class="mc__hs-idle-side">
+          <img class="mc__hs-art" src="modules/my-company/my-company-hubspot-panda.jpg" alt="" width="720" height="618">
           <button type="button" class="mc__btn mc__btn--sm" data-hs="connect" ${busy ? 'disabled' : ''}>
             ${busy === 'connect' ? 'Opening HubSpot…' : 'Connect HubSpot'}</button>
-        </div>
-        <p class="mc__hs-note">Lets Mktforge read this company’s HubSpot contacts, companies, deals and notes
-          to help draft emails. Read-only: Mktforge can’t create, edit or delete anything in HubSpot.
-          You’ll need to be a Super Admin (or have App Marketplace access) in the HubSpot account.</p>
-        ${err}
         </div>
       </div>`;
       return;

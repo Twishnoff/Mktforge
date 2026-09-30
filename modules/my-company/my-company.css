@@ -657,15 +657,9 @@ a.mc__value:hover, .mc__chip a:hover { text-decoration: underline; }
 
 .mc__hs-logo {
   flex: none;
-  display: grid;
-  place-items: center;
+  display: block;
   width: 40px; height: 40px;
-  border-radius: 8px;
-  background: #FF7A59;          /* HubSpot orange, as a plain label tile */
-  color: #fff;
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: .02em;
+  border-radius: 8px;           /* the HubSpot sprocket on its orange tile */
 }
 
 .mc__hs-title { margin: 0; font-size: 18px; }
@@ -699,19 +693,26 @@ a.mc__value:hover, .mc__chip a:hover { text-decoration: underline; }
 
 .mc__hs-error { margin-top: 12px; }
 
-/* not connected: the wiring panda on the left, the usual content on the right */
+/* not connected: copy on the left; the wiring panda on the right with the
+   Connect button under him, the two columns centred against each other */
 .mc__hs-idle {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 28px;
 }
-.mc__hs-art { flex: 0 0 170px; }
-.mc__hs-art img { display: block; width: 100%; height: auto; }
 .mc__hs-idle-main { flex: 1 1 auto; min-width: 0; }
+.mc__hs-idle-side {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.mc__hs-art { display: block; width: 170px; height: auto; }
 
 @media (max-width: 720px) {
-  .mc__hs-idle { flex-direction: column; align-items: stretch; gap: 14px; }
-  .mc__hs-art { flex-basis: auto; width: 150px; margin: 0 auto; }
+  .mc__hs-idle { flex-direction: column; align-items: stretch; gap: 18px; }
+  .mc__hs-art { width: 150px; }
 }
 
 .mc__btn--ghost {
