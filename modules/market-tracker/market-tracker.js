@@ -1358,7 +1358,7 @@
         <table class="mtrk__table">
           <thead><tr>
             <th scope="col">Date</th><th scope="col">Source</th><th scope="col">Excerpt / summary</th>
-            <th scope="col">Mentions</th><th scope="col"><span class="mtrk__sr">Link</span></th>
+            <th scope="col" class="mtrk__c-mentions">Mentions</th><th scope="col"><span class="mtrk__sr">Link</span></th>
           </tr></thead>
           <tbody>${body}</tbody>
         </table>
@@ -1546,7 +1546,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/market-tracker/market-tracker.css?v=2026-09-30a',
+    styles: 'modules/market-tracker/market-tracker.css?v=2026-09-30b',
 
     mount(container) {
       mounted = true;

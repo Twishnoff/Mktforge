@@ -535,9 +535,10 @@
 }
 .mtrk__c-source { width: 150px; }
 .mtrk__c-mentions { width: 170px; }
-/* Chips sit centred in the column (the header stays left with the others),
-   so a short name isn't left-aligned against the wider ones under it. */
-td.mtrk__c-mentions { text-align: center; }
+/* Chips sit centred in the column, under a centred header, so a short name
+   isn't left-aligned against the wider ones under it. */
+/* Header and cells alike, so the chips line up under the word "Mentions". */
+th.mtrk__c-mentions, td.mtrk__c-mentions { text-align: center; }
 td.mtrk__c-mentions .mtrk__chip { margin-left: auto; margin-right: auto; }
 .mtrk__c-link { width: 64px; white-space: nowrap; text-align: right; }
 
