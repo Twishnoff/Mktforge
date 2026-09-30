@@ -733,18 +733,23 @@ body[data-nav="collapsed"] .nav__button[aria-current="page"] .nav__status {
 }
 
 /* ==========================================================================
-   API key badge (MktforgeKit.byok) — under a tool module's run button
+   API key badge (MktforgeKit.byok) — inside a tool module's title, to the
+   right of the name. Its own font, so it doesn't inherit the display serif.
    ========================================================================== */
 
 .mf-byok {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin: 10px 0 0;
+  margin-left: 16px;
   padding: 4px 12px 4px 10px;
   border-radius: 999px;
-  font-size: 13.5px;
-  line-height: 1.4;
+  vertical-align: middle;
+  position: relative;
+  top: -3px;
+  font: 500 13.5px/1.4 var(--font-body);
+  letter-spacing: 0;
+  white-space: nowrap;
   color: var(--accent);
   background: var(--accent-tint);
   border: 1px solid rgba(47, 111, 78, .25);
@@ -764,4 +769,5 @@ body[data-nav="collapsed"] .nav__button[aria-current="page"] .nav__status {
   color: #8A5A00;
   background: #FBF1DC;
   border-color: rgba(138, 90, 0, .3);
+  white-space: normal;
 }

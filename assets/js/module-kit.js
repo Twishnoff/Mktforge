@@ -634,24 +634,24 @@ window.MktforgeKit = (() => {
     }
 
     /* ---- the badge ----
-       Placed under the run button of each tool module (selector per module;
-       My Company and Manage Profile have no run). Shown only when the
-       account has a key. */
+       Sits to the right of the module's green title (every tool module's
+       <h1 class="…__eyebrow">); My Company and Manage Profile have no run.
+       Shown only when the account has a key. */
     const ANCHORS = {
-      'find-my-customer':        '.fmc__submit',
-      'persona-builder':         '.pb__submit',
-      'battle-card-generator':   '.bcg__submit',
-      'marketing-opportunities': '.mo__submit',
-      'build-positioning':       '.bpos__fields',
-      'draft-messaging':         '.dmsg__inputs-foot',
-      'market-tracker':          '.mtrk__picks'
+      'find-my-customer':        '.fmc__eyebrow',
+      'persona-builder':         '.pb__eyebrow',
+      'battle-card-generator':   '.bcg__eyebrow',
+      'marketing-opportunities': '.mo__eyebrow',
+      'build-positioning':       '.bpos__eyebrow',
+      'draft-messaging':         '.dmsg__eyebrow',
+      'market-tracker':          '.mtrk__eyebrow'
       // target-messaging: its Worker is still the Hello World stub and doesn't
-      // read the key yet — add '.tmsg__run' here once it does.
+      // read the key yet — add '.tmsg__eyebrow' here once it does.
     };
 
     function badgeMarkup() {
-      return `<p class="mf-byok" data-mf-byok hidden role="status" aria-live="polite">
-        <span class="mf-byok__dot" aria-hidden="true"></span><span class="mf-byok__text"></span></p>`;
+      return `<span class="mf-byok" data-mf-byok hidden role="status" aria-live="polite">
+        <span class="mf-byok__dot" aria-hidden="true"></span><span class="mf-byok__text"></span></span>`;
     }
 
     function paintBadge(el) {
@@ -683,7 +683,7 @@ window.MktforgeKit = (() => {
       if (!sel || !container) return;
       const anchor = container.querySelector(sel);
       if (!anchor || container.querySelector('[data-mf-byok]')) return;
-      anchor.insertAdjacentHTML('afterend', badgeMarkup());
+      anchor.insertAdjacentHTML('beforeend', badgeMarkup());
       const el = container.querySelector('[data-mf-byok]');
       paintBadge(el);
       const off = onChange(() => paintBadge(el));
