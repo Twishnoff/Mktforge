@@ -576,14 +576,23 @@
 .mtrk__row.is-green .mtrk__tone { color: var(--mtrk-good); }
 .mtrk__row.is-red .mtrk__tone { color: var(--mtrk-crit); }
 
+/* A chip hugs its text and centres it, so a name that wraps to two lines
+   (2026-09-30) sits evenly inside the pill instead of ragged-left against a
+   full-width border. */
 .mtrk__chip {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
   margin: 0 4px 4px 0;
-  padding: 1px 8px;
+  padding: 2px 10px;
   border: 1px solid var(--mtrk-line);
   border-radius: 999px;
   background: var(--mtrk-surface);
   font-size: 13.5px;
+  line-height: 1.3;
+  text-align: center;
   overflow-wrap: anywhere;
 }
 
