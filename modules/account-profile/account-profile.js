@@ -1,7 +1,9 @@
 /* ==========================================================================
    Manage Profile
-   The signed-in account's own settings. Right now that is one thing: the
-   picture shown in the circle beside the account name in the management bar.
+   The signed-in account's own settings: the picture shown in the circle
+   beside the account name in the management bar, and the account's own
+   Anthropic API key (optional — module runs come out of it instead of
+   Mktforge's key). Both belong to the account, not to a company.
 
    Reached from the account menu in the management bar, not from the nav —
    registered with `hidden: true`, so it has a #/account-profile route of its
@@ -59,8 +61,8 @@
       <div class="ap">
         <header class="ap__head">
           <h1 class="ap__title">Manage Profile</h1>
-          <p class="ap__dek">Your profile picture is what shows in the circle beside your account
-            name at the top of the page.</p>
+          <p class="ap__dek">Settings for your account — the same whichever company you're working in.
+            Your profile picture is what shows in the circle beside your account name at the top of the page.</p>
         </header>
 
         <section class="ap__card" aria-label="Profile picture">
@@ -93,6 +95,59 @@
             <button type="button" class="ap__remove" data-el="remove" hidden>Remove picture</button>
             <span class="ap__spacer"></span>
             <button type="button" class="ap__btn" data-el="save" disabled>Save</button>
+          </div>
+        </section>
+
+        <section class="ap__card" aria-label="Your API key" data-el="key-card">
+          <h2 class="ap__h2">Use Your Own API Key</h2>
+          <p class="ap__dek ap__dek--card">Optional. Add your own Anthropic API key and every module you run
+            is billed to your Anthropic account instead of Mktforge's. Remove it any time to go back.</p>
+
+          <div class="ap__key" data-el="key-body">
+            <p class="ap__key-loading" data-el="key-loading">Checking your account…</p>
+
+            <!-- shown when a key is stored -->
+            <div class="ap__key-have" data-el="key-have" hidden>
+              <p class="ap__key-line">
+                <span class="ap__key-dot" data-el="key-dot" aria-hidden="true"></span>
+                <span data-el="key-summary"></span>
+              </p>
+              <p class="ap__key-sub" data-el="key-sub"></p>
+              <div class="ap__actions">
+                <button type="button" class="ap__remove" data-el="key-remove">Remove key</button>
+                <span class="ap__spacer"></span>
+                <button type="button" class="ap__btn ap__btn--ghost" data-el="key-replace">Replace key</button>
+              </div>
+            </div>
+
+            <!-- shown when there is no key, or Replace was clicked -->
+            <form class="ap__key-form" data-el="key-form" hidden autocomplete="off">
+              <ol class="ap__key-steps">
+                <li>Create a key <strong>just for Mktforge</strong> in the
+                  <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic Console</a>
+                  — don't reuse one from another app.</li>
+                <li>Set a <strong>monthly spend limit</strong> on your Anthropic account
+                  (<a href="https://console.anthropic.com/settings/limits" target="_blank" rel="noopener">Console → Limits</a>),
+                  so a key that leaked could never cost more than that.</li>
+                <li>Paste the key below. It's checked with Anthropic, then stored encrypted on Mktforge's server.
+                  It's never shown again, not even to you — only its last four characters.</li>
+              </ol>
+              <div class="ap__key-row">
+                <label class="ap__key-label" for="ap-key-input">Anthropic API key</label>
+                <input type="password" id="ap-key-input" data-el="key-input" placeholder="sk-ant-…"
+                  spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off">
+              </div>
+              <p class="ap__key-fine">By saving a key you're choosing to run Mktforge on your own Anthropic
+                account: usage, costs and any rate limits are between you and Anthropic. Keep the spend limit on.</p>
+              <div class="ap__actions">
+                <button type="button" class="ap__remove" data-el="key-cancel" hidden>Cancel</button>
+                <span class="ap__spacer"></span>
+                <button type="submit" class="ap__btn" data-el="key-save" disabled>Save key</button>
+              </div>
+            </form>
+
+            <p class="ap__error" data-el="key-error" role="alert" hidden></p>
+            <p class="ap__key-off" data-el="key-off" hidden></p>
           </div>
         </section>
       </div>`;
@@ -186,6 +241,136 @@
     }
   }
 
+  /* ---------- your own API key ----------
+     The key never touches this file's state beyond the input box: what's
+     kept is the status the access Worker reports (has one / last four /
+     rejected). MktforgeKit.byok does the talking. */
+
+  const key = {
+    status: null,        // { hasKey, last4, status, available, ... } or null while loading
+    editing: false,      // the paste form is open even though a key exists (Replace)
+    busy: false,
+    error: ''
+  };
+  let unsubKey = null;
+
+  function renderKey() {
+    if (!root) return;
+    const st = key.status;
+    const loading = q('[data-el="key-loading"]');
+    const have = q('[data-el="key-have"]');
+    const form = q('[data-el="key-form"]');
+    const off = q('[data-el="key-off"]');
+    const err = q('[data-el="key-error"]');
+
+    loading.hidden = !!st;
+    if (!st) { have.hidden = true; form.hidden = true; off.hidden = true; return; }
+
+    const available = (st.available !== false || st.hasKey) && !st.unavailable;
+    off.hidden = available;
+    off.textContent = st.unavailable
+      ? 'Couldn’t reach the access service just now. Reload the page to try again.'
+      : 'Bringing your own key isn’t switched on for Mktforge yet.';
+    const showHave = st.hasKey && !key.editing;
+    have.hidden = !showHave;
+    form.hidden = showHave || !available;
+
+    if (showHave) {
+      const tail = st.last4 ? `···${esc(st.last4)}` : '';
+      const dot = q('[data-el="key-dot"]');
+      const summary = q('[data-el="key-summary"]');
+      const sub = q('[data-el="key-sub"]');
+      if (st.status === 'rejected') {
+        dot.className = 'ap__key-dot is-warn';
+        summary.innerHTML = `Your key ending in <strong>${tail}</strong> was rejected by Anthropic`;
+        sub.textContent = 'Modules are running on the Mktforge key until you replace it. '
+          + 'It was probably revoked — check it in the Anthropic Console, then paste a working key here.';
+      } else {
+        dot.className = 'ap__key-dot is-ok';
+        summary.innerHTML = `Modules run on your key ending in <strong>${tail}</strong>`;
+        sub.textContent = st.verifiedAt
+          ? `Checked with Anthropic ${new Date(st.verifiedAt).toLocaleString()}.`
+          : 'Checked with Anthropic when it was saved.';
+      }
+    }
+
+    const input = q('[data-el="key-input"]');
+    const save = q('[data-el="key-save"]');
+    const cancel = q('[data-el="key-cancel"]');
+    cancel.hidden = !(st.hasKey && key.editing);
+    save.disabled = key.busy || !String(input.value || '').trim();
+    save.textContent = key.busy ? 'Checking…' : 'Save key';
+    input.disabled = key.busy;
+    q('[data-el="key-remove"]').disabled = key.busy;
+    q('[data-el="key-replace"]').disabled = key.busy;
+
+    err.textContent = key.error;
+    err.hidden = !key.error;
+  }
+
+  async function saveKey() {
+    if (key.busy) return;
+    const input = q('[data-el="key-input"]');
+    const value = String(input.value || '').trim();
+    if (!value) return;
+    key.busy = true; key.error = '';
+    renderKey();
+    try {
+      await window.MktforgeKit.byok.save(value);
+      input.value = '';           // the plaintext is gone from the page the moment it's saved
+      key.editing = false;
+      notify('API key saved. Modules now run on your Anthropic account.');
+    } catch (err) {
+      key.error = err.message || 'Couldn’t save that key. Try again.';
+    } finally {
+      key.busy = false;
+      renderKey();
+    }
+  }
+
+  async function removeKey() {
+    if (key.busy) return;
+    if (!window.confirm('Remove your API key? Modules will go back to running on the Mktforge key.')) return;
+    key.busy = true; key.error = '';
+    renderKey();
+    try {
+      await window.MktforgeKit.byok.remove();
+      key.editing = false;
+      notify('API key removed.');
+    } catch (err) {
+      key.error = err.message || 'Couldn’t remove the key. Try again.';
+    } finally {
+      key.busy = false;
+      renderKey();
+    }
+  }
+
+  function bindKey() {
+    const form = q('[data-el="key-form"]');
+    const input = q('[data-el="key-input"]');
+    form.addEventListener('submit', (e) => { e.preventDefault(); saveKey(); });
+    input.addEventListener('input', () => { key.error = ''; renderKey(); });
+    q('[data-el="key-remove"]').addEventListener('click', removeKey);
+    q('[data-el="key-replace"]').addEventListener('click', () => {
+      key.editing = true; key.error = '';
+      renderKey();
+      input.focus();
+    });
+    q('[data-el="key-cancel"]').addEventListener('click', () => {
+      key.editing = false; key.error = '';
+      input.value = '';
+      renderKey();
+    });
+  }
+
+  function loadKey() {
+    const kit = window.MktforgeKit && window.MktforgeKit.byok;
+    if (!kit) { key.status = { hasKey: false, available: false }; renderKey(); return; }
+    if (unsubKey) unsubKey();
+    unsubKey = kit.onChange((st) => { key.status = st; renderKey(); });
+    kit.status({ refresh: true });
+  }
+
   /* ---------- load ---------- */
 
   async function load() {
@@ -261,8 +446,11 @@
       container.innerHTML = shell();
       root = container.firstElementChild;
       bind();
+      bindKey();
       render();
+      renderKey();
       load();
+      loadKey();
 
       // Another tab — or a future second place to change it — stays in step.
       unsubAvatar = Data().onAvatar((photo) => {
@@ -273,6 +461,8 @@
 
     unmount() {
       if (unsubAvatar) { unsubAvatar(); unsubAvatar = null; }
+      if (unsubKey) { unsubKey(); unsubKey = null; }
+      key.editing = false; key.error = '';
       root = null;
     }
   });

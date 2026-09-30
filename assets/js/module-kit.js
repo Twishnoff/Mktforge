@@ -13,6 +13,7 @@
                                     Worker request, or null (see assets/js/research.js)
      perCompany(moduleId, opts)     one screen state per company (see below)
      hubspot(companyId?)            read-only HubSpot client for a company (see bottom)
+     byok                           the account's own API key: status, badge, Manage Profile calls
 
    Everything here only reads My Company data (through MktforgeData) and
    only touches the elements a module passes in.
@@ -512,6 +513,221 @@ window.MktforgeKit = (() => {
     };
   }
 
+  /* ---------- bring your own key (BYOK) ----------
+     An account can store its own Anthropic API key on Manage Profile. The
+     key itself lives encrypted in the access Worker; the browser only ever
+     learns "there is one, ending in ···xxxx". Module runs then come out of
+     that key instead of Mktforge's, and every Worker response says which
+     (X-Mktforge-Billing: user | host | host-fallback).
+
+       await MktforgeKit.byok.status()        -> { hasKey, last4, status, available }
+       await MktforgeKit.byok.save(key)       validate + store (Manage Profile)
+       await MktforgeKit.byok.remove()
+       MktforgeKit.byok.onChange(fn)          fn(status) now and on every change
+
+     The badge under each tool module's run button needs nothing from the
+     modules: Mktforge.register is wrapped below so it's added after mount,
+     and window.fetch is wrapped so the billing header of every Worker
+     answer is noticed. */
+
+  const byok = (() => {
+    const cfg = () => (window.MKTFORGE_CONFIG || {}).access || {};
+    const base = () => String(cfg().API_BASE_URL || '').replace(/\/+$/, '');
+    let current = null;            // last known status, null = not loaded
+    let loading = null;
+    let gen = 0;                   // bumps on sign-in/out so a slow answer for the old account is dropped
+    const listeners = new Set();
+
+    class KeyError extends Error {
+      constructor(message, code, status) { super(message); this.code = code; this.status = status; }
+    }
+
+    async function request(method, body) {
+      if (!base()) throw new KeyError('The access service isn’t configured.', 'not_configured', 0);
+      const a = window.MktforgeAuth;
+      const token = a && a.getIdToken ? await a.getIdToken() : null;
+      if (!token) throw new KeyError('Sign in first.', 'unauthenticated', 401);
+      const init = { method, headers: { Authorization: `Bearer ${token}` } };
+      if (body !== undefined) {
+        init.headers['Content-Type'] = 'application/json';
+        init.body = JSON.stringify(body);
+      }
+      let res;
+      try { res = await fetch(`${base()}/api-key`, init); } catch (err) {
+        throw new KeyError('Couldn’t reach the access service. Check your connection and try again.', 'network', 0);
+      }
+      let data = {};
+      try { data = await res.json(); } catch (e) { /* empty body */ }
+      if (!res.ok) {
+        throw new KeyError(data.message || (res.status === 401 || res.status === 403 ? NO_ACCESS
+          : 'Something went wrong with the access service.'), data.error || `http_${res.status}`, res.status);
+      }
+      return data;
+    }
+
+    function set(next) {
+      current = next ? { ...next, _at: Date.now() } : null;
+      listeners.forEach((fn) => { try { fn(current); } catch (e) { console.error(e); } });
+    }
+
+    function status({ refresh = false } = {}) {
+      if (current && !refresh) return Promise.resolve(current);
+      if (loading && !refresh) return loading;
+      const mine = gen;
+      const p = request('GET').then((data) => { if (mine === gen) set(data); return current; })
+        .catch((err) => {
+          // No key is the safe reading of any failure: no badge, host key.
+          console.warn('[Mktforge] API key status unavailable', err);
+          if (mine === gen && !current) set({ hasKey: false, available: false, unavailable: true });
+          return current;
+        })
+        .finally(() => { if (loading === p) loading = null; });
+      loading = p;
+      return p;
+    }
+
+    async function save(key) {
+      const data = await request('POST', { provider: 'anthropic', key: String(key || '').trim() });
+      set(data);
+      return data;
+    }
+
+    async function remove() {
+      const data = await request('DELETE');
+      set({ ...data, hasKey: false });
+      return data;
+    }
+
+    function onChange(fn) {
+      listeners.add(fn);
+      if (current) fn(current);
+      return () => listeners.delete(fn);
+    }
+
+    /* ---- what the last Worker answer said ----
+       'user'          the run used the account's key
+       'host'          Mktforge's key (no key stored)
+       'host-fallback' the account's key was rejected, so Mktforge's was used */
+    let lastBilling = null;
+    const billingListeners = new Set();
+    function noteBilling(value, last4) {
+      lastBilling = { value, last4: last4 || null, at: Date.now() };
+      if (value === 'host-fallback' && current && current.hasKey && current.status !== 'rejected') {
+        // The Worker found out before we did: pull the fresh status.
+        status({ refresh: true });
+      }
+      billingListeners.forEach((fn) => { try { fn(lastBilling); } catch (e) { console.error(e); } });
+    }
+
+    if (typeof window.fetch === 'function' && !window.fetch.__mktforgeByok) {
+      const original = window.fetch.bind(window);
+      const wrapped = async (...args) => {
+        const res = await original(...args);
+        try {
+          const b = res && res.headers && res.headers.get('X-Mktforge-Billing');
+          if (b) noteBilling(b, res.headers.get('X-Mktforge-Key-Last4'));
+        } catch (e) { /* opaque response */ }
+        return res;
+      };
+      wrapped.__mktforgeByok = true;
+      window.fetch = wrapped;
+    }
+
+    /* ---- the badge ----
+       Placed under the run button of each tool module (selector per module;
+       My Company and Manage Profile have no run). Shown only when the
+       account has a key. */
+    const ANCHORS = {
+      'find-my-customer':        '.fmc__submit',
+      'persona-builder':         '.pb__submit',
+      'battle-card-generator':   '.bcg__submit',
+      'marketing-opportunities': '.mo__submit',
+      'build-positioning':       '.bpos__fields',
+      'draft-messaging':         '.dmsg__inputs-foot',
+      'market-tracker':          '.mtrk__picks'
+      // target-messaging: its Worker is still the Hello World stub and doesn't
+      // read the key yet — add '.tmsg__run' here once it does.
+    };
+
+    function badgeMarkup() {
+      return `<p class="mf-byok" data-mf-byok hidden role="status" aria-live="polite">
+        <span class="mf-byok__dot" aria-hidden="true"></span><span class="mf-byok__text"></span></p>`;
+    }
+
+    function paintBadge(el) {
+      if (!el || !el.isConnected) return;
+      const st = current;
+      const text = el.querySelector('.mf-byok__text');
+      if (!st || !st.hasKey) { el.hidden = true; el.className = 'mf-byok'; return; }
+      const tail = st.last4 ? ` ···${st.last4}` : '';
+      // What the Workers actually did beats what the status says: a Worker
+      // without the encryption secret, say, runs on the Mktforge key while
+      // the stored status is still "ok".
+      const ranOnHost = lastBilling && lastBilling.value !== 'user'
+        && lastBilling.at > (st._at || 0);
+      if (st.status === 'rejected') {
+        el.className = 'mf-byok is-warn';
+        text.textContent = `Your API key${tail} was rejected — runs are using the Mktforge key. Check it in Manage Profile.`;
+      } else if (ranOnHost) {
+        el.className = 'mf-byok is-warn';
+        text.textContent = `The last run used the Mktforge key, not your API key${tail}. Check it in Manage Profile.`;
+      } else {
+        el.className = 'mf-byok is-ok';
+        text.textContent = `Running on your API key${tail}`;
+      }
+      el.hidden = false;
+    }
+
+    function mountBadge(moduleId, container) {
+      const sel = ANCHORS[moduleId];
+      if (!sel || !container) return;
+      const anchor = container.querySelector(sel);
+      if (!anchor || container.querySelector('[data-mf-byok]')) return;
+      anchor.insertAdjacentHTML('afterend', badgeMarkup());
+      const el = container.querySelector('[data-mf-byok]');
+      paintBadge(el);
+      const off = onChange(() => paintBadge(el));
+      const repaint = () => paintBadge(el);
+      billingListeners.add(repaint);
+      // Tidy up when the module's markup goes away (however deep the badge sat).
+      const mo = new MutationObserver(() => {
+        if (!el.isConnected) { off(); billingListeners.delete(repaint); mo.disconnect(); }
+      });
+      mo.observe(container, { childList: true, subtree: true });
+      status();   // first open: fetch (cached afterwards)
+    }
+
+    if (window.Mktforge && typeof window.Mktforge.register === 'function' && !window.Mktforge.register.__mktforgeByok) {
+      const originalRegister = window.Mktforge.register;
+      const wrappedRegister = (mod) => {
+        if (mod && typeof mod.mount === 'function' && ANCHORS[mod.id]) {
+          const originalMount = mod.mount;
+          const id = mod.id;
+          mod = { ...mod, mount(...args) {
+            const out = originalMount.apply(this, args);
+            const go = () => { try { mountBadge(id, args[0]); } catch (e) { console.warn('[Mktforge] key badge', e); } };
+            if (out && typeof out.then === 'function') out.then(go, () => {}); else go();
+            return out;
+          } };
+        }
+        return originalRegister.call(window.Mktforge, mod);
+      };
+      wrappedRegister.__mktforgeByok = true;
+      window.Mktforge.register = wrappedRegister;
+    }
+
+    // Know the answer before the first module opens, and forget it on sign-out.
+    document.addEventListener('mktforge:user-changed', (e) => {
+      gen += 1;
+      lastBilling = null;
+      set(null);                       // badges hide at once
+      if (e.detail) status({ refresh: true });
+    });
+
+    return { status, save, remove, onChange, get current() { return current; },
+             get lastBilling() { return lastBilling; }, KeyError };
+  })();
+
   return { NO_ACCESS, accountEmail, accessProblem, accessError, seedCompanyUrl, attachPicker, savedMaterials,
-           perCompany, STOPPED, INTERRUPTED, hubspot, HubSpotError };
+           perCompany, STOPPED, INTERRUPTED, hubspot, HubSpotError, byok };
 })();

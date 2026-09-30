@@ -731,3 +731,37 @@ body[data-nav="collapsed"] .nav__button[aria-current="page"] .nav__status {
 .display :where(.pb__box, .fmc__box, .mo__box, .bcg__box) :where(tbody tr:nth-child(even)) > td {
   background: var(--surface-alt);
 }
+
+/* ==========================================================================
+   API key badge (MktforgeKit.byok) — under a tool module's run button
+   ========================================================================== */
+
+.mf-byok {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 4px 12px 4px 10px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--accent);
+  background: var(--accent-tint);
+  border: 1px solid rgba(47, 111, 78, .25);
+}
+
+.mf-byok[hidden] { display: none; }
+
+.mf-byok__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.mf-byok.is-warn {
+  color: #8A5A00;
+  background: #FBF1DC;
+  border-color: rgba(138, 90, 0, .3);
+}

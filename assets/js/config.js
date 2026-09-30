@@ -105,6 +105,12 @@ window.MKTFORGE_CONFIG = {
     API_BASE_URL: 'https://customer-tracker.tyler-wishnoff.workers.dev'
   },
 
+  access: {
+    // Invite codes, the allowlist, and each account's own Anthropic API key
+    // (Manage Profile → "Use your own API key"), all on the access Worker.
+    API_BASE_URL: 'https://mktforge-access.tyler-wishnoff.workers.dev'
+  },
+
   hubspot: {
     // Read-only HubSpot connection, one per Mktforge company
     // (C:\Users\Tyler\hubspot-connect, deployed as "hubspot-connect").
