@@ -305,6 +305,10 @@ window.Mktforge = (() => {
      or when the name changes — without going back to Firestore each time. */
   let avatarPhoto = '';
 
+  // The picture everyone starts with, and the one the circle falls back to
+  // when a stored picture can't be shown.
+  const DEFAULT_AVATAR = 'assets/img/default-avatar.jpg';
+
   function renderProfile() {
     // getUser() is null in the instant between signing out and the redirect,
     // so nothing here may assume there is an account.
@@ -313,15 +317,19 @@ window.Mktforge = (() => {
       window.MktforgeAuth.getDisplayName() || '';
 
     const avatar = document.getElementById('profile-avatar');
-    const src = avatarPhoto || (user && user.avatar) || '';
-    avatar.innerHTML = src
-      ? `<img src="${src}" alt="">`
-      : window.MktforgeIcons.user;
+    const src = avatarPhoto || (user && user.avatar) || DEFAULT_AVATAR;
+    avatar.innerHTML = `<img src="${src}" alt="">`;
+    const img = avatar.firstElementChild;
+    // A stored picture that won't load (bad data, blocked URL) shows the
+    // default instead of a broken image — once, so the default itself can't loop.
+    img.addEventListener('error', () => {
+      if (img.getAttribute('src') !== DEFAULT_AVATAR) img.setAttribute('src', DEFAULT_AVATAR);
+    }, { once: true });
   }
 
   /* Reads the stored picture once at boot, then keeps the circle in step with
      whatever Manage Profile saves. A failure here is not worth interrupting
-     anyone over — the circle simply keeps the placeholder icon. */
+     anyone over — the circle simply keeps the default picture. */
   function initAvatar() {
     const Data = window.MktforgeData;
     if (!Data || typeof Data.getAvatar !== 'function') return;

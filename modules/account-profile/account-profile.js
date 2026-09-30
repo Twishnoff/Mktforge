@@ -25,6 +25,8 @@
     document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message, tone } }));
 
   const ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
+  // Shown until the account has a picture of its own, and again after Remove.
+  const DEFAULT_AVATAR = 'assets/img/default-avatar.jpg';
 
   /* ---------- state that outlives mount/unmount ----------
      Someone can wander off to another module mid-edit and come back to the
@@ -167,9 +169,10 @@
 
     const circle = q('[data-el="circle"]');
     const src = previewSrc();
-    circle.innerHTML = src
-      ? `<img src="${esc(src)}" alt="">`
-      : (window.MktforgeIcons ? window.MktforgeIcons.user : '');
+    circle.innerHTML = `<img src="${esc(src || DEFAULT_AVATAR)}" alt="">`;
+    circle.firstElementChild.addEventListener('error', function () {
+      if (this.getAttribute('src') !== DEFAULT_AVATAR) this.setAttribute('src', DEFAULT_AVATAR);
+    }, { once: true });
     circle.classList.toggle('is-empty', !src);
 
     const caption = q('[data-el="caption"]');
@@ -177,7 +180,7 @@
     else if (state.draft) caption.textContent = 'Not saved yet';
     else if (state.remove && state.saved) caption.textContent = 'Will be removed';
     else if (state.saved) caption.textContent = 'Current picture';
-    else caption.textContent = 'No picture set';
+    else caption.textContent = 'Default picture';
 
     const save = q('[data-el="save"]');
     save.disabled = state.saving || !state.loaded || !isDirty();
