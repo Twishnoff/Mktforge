@@ -1546,7 +1546,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/market-tracker/market-tracker.css?v=2026-09-27i',
+    styles: 'modules/market-tracker/market-tracker.css?v=2026-09-30a',
 
     mount(container) {
       mounted = true;
