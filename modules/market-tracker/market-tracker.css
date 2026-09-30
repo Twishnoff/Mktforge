@@ -535,6 +535,9 @@
 }
 .mtrk__c-source { width: 150px; }
 .mtrk__c-mentions { width: 170px; }
+/* Chips sit centred in the column (the header stays left with the others),
+   so a short name isn't left-aligned against the wider ones under it. */
+td.mtrk__c-mentions { text-align: center; }
 .mtrk__c-link { width: 64px; white-space: nowrap; text-align: right; }
 
 .mtrk__source { display: block; font-weight: 600; overflow-wrap: anywhere; }
@@ -585,7 +588,7 @@
   justify-content: center;
   width: fit-content;
   max-width: 100%;
-  margin: 0 4px 4px 0;
+  margin: 0 2px 4px;
   padding: 2px 10px;
   border: 1px solid var(--mtrk-line);
   border-radius: 999px;
