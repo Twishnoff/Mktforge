@@ -1039,14 +1039,23 @@
     }
 
     if (!s.connected) {
-      box.innerHTML = `${head(`<p class="mc__hs-status">Not connected</p>`)}
+      // Not connected yet (or disconnected): the wiring panda keeps the box
+      // company until there's a live connection to show instead.
+      box.innerHTML = `<div class="mc__hs-idle">
+        <div class="mc__hs-art" aria-hidden="true">
+          <img src="modules/my-company/my-company-hubspot-panda.jpg" alt="" width="720" height="618">
+        </div>
+        <div class="mc__hs-idle-main">
+        ${head(`<p class="mc__hs-status">Not connected</p>`)}
           <button type="button" class="mc__btn mc__btn--sm" data-hs="connect" ${busy ? 'disabled' : ''}>
             ${busy === 'connect' ? 'Opening HubSpot…' : 'Connect HubSpot'}</button>
         </div>
         <p class="mc__hs-note">Lets Mktforge read this company’s HubSpot contacts, companies, deals and notes
           to help draft emails. Read-only: Mktforge can’t create, edit or delete anything in HubSpot.
           You’ll need to be a Super Admin (or have App Marketplace access) in the HubSpot account.</p>
-        ${err}`;
+        ${err}
+        </div>
+      </div>`;
       return;
     }
 

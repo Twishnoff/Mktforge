@@ -99,6 +99,11 @@
         </section>
 
         <section class="ap__card" aria-label="Your API key" data-el="key-card">
+          <div class="ap__key-layout">
+            <div class="ap__key-art" aria-hidden="true">
+              <img src="modules/account-profile/account-profile-key-panda.jpg" alt="" width="720" height="618">
+            </div>
+            <div class="ap__key-main">
           <h2 class="ap__h2">Use Your Own API Key</h2>
           <p class="ap__dek ap__dek--card">Optional. Add your own Anthropic API key and every module you run
             is billed to your Anthropic account instead of Mktforge's. Remove it any time to go back.</p>
@@ -148,6 +153,8 @@
 
             <p class="ap__error" data-el="key-error" role="alert" hidden></p>
             <p class="ap__key-off" data-el="key-off" hidden></p>
+          </div>
+            </div>
           </div>
         </section>
       </div>`;

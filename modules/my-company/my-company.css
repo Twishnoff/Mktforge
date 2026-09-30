@@ -699,6 +699,21 @@ a.mc__value:hover, .mc__chip a:hover { text-decoration: underline; }
 
 .mc__hs-error { margin-top: 12px; }
 
+/* not connected: the wiring panda on the left, the usual content on the right */
+.mc__hs-idle {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.mc__hs-art { flex: 0 0 170px; }
+.mc__hs-art img { display: block; width: 100%; height: auto; }
+.mc__hs-idle-main { flex: 1 1 auto; min-width: 0; }
+
+@media (max-width: 720px) {
+  .mc__hs-idle { flex-direction: column; align-items: stretch; gap: 14px; }
+  .mc__hs-art { flex-basis: auto; width: 150px; margin: 0 auto; }
+}
+
 .mc__btn--ghost {
   background: transparent;
   color: var(--accent);

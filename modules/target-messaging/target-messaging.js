@@ -1082,6 +1082,8 @@
     stage.classList.toggle('is-idle', view !== 'results');
     stage.classList.toggle('is-running', view === 'loading');
     playForge(view === 'loading');
+    // A run that broke: the singed panda asks for another go.
+    window.MktforgeKit.oops(stage, 'tmsg', view === 'intro' && !!state.error);
   }
 
   /* While running, the progress sits under the panda; afterwards, the

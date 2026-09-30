@@ -14,6 +14,7 @@
      perCompany(moduleId, opts)     one screen state per company (see below)
      hubspot(companyId?)            read-only HubSpot client for a company (see bottom)
      byok                           the account's own API key: status, badge, Manage Profile calls
+     oops(scope, prefix, on)        swap a module's intro box to the "something went wrong" panda
 
    Everything here only reads My Company data (through MktforgeData) and
    only touches the elements a module passes in.
@@ -513,6 +514,52 @@ window.MktforgeKit = (() => {
     };
   }
 
+  /* ---------- the "uh oh" panda ----------
+     Every tool module shows one intro box (panda + title + text) before a
+     run. When a run breaks and the person has to run it again, that box
+     swaps to the singed panda and a note saying so; the next run (or a
+     company without an error) puts the module's own panda back.
+
+       MktforgeKit.oops(scope, 'bcg', view === 'intro' && !!state.error)
+
+     `scope` is the element holding .<prefix>__intro-img / -title / -text. */
+
+  const OOPS = {
+    img: 'assets/img/oops-panda.jpg',
+    title: 'Uh oh! Something went wrong.',
+    text: 'No worries, just make sure your input data is still correct and run the tool again. It should work this time...hopefully.'
+  };
+
+  function oops(scope, prefix, on) {
+    if (!scope) return;
+    const img = scope.querySelector(`.${prefix}__intro-img`);
+    const title = scope.querySelector(`.${prefix}__intro-title`);
+    const text = scope.querySelector(`.${prefix}__intro-text`);
+    if (!img || !title || !text) return;
+    const showing = img.dataset.oops === '1';
+    if (on === showing) return;
+    if (on) {
+      img.dataset.oops = '1';
+      img.dataset.ownSrc = img.getAttribute('src');
+      img.dataset.ownW = img.getAttribute('width') || '';
+      img.dataset.ownH = img.getAttribute('height') || '';
+      title.dataset.own = title.textContent;
+      text.dataset.own = text.textContent;
+      img.setAttribute('src', OOPS.img);
+      img.setAttribute('width', '720');
+      img.setAttribute('height', '618');
+      title.textContent = OOPS.title;
+      text.textContent = OOPS.text;
+    } else {
+      delete img.dataset.oops;
+      img.setAttribute('src', img.dataset.ownSrc || img.getAttribute('src'));
+      if (img.dataset.ownW) img.setAttribute('width', img.dataset.ownW);
+      if (img.dataset.ownH) img.setAttribute('height', img.dataset.ownH);
+      title.textContent = title.dataset.own || title.textContent;
+      text.textContent = text.dataset.own || text.textContent;
+    }
+  }
+
   /* ---------- bring your own key (BYOK) ----------
      An account can store its own Anthropic API key on Manage Profile. The
      key itself lives encrypted in the access Worker; the browser only ever
@@ -729,5 +776,5 @@ window.MktforgeKit = (() => {
   })();
 
   return { NO_ACCESS, accountEmail, accessProblem, accessError, seedCompanyUrl, attachPicker, savedMaterials,
-           perCompany, STOPPED, INTERRUPTED, hubspot, HubSpotError, byok };
+           perCompany, STOPPED, INTERRUPTED, hubspot, HubSpotError, byok, oops };
 })();

@@ -1184,6 +1184,8 @@
     grid.classList.toggle('is-idle', view !== 'results');
     grid.classList.toggle('is-running', view === 'loading');
     playForge(view === 'loading');
+    // A run that broke: the singed panda asks for another go.
+    window.MktforgeKit.oops(grid, 'bpos', view === 'intro' && !!state.error);
   }
 
   /* The forging panda: two clips stacked in one spot. `forge` loops while a

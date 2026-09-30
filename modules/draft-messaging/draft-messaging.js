@@ -585,6 +585,8 @@
     grid.classList.toggle('is-idle', view !== 'results');
     grid.classList.toggle('is-running', view === 'loading');
     playForge(view === 'loading');
+    // A run that broke: the singed panda asks for another go.
+    window.MktforgeKit.oops(grid, 'dmsg', view === 'intro' && !!state.error);
   }
 
   /* The forging panda: `forge` loops while a run works; `forgeEnd` (the last

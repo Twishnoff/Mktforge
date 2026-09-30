@@ -603,6 +603,8 @@
     el.pdfRow.hidden = view !== 'results';
     el.pdfRow.style.display = view === 'results' ? '' : 'none';
     playForge(view === 'loading');
+    // A run that broke: the singed panda asks for another go.
+    window.MktforgeKit.oops(el.grid, 'mo', view === 'intro' && !!state.error);
   }
 
   /* The forging panda: two clips stacked in one spot. `forge` loops while a

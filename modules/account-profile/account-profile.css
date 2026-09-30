@@ -185,6 +185,25 @@
 
 /* --- your own API key --- */
 
+.ap__key-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+}
+
+.ap__key-art {
+  flex: 0 0 220px;
+  align-self: center;
+}
+
+.ap__key-art img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ap__key-main { flex: 1 1 auto; min-width: 0; }
+
 .ap__dek--card { margin-top: -8px; margin-bottom: 18px; }
 
 .ap__key-loading { margin: 0; color: var(--muted); }
@@ -255,4 +274,7 @@
   .ap { padding: 28px 20px 56px; }
   .ap__body { flex-direction: column; align-items: center; gap: 22px; }
   .ap__pick { width: 100%; }
+  .ap__key-layout { flex-direction: column; align-items: center; gap: 18px; }
+  .ap__key-art { flex-basis: auto; width: 180px; }
+  .ap__key-main { width: 100%; }
 }

@@ -174,6 +174,8 @@
     el.pdfRow.hidden = view !== 'results';
     el.pdfRow.style.display = view === 'results' ? '' : 'none';
     playForge(view === 'loading');
+    // A run that broke: the singed panda asks for another go.
+    window.MktforgeKit.oops(el.grid, 'pb', view === 'intro' && !!state.error);
   }
 
   /* The forging panda: two clips stacked in one spot. `forge` loops while a
@@ -520,11 +522,17 @@
           showPartialNote(st.persona, st.status);
           el.pdf.disabled = false;
         }
-      } else if (!st.error && onScreen(st)) {
-        // The stream closed without a result or an error: back to the start.
-        setAllBoxesPlaceholder();
-        setView('intro');
-        el.status.textContent = '';
+      } else if (!st.error) {
+        // The stream closed without a result or an error: that's still a
+        // run the person has to do again, so say so.
+        st.error = 'The run ended without a result. Please try again.';
+        st.status = '';
+        if (onScreen(st)) {
+          setAllBoxesPlaceholder();
+          setView('intro');
+          showFormError(st.error);
+          el.status.textContent = '';
+        }
       }
     } catch (err) {
       if (!pc.live(st, runId)) return;                 // superseded or cancelled
