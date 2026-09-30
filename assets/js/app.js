@@ -307,7 +307,7 @@ window.Mktforge = (() => {
 
   // The picture everyone starts with, and the one the circle falls back to
   // when a stored picture can't be shown.
-  const DEFAULT_AVATAR = 'assets/img/default-avatar.jpg?v=2';
+  const DEFAULT_AVATAR = 'assets/img/default-avatar.jpg?v=3';
 
   function renderProfile() {
     // getUser() is null in the instant between signing out and the redirect,
