@@ -41,6 +41,9 @@ window.MktforgeKit = (() => {
      message about the email ("not recognized", "approved list", "valid email
      address"). 401/403 also covers a rejected sign-in token. */
   function accessError(status, message) {
+    // 402: the account's plan needs its own Anthropic key (Manage Profile).
+    // The Worker's message says exactly that, so show it as it is.
+    if (status === 402) return String(message || 'This account needs its own Anthropic API key. Add one under Manage Profile.');
     if (status === 401 || status === 403) return NO_ACCESS;
     if (/e-?mail|approved list|not recognized|access/i.test(String(message || ''))) return NO_ACCESS;
     return null;
@@ -463,6 +466,61 @@ window.MktforgeKit = (() => {
     constructor(message, code, status) { super(message); this.code = code; this.status = status; }
   }
 
+  /* ---------- Slack (MktBOT) ----------
+     One Slack workspace per Mktforge company, held by the mktforge-slack
+     Worker. Same shape as hubspot(): status / connect / disconnect, plus
+     completeLink(code) for a Slack user tying their account to this company.
+       const sl = MktforgeKit.slack();        // the active company
+       await sl.status();                     // { connected, teamName, linkedUsers, youLinked, ... }
+       await sl.connect();                    // leaves the page for Slack's approval screen
+       await sl.disconnect();
+       await sl.completeLink(code);           // { ok, teamName, company } */
+
+  function slack(companyId) {
+    const cfg = (window.MKTFORGE_CONFIG || {}).slack || {};
+    const base = String(cfg.API_BASE_URL || '').replace(/\/+$/, '');
+    const cid = () => companyId || (window.MktforgeData && window.MktforgeData.activeCompanyId) || null;
+
+    async function request(method, path, { body, query } = {}) {
+      if (!base) throw new HubSpotError('Slack isn’t set up for Mktforge yet.', 'not_configured', 0);
+      const id = cid();
+      if (!id) throw new HubSpotError('No company is selected.', 'bad_company', 0);
+      const a = window.MktforgeAuth;
+      const token = a && a.getIdToken ? await a.getIdToken() : null;
+      if (!token) throw new HubSpotError('Sign in to use Slack.', 'unauthenticated', 401);
+      const url = new URL(base + path);
+      if (query) Object.entries({ companyId: id, ...query }).forEach(([k, v]) => url.searchParams.set(k, v));
+      const init = { method, headers: { Authorization: `Bearer ${token}` } };
+      if (method !== 'GET') {
+        init.headers['Content-Type'] = 'application/json';
+        init.body = JSON.stringify({ companyId: id, ...(body || {}) });
+      }
+      let res;
+      try { res = await fetch(url.toString(), init); } catch (err) {
+        throw new HubSpotError('Couldn’t reach the Slack connection. Check your internet and try again.', 'network', 0);
+      }
+      let data = {};
+      try { data = await res.json(); } catch (e) { /* empty body */ }
+      if (!res.ok) {
+        const msg = data.message || (res.status === 401 || res.status === 403 ? NO_ACCESS : 'Something went wrong with the Slack connection.');
+        throw new HubSpotError(msg, data.error || `http_${res.status}`, res.status);
+      }
+      return data;
+    }
+
+    return {
+      get companyId() { return cid(); },
+      status: () => request('GET', '/status', { query: {} }),
+      async connect() {
+        const { url } = await request('POST', '/oauth/start');
+        if (!url) throw new HubSpotError('Slack didn’t return an approval link.', 'no_url', 0);
+        window.location.assign(url);
+      },
+      disconnect: () => request('POST', '/disconnect'),
+      completeLink: (code) => request('POST', '/link/complete', { body: { code } })
+    };
+  }
+
   function hubspot(companyId) {
     const cfg = (window.MKTFORGE_CONFIG || {}).hubspot || {};
     const base = String(cfg.API_BASE_URL || '').replace(/\/+$/, '');
@@ -776,5 +834,5 @@ window.MktforgeKit = (() => {
   })();
 
   return { NO_ACCESS, accountEmail, accessProblem, accessError, seedCompanyUrl, attachPicker, savedMaterials,
-           perCompany, STOPPED, INTERRUPTED, hubspot, HubSpotError, byok, oops };
+           perCompany, STOPPED, INTERRUPTED, hubspot, HubSpotError, slack, byok, oops };
 })();

@@ -124,7 +124,10 @@
       pumping: false,
       hs: null,              // HubSpot status from the Worker, null until loaded
       hsError: '',
-      hsBusy: ''             // 'connect' | 'disconnect' while a button is working
+      hsBusy: '',            // 'connect' | 'disconnect' while a button is working
+      sl: null,              // Slack (MktBOT) status from the Worker, null until loaded
+      slError: '',
+      slBusy: ''
     }),
     held: ['drafts', 'editing']
   });
@@ -172,6 +175,9 @@
           <h2 class="mc__h2" id="mc-integrations-title">Integrations</h2>
           <div class="mc__card mc__card--tight">
             <div class="mc__hs" data-el="hubspot"><p class="mc__loading">Checking HubSpot…</p></div>
+          </div>
+          <div class="mc__card mc__card--tight mc__card--slack">
+            <div class="mc__hs mc__sl" data-el="slack"><p class="mc__loading">Checking Slack…</p></div>
           </div>
         </section>
 
@@ -1151,6 +1157,191 @@
     }
   }
 
+  /* ---------- Slack (MktBOT) ----------
+     One Slack workspace per company; the mktforge-slack Worker holds the
+     bot token. Two ways back from Slack land here:
+       ?slack=<result>&company=<id>#/my-company   after "Add to Slack"
+       ?slack_link=<code>#/my-company             a Slack user linking their account
+     Both are read once and removed from the address bar. */
+
+  const SL_RETURN = (() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const result = p.get('slack');
+      const link = p.get('slack_link');
+      if (!result && !link) return null;
+      p.delete('slack'); p.delete('slack_link');
+      const company = p.get('company');
+      if (result) p.delete('company');
+      const rest = p.toString();
+      history.replaceState(history.state, '',
+        `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
+      return { result, link, company };
+    } catch (e) { return null; }
+  })();
+
+  const SL_NOTICES = {
+    connected: { message: 'Slack connected. Mention @MktBOT in a channel, or DM it, to get started.' },
+    denied:    { message: 'Slack wasn’t connected — the approval was cancelled.' },
+    expired:   { message: 'That Slack approval took too long. Click Add to Slack to try again.', tone: 'error' },
+    error:     { message: 'Slack didn’t finish connecting. Try again, and check you can install apps in that workspace.', tone: 'error' }
+  };
+
+  if (SL_RETURN) {
+    document.addEventListener('mktforge:company-ready', async () => {
+      const notify = (message, tone) => document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message, tone } }));
+      if (SL_RETURN.result) {
+        const n = SL_NOTICES[SL_RETURN.result] || SL_NOTICES.error;
+        let message = n.message;
+        const active = Data() && Data().activeCompanyId;
+        if (SL_RETURN.result === 'connected' && SL_RETURN.company && active && SL_RETURN.company !== active) {
+          message = 'Slack connected to the company you started from. Switch back to it to see the connection.';
+        }
+        notify(message, n.tone);
+      }
+      if (SL_RETURN.link) {
+        // A Slack user is tying their Slack account to THIS account + the
+        // company on screen. The Worker checks the code and tells Slack.
+        try {
+          const r = await window.MktforgeKit.slack(Data().activeCompanyId).completeLink(SL_RETURN.link);
+          notify(`Slack linked: @MktBOT in ${r.teamName || 'your workspace'} now works with ${r.company || 'this company'}. Head back to Slack.`);
+          state.sl = null;
+          loadSlack();
+        } catch (ex) {
+          console.error('[My Company] Slack link failed', ex);
+          notify(ex.message || 'Couldn’t link your Slack account. Mention @MktBOT again for a new link.', 'error');
+        }
+      }
+    }, { once: true });
+  }
+
+  function renderSlack() {
+    const box = root && q('[data-el="slack"]');
+    if (!box) return;
+    const st = state;
+    const s = st.sl;
+    const busy = st.slBusy;
+    const err = st.slError ? `<p class="mc__error mc__hs-error" role="alert">${esc(st.slError)}</p>` : '';
+    const logo = `<span class="mc__sl-logo" aria-hidden="true">#</span>`;
+
+    const head = (statusHtml) => `
+      <div class="mc__hs-main">
+        <div class="mc__hs-name">
+          ${logo}
+          <div>
+            <h3 class="mc__h3 mc__hs-title">Slack <span class="mc__sl-bot">MktBOT</span></h3>
+            ${statusHtml}
+          </div>
+        </div>`;
+
+    if (!s) {
+      box.innerHTML = st.slError
+        ? `${head('<p class="mc__hs-status">Status unavailable</p>')}
+             <button type="button" class="mc__btn mc__btn--sm mc__btn--ghost" data-sl="retry">Try again</button>
+           </div>${err}`
+        : '<p class="mc__loading">Checking Slack…</p>';
+      return;
+    }
+
+    if (!s.connected) {
+      box.innerHTML = `<div class="mc__hs-idle">
+        <div class="mc__hs-idle-main">
+          <div class="mc__hs-name">
+            ${logo}
+            <div>
+              <h3 class="mc__h3 mc__hs-title">Slack <span class="mc__sl-bot">MktBOT</span></h3>
+              <p class="mc__hs-status">Not connected</p>
+            </div>
+          </div>
+          <p class="mc__hs-note">Add MktBOT to your Slack workspace and your team can ask Mktforge for battle cards, personas,
+            marketing opportunities and customer research right from a channel — results land in the thread and are
+            saved here. Each person links their own Mktforge account the first time they mention the bot, so runs use
+            their access and their API key.</p>
+          ${s.available === false ? '<p class="mc__hs-note">Slack isn’t switched on for Mktforge yet.</p>' : ''}
+          ${err}
+        </div>
+        <div class="mc__hs-idle-side">
+          <button type="button" class="mc__btn mc__btn--sm" data-sl="connect" ${busy || s.available === false ? 'disabled' : ''}>
+            ${busy === 'connect' ? 'Opening Slack…' : 'Add to Slack'}</button>
+        </div>
+      </div>`;
+      return;
+    }
+
+    const since = hsTime(s.installedAt);
+    const people = s.linkedUsers === 1 ? '1 person linked' : `${s.linkedUsers || 0} people linked`;
+    box.innerHTML = `${head(`<p class="mc__hs-status is-ok"><span class="mc__hs-dot" aria-hidden="true"></span>
+            Connected to <strong>${esc(s.teamName || 'your workspace')}</strong> · ${esc(people)}${s.youLinked ? ' · you’re linked' : ''}</p>`)}
+        <button type="button" class="mc__delete" data-sl="disconnect" ${busy ? 'disabled' : ''}>
+          ${busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}</button>
+      </div>
+      <p class="mc__hs-note">${since ? `Connected ${esc(since)}. ` : ''}Mention <strong>@MktBOT</strong> in a channel or send it a DM.
+        Try “make a battle card for VP of Sales vs competitor.com”, “what events are coming up for Data Engineers?”
+        or “add acme.com to our competitors”. Type <code>/mktforge</code> for help.</p>
+      ${err}`;
+  }
+
+  async function loadSlack() {
+    const st = state;
+    st.slError = '';
+    if (onScreen(st) && !st.sl) renderSlack();
+    try {
+      st.sl = await window.MktforgeKit.slack(st._cid).status();
+    } catch (ex) {
+      console.warn('[My Company] Slack status unavailable', ex);
+      if (!st.sl) st.slError = ex.message || 'Couldn’t check the Slack connection.';
+    }
+    if (onScreen(st)) renderSlack();
+  }
+
+  async function handleSlackClick(e) {
+    const btn = e.target.closest('[data-sl]');
+    if (!btn || state.slBusy) return;
+    const st = state;
+    const action = btn.dataset.sl;
+
+    if (action === 'retry') { st.sl = null; loadSlack(); return; }
+
+    if (action === 'connect') {
+      st.slBusy = 'connect';
+      st.slError = '';
+      renderSlack();
+      try {
+        await window.MktforgeKit.slack(st._cid).connect();   // leaves the page on success
+      } catch (ex) {
+        console.error('[My Company] Slack connect failed', ex);
+        st.slError = ex.message || 'Couldn’t start the Slack connection.';
+        st.slBusy = '';
+        if (onScreen(st)) renderSlack();
+      }
+      return;
+    }
+
+    if (action === 'disconnect') {
+      const ok = await Mktforge.confirm({
+        message: 'Disconnect Slack from this company? MktBOT will stop answering in that workspace and everyone’s Slack links for this company are removed. '
+          + 'To remove the app from Slack completely, also remove it under Apps in your Slack workspace settings.',
+        cancelLabel: 'Keep Connected',
+        confirmLabel: 'Disconnect',
+        danger: true
+      });
+      if (!ok) return;
+      st.slBusy = 'disconnect';
+      st.slError = '';
+      if (onScreen(st)) renderSlack();
+      try {
+        await window.MktforgeKit.slack(st._cid).disconnect();
+        st.sl = { connected: false, available: true };
+        document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message: 'Slack disconnected.' } }));
+      } catch (ex) {
+        console.error('[My Company] Slack disconnect failed', ex);
+        st.slError = ex.message || 'Couldn’t disconnect Slack. Try again.';
+      }
+      st.slBusy = '';
+      if (onScreen(st)) renderSlack();
+    }
+  }
+
   /* ---------- Delete This Company ---------- */
 
   async function handleDeleteCompany() {
@@ -1175,7 +1366,7 @@
     icon:   'factory',
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/my-company/my-company.css?v=2026-09-27k',
+    styles: 'modules/my-company/my-company.css?v=2026-10-03a',
     companyAware: true,
 
     mount(container) {
@@ -1218,6 +1409,11 @@
       state.hsBusy = '';                             // a Connect that left the page is over
       renderHubSpot();
       loadHubSpot();                                 // always refresh on open
+
+      q('[data-el="slack"]').addEventListener('click', handleSlackClick);
+      state.slBusy = '';
+      renderSlack();
+      loadSlack();
 
       if (state.loaded) {
         // Another module may have changed the profile (e.g. Find My Customer

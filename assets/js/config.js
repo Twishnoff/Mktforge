@@ -111,6 +111,12 @@ window.MKTFORGE_CONFIG = {
     API_BASE_URL: 'https://mktforge-access.tyler-wishnoff.workers.dev'
   },
 
+  slack: {
+    // MktBOT — Mktforge in Slack, one workspace per Mktforge company
+    // (C:\Users\Tyler\mktforge-slack, deployed as "mktforge-slack").
+    API_BASE_URL: 'https://mktforge-slack.tyler-wishnoff.workers.dev'
+  },
+
   hubspot: {
     // Read-only HubSpot connection, one per Mktforge company
     // (C:\Users\Tyler\hubspot-connect, deployed as "hubspot-connect").
