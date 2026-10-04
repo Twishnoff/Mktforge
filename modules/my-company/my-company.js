@@ -1222,7 +1222,7 @@
     const s = st.sl;
     const busy = st.slBusy;
     const err = st.slError ? `<p class="mc__error mc__hs-error" role="alert">${esc(st.slError)}</p>` : '';
-    const logo = `<span class="mc__sl-logo" aria-hidden="true">#</span>`;
+    const logo = `<img class="mc__hs-logo" src="modules/my-company/slack-logo.png" alt="" width="40" height="40">`;
 
     const head = (statusHtml) => `
       <div class="mc__hs-main">
@@ -1366,7 +1366,7 @@
     icon:   'factory',
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/my-company/my-company.css?v=2026-10-03a',
+    styles: 'modules/my-company/my-company.css?v=2026-10-03b',
     companyAware: true,
 
     mount(container) {

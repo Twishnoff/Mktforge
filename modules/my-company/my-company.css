@@ -725,15 +725,6 @@ a.mc__value:hover, .mc__chip a:hover { text-decoration: underline; }
 /* --- integrations: Slack (MktBOT) --- */
 
 .mc__card--slack { margin-top: 14px; }
-.mc__sl-logo {
-  flex: 0 0 auto;
-  width: 40px; height: 40px;
-  border-radius: 10px;
-  background: var(--accent);
-  color: #fff;
-  font: 700 22px/40px var(--font-display);
-  text-align: center;
-}
 .mc__sl-bot {
   display: inline-block;
   margin-left: 8px;
