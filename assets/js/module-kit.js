@@ -517,7 +517,12 @@ window.MktforgeKit = (() => {
         window.location.assign(url);
       },
       disconnect: () => request('POST', '/disconnect'),
-      completeLink: (code) => request('POST', '/link/complete', { body: { code } })
+      completeLink: (code) => request('POST', '/link/complete', { body: { code } }),
+      /* A workspace already connected to another company: the Worker parks
+         the new install and the app asks before switching. */
+      pending: (id) => request('GET', '/oauth/pending', { query: { id } }),
+      confirmSwitch: (id) => request('POST', '/oauth/confirm', { body: { id } }),
+      cancelSwitch: (id) => request('POST', '/oauth/cancel', { body: { id } })
     };
   }
 

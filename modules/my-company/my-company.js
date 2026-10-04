@@ -1170,13 +1170,14 @@
       const result = p.get('slack');
       const link = p.get('slack_link');
       if (!result && !link) return null;
-      p.delete('slack'); p.delete('slack_link');
+      const pending = p.get('pending');
+      p.delete('slack'); p.delete('slack_link'); p.delete('pending');
       const company = p.get('company');
       if (result) p.delete('company');
       const rest = p.toString();
       history.replaceState(history.state, '',
         `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
-      return { result, link, company };
+      return { result, link, company, pending };
     } catch (e) { return null; }
   })();
 
@@ -1190,6 +1191,40 @@
   if (SL_RETURN) {
     document.addEventListener('mktforge:company-ready', async () => {
       const notify = (message, tone) => document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message, tone } }));
+      if (SL_RETURN.result === 'conflict' && SL_RETURN.pending) {
+        // The workspace is already another company's. Ask before switching.
+        const sl = window.MktforgeKit.slack(SL_RETURN.company || Data().activeCompanyId);
+        let info = null;
+        try { info = await sl.pending(SL_RETURN.pending); }
+        catch (ex) { notify(ex.message || 'That Slack approval expired. Click Add to Slack to try again.', 'error'); return; }
+        const team = info.teamName || 'That Slack workspace';
+        const from = info.sameAccount
+          ? (info.existingCompanyName || 'another of your companies')
+          : 'a company on another Mktforge account';
+        const to = info.newCompanyName || 'this company';
+        const ok = await Mktforge.confirm({
+          message: `${team} is already connected to ${from}. If you proceed, MktBOT will be disconnected from ${from} `
+            + `(everyone’s Slack links there are removed) and connected to ${to}.`,
+          cancelLabel: 'Cancel',
+          confirmLabel: 'Yes, Proceed',
+          danger: true
+        });
+        try {
+          if (ok) {
+            await sl.confirmSwitch(SL_RETURN.pending);
+            notify(`Slack connected. MktBOT in ${team} now works with ${to}.`);
+          } else {
+            await sl.cancelSwitch(SL_RETURN.pending);
+            notify(`Cancelled — ${team} stays connected to ${from}.`);
+          }
+        } catch (ex) {
+          console.error('[My Company] Slack switch failed', ex);
+          notify(ex.message || 'Couldn’t finish the Slack change. Try again.', 'error');
+        }
+        state.sl = null;
+        loadSlack();
+        return;
+      }
       if (SL_RETURN.result) {
         const n = SL_NOTICES[SL_RETURN.result] || SL_NOTICES.error;
         let message = n.message;
