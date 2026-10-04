@@ -1253,14 +1253,13 @@
               <p class="mc__hs-status">Not connected</p>
             </div>
           </div>
-          <p class="mc__hs-note">Add MktBOT to your Slack workspace and your team can ask Mktforge for battle cards, personas,
-            marketing opportunities and customer research right from a channel — results land in the thread and are
-            saved here. Each person links their own Mktforge account the first time they mention the bot, so runs use
-            their access and their API key.</p>
+          <p class="mc__hs-note">Add MktBOT to your Slack workspace to generate and request battle cards, personas and more from
+            your Mktforge account, directly from your chat channels.</p>
           ${s.available === false ? '<p class="mc__hs-note">Slack isn’t switched on for Mktforge yet.</p>' : ''}
           ${err}
         </div>
         <div class="mc__hs-idle-side">
+          <img class="mc__hs-art" src="modules/my-company/my-company-slack-panda.jpg" alt="" width="720" height="568">
           <button type="button" class="mc__btn mc__btn--sm" data-sl="connect" ${busy || s.available === false ? 'disabled' : ''}>
             ${busy === 'connect' ? 'Opening Slack…' : 'Add to Slack'}</button>
         </div>
