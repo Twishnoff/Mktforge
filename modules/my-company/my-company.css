@@ -351,6 +351,9 @@ a.mc__value:hover, .mc__chip a:hover { text-decoration: underline; }
 }
 
 .mc__btn:hover:not(:disabled) { opacity: .9; }
+/* Generate Company Brief sits bottom-left; Save keeps the right edge. */
+.mc__brief { margin-right: auto; }
+.mc__brief:disabled { opacity: .75; cursor: progress; }
 .mc__btn:disabled { opacity: .6; cursor: progress; }
 /* Nothing changed yet: greyed out, not "busy". */
 .mc__btn.is-idle:disabled { opacity: .4; cursor: default; }

@@ -122,6 +122,13 @@ window.MKTFORGE_CONFIG = {
     // (C:\Users\Tyler\hubspot-connect, deployed as "hubspot-connect").
     // Tokens live in the Worker, encrypted; the browser never sees them.
     API_BASE_URL: 'https://hubspot-connect.tyler-wishnoff.workers.dev'
+  },
+
+  companyBrief: {
+    // My Company → "Generate Company Brief": consolidates the company's
+    // generated PDFs into one shareable brief
+    // (C:\Users\Tyler\company-brief, deployed as "company-brief").
+    API_BASE_URL: 'https://company-brief.tyler-wishnoff.workers.dev'
   }
 
 };

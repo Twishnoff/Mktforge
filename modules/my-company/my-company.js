@@ -127,7 +127,8 @@
       hsBusy: '',            // 'connect' | 'disconnect' while a button is working
       sl: null,              // Slack (MktBOT) status from the Worker, null until loaded
       slError: '',
-      slBusy: ''
+      slBusy: '',
+      briefBusy: ''          // progress text while Generate Company Brief runs
     }),
     held: ['drafts', 'editing']
   });
@@ -165,6 +166,8 @@
           <form class="mc__form" data-el="form" novalidate>
             <div class="mc__rows" data-el="rows"><p class="mc__loading">Loading your profile…</p></div>
             <div class="mc__actions">
+              <button type="button" class="mc__btn mc__btn--ghost mc__brief" data-el="brief"
+                title="Build a shareable PDF from this company's Mktforge results">Generate Company Brief</button>
               <p class="mc__error" data-el="error" role="alert" hidden></p>
               <button type="submit" class="mc__btn" data-el="save">Save</button>
             </div>
@@ -333,6 +336,7 @@
         ? `<p class="mc__error">${esc(state.loadError)} <button type="button" class="mc__link" data-el="retry">Try again</button></p>`
         : '<p class="mc__loading">Loading your profile…</p>';
       q('[data-el="save"]').hidden = true;
+      q('[data-el="brief"]').hidden = true;
       const retry = q('[data-el="retry"]');
       if (retry) retry.addEventListener('click', load);
       return;
@@ -340,6 +344,8 @@
 
     rows.innerHTML = FIELDS.map((f) => (rowEditing(f) ? editHtml(f) : savedHtml(f))).join('');
     q('[data-el="save"]').hidden = !FIELDS.some(rowEditing);
+    q('[data-el="brief"]').hidden = false;
+    renderBriefButton();
     syncSave();
 
     FIELDS.forEach((f) => { if (rowEditing(f)) wireRow(f); });
@@ -1392,6 +1398,38 @@
     if (!done && btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Delete This Company'; }
   }
 
+  /* ---------- Company Brief ---------- */
+
+  function renderBriefButton() {
+    const btn = q('[data-el="brief"]');
+    if (!btn) return;
+    btn.disabled = !!state.briefBusy;
+    btn.textContent = state.briefBusy || 'Generate Company Brief';
+  }
+
+  async function handleBrief() {
+    const st = state;
+    if (st.briefBusy) return;
+    const err = q('[data-el="error"]');
+    err.hidden = true;
+    const say = (text) => { st.briefBusy = text; if (onScreen(st)) renderBriefButton(); };
+    say('Starting…');
+    Mktforge.reportActivity('my-company', 'running');
+    try {
+      await Mktforge.loadScript('modules/my-company/company-brief.js');
+      await window.MktforgeCompanyBrief.generate({ cid: st._cid, say });
+      Mktforge.reportActivity('my-company', 'idle');
+    } catch (e) {
+      Mktforge.reportActivity('my-company', 'error');
+      const message = (e && e.message) || 'The brief could not be generated. Please try again.';
+      if (onScreen(st)) { err.textContent = message; err.hidden = false; }
+      else document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message, tone: 'error' } }));
+    } finally {
+      st.briefBusy = '';
+      if (onScreen(st)) renderBriefButton();
+    }
+  }
+
   /* ---------- module ---------- */
 
   Mktforge.register({
@@ -1400,7 +1438,7 @@
     icon:   'factory',
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/my-company/my-company.css?v=2026-10-03b',
+    styles: 'modules/my-company/my-company.css?v=2026-10-07a',
     companyAware: true,
 
     mount(container) {
@@ -1409,6 +1447,7 @@
       root = container.firstElementChild;
 
       q('[data-el="form"]').addEventListener('submit', handleSave);
+      q('[data-el="brief"]').addEventListener('click', handleBrief);
       q('[data-el="form"]').addEventListener('input', () => pc.hold());
       q('[data-el="rows"]').addEventListener('click', () => setTimeout(() => pc.hold(), 0));
       const delBtn = q('[data-el="delete-company"]');
