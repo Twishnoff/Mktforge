@@ -600,6 +600,23 @@ window.MktforgeKit = (() => {
     text: 'No worries, just make sure your input data is still correct and run the tool again. It should work this time...hopefully.'
   };
 
+  /* The same panda, different words, when the run was refused because the
+     account has no working API key of its own (byok plan): the Worker said
+     so (X-Mktforge-Billing: none) or the app already knows it. */
+  const OOPS_KEY = {
+    title: "Uh oh! Looks like you aren't running on a valid API key.",
+    html: 'Mktforge is free to use if you provide your own API key. Add it under '
+      + '<a href="#/account-profile"><strong>Manage Profile</strong></a>. '
+      + 'If you\u2019d like to use Mktforge without your own API key, request free hosting at '
+      + '<a href="https://mktforge.io" target="_blank" rel="noopener">Mktforge.io</a>.'
+  };
+
+  function keyRefusal() {
+    const b = byok.lastBilling;
+    if (b && b.value === 'none' && Date.now() - b.at < 60000) return true;
+    return byok.blocked();
+  }
+
   function oops(scope, prefix, on) {
     if (!scope) return;
     const img = scope.querySelector(`.${prefix}__intro-img`);
@@ -607,21 +624,33 @@ window.MktforgeKit = (() => {
     const text = scope.querySelector(`.${prefix}__intro-text`);
     if (!img || !title || !text) return;
     const showing = img.dataset.oops === '1';
-    if (on === showing) return;
+    const variant = on ? (keyRefusal() ? 'key' : 'run') : '';
+    if (on === showing && (!on || img.dataset.oopsVariant === variant)) return;
     if (on) {
-      img.dataset.oops = '1';
-      img.dataset.ownSrc = img.getAttribute('src');
-      img.dataset.ownW = img.getAttribute('width') || '';
-      img.dataset.ownH = img.getAttribute('height') || '';
-      title.dataset.own = title.textContent;
-      text.dataset.own = text.textContent;
+      if (!showing) {
+        img.dataset.oops = '1';
+        img.dataset.ownSrc = img.getAttribute('src');
+        img.dataset.ownW = img.getAttribute('width') || '';
+        img.dataset.ownH = img.getAttribute('height') || '';
+        title.dataset.own = title.textContent;
+        text.dataset.own = text.textContent;
+      }
+      img.dataset.oopsVariant = variant;
       img.setAttribute('src', OOPS.img);
       img.setAttribute('width', '720');
       img.setAttribute('height', '618');
-      title.textContent = OOPS.title;
-      text.textContent = OOPS.text;
+      text.classList.toggle('mf-oops-key', variant === 'key');
+      if (variant === 'key') {
+        title.textContent = OOPS_KEY.title;
+        text.innerHTML = OOPS_KEY.html;
+      } else {
+        title.textContent = OOPS.title;
+        text.textContent = OOPS.text;
+      }
     } else {
       delete img.dataset.oops;
+      delete img.dataset.oopsVariant;
+      text.classList.remove('mf-oops-key');
       img.setAttribute('src', img.dataset.ownSrc || img.getAttribute('src'));
       if (img.dataset.ownW) img.setAttribute('width', img.dataset.ownW);
       if (img.dataset.ownH) img.setAttribute('height', img.dataset.ownH);

@@ -780,6 +780,10 @@ body[data-nav="collapsed"] .nav__button[aria-current="page"] .nav__status {
   white-space: normal;
 }
 
+/* Links in the "no valid API key" version of a module's uh-oh box. */
+.mf-oops-key a { color: var(--accent); text-decoration: underline; }
+.mf-oops-key a:hover { opacity: .85; }
+
 .mf-byok a {
   color: inherit;
   font-weight: 600;
