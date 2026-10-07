@@ -5,7 +5,11 @@
    writes the account's uid into the shared KV allowlist that every module
    Worker reads. Nothing here decides access — it only asks.
 
-     MktforgeInvite.redeem(code) -> Promise<{ ok, label? }>
+     MktforgeInvite.redeem(code) -> Promise<{ ok, label?, plan, upgraded? }>
+       with a code: join the allowlist on the hosted plan (may fall back to
+       Mktforge's API key) — or upgrade an existing self-signup account to it
+     MktforgeInvite.register()   -> Promise<{ ok, plan }>
+       no code: join on the byok plan (the account's own API key only)
 
    Throws an Error whose .message is already written for the person.
    ========================================================================== */
@@ -14,7 +18,7 @@ window.MktforgeInvite = (() => {
 
   const API = 'https://mktforge-access.tyler-wishnoff.workers.dev';
 
-  async function redeem(code) {
+  async function post(path, body, failVerb) {
     const token = (window.MktforgeAuth && window.MktforgeAuth.getIdToken)
       ? await window.MktforgeAuth.getIdToken(true)
       : null;
@@ -25,13 +29,13 @@ window.MktforgeInvite = (() => {
 
     let res;
     try {
-      res = await fetch(`${API}/redeem`, {
+      res = await fetch(`${API}${path}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ code })
+        body: JSON.stringify(body || {})
       });
     } catch (err) {
       // Network failure, not a rejected code — say so, so nobody retypes a
@@ -43,12 +47,15 @@ window.MktforgeInvite = (() => {
 
     if (!res.ok || !payload || payload.ok !== true) {
       throw new Error(
-        (payload && payload.message) || `Could not redeem that code (${res.status}).`
+        (payload && payload.message) || `Could not ${failVerb} (${res.status}).`
       );
     }
 
     return payload;
   }
 
-  return { redeem };
+  const redeem = (code) => post('/redeem', { code }, 'redeem that code');
+  const register = () => post('/register', {}, 'set up your account');
+
+  return { redeem, register };
 })();

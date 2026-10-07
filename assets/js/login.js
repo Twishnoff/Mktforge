@@ -60,6 +60,9 @@
     setMsg('signin-msg', 'Couldn\u2019t reach the sign-in service. Check your connection and try again.');
   });
 
+  // The marketing site's "Sign Up" lands here with ?view=create.
+  if (new URLSearchParams(location.search).get('view') === 'create') show('create');
+
   MktforgeAuth.ready.then((user) => {
     if (!user) return;                                  // signed out — stay here
     if (MktforgeAuth.config.requireVerifiedEmail && !user.verified) {
@@ -124,19 +127,21 @@
     }
     $('create-password2').removeAttribute('aria-invalid');
 
-    if (!code) { setMsg('create-msg', 'Enter your invite code.'); return; }
-
     busy($('create-btn'), true, 'Creating…');
     try {
       const user = await MktforgeAuth.signUp(email, p1);
 
-      // The account exists and is signed in from here. Redeem the invite code
-      // before letting them through, and remove the account if it is refused:
-      // Firebase will not create a second account on an address that already
-      // has one, so a bad code would otherwise strand their real email on a
-      // permanently useless login that only the administrator can delete.
+      // The account exists and is signed in from here. Put it on the
+      // allowlist before letting them through — with the invite code when
+      // they entered one (runs may fall back to Mktforge's key), otherwise as
+      // a self-signup (their own API key only) — and remove the account if
+      // that is refused: Firebase will not create a second account on an
+      // address that already has one, so a bad code would otherwise strand
+      // their real email on a permanently useless login that only the
+      // administrator can delete.
       try {
-        await MktforgeInvite.redeem(code);
+        if (code) await MktforgeInvite.redeem(code);
+        else await MktforgeInvite.register();
       } catch (redeemErr) {
         try {
           await user.delete();
@@ -144,7 +149,7 @@
           console.warn('[Mktforge] could not remove the unapproved account', cleanupErr);
           try { await MktforgeAuth.signOut(); } catch (e) { /* nothing further to do */ }
         }
-        setMsg('create-msg', redeemErr.message || 'That invite code is not valid.');
+        setMsg('create-msg', redeemErr.message || (code ? 'That invite code is not valid.' : 'Could not set up your account. Try again.'));
         return;
       }
 

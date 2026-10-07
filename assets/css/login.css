@@ -102,6 +102,15 @@
 
 .field input[aria-invalid="true"] { border-color: #A8371F; }
 
+.field__opt { font-weight: 400; color: var(--muted); }
+
+.field__hint {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 /* --- Buttons --- */
 
 .actions {

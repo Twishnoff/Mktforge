@@ -39,13 +39,20 @@ window.MktforgeKit = (() => {
 
   /* The Workers answer an unknown or malformed email with 400/403 and a
      message about the email ("not recognized", "approved list", "valid email
-     address"). 401/403 also covers a rejected sign-in token. */
+     address"). 401/403 also covers a rejected sign-in token.
+
+     Some refusals carry a message the person needs to read as written —
+     verify your email (403), today's limit (429), add or fix your own API
+     key (402). Those pass straight through; everything else that means
+     "this account can't use this" collapses into NO_ACCESS. */
+  const PASS_THROUGH = /verify your email|verification link|request limit|api key/i;
   function accessError(status, message) {
-    // 402: the account's plan needs its own Anthropic key (Manage Profile).
-    // The Worker's message says exactly that, so show it as it is.
-    if (status === 402) return String(message || 'This account needs its own Anthropic API key. Add one under Manage Profile.');
-    if (status === 401 || status === 403) return NO_ACCESS;
-    if (/e-?mail|approved list|not recognized|access/i.test(String(message || ''))) return NO_ACCESS;
+    const text = String(message || '');
+    if (status === 402) return text || 'This account needs its own Anthropic API key. Add one under Manage Profile.';
+    if (status === 429) return text || "You've hit today's request limit for this account. It resets at midnight UTC.";
+    if (status === 401 || status === 403) return PASS_THROUGH.test(text) ? text : NO_ACCESS;
+    if (PASS_THROUGH.test(text)) return text;
+    if (/e-?mail|approved list|not recognized|access/i.test(text)) return NO_ACCESS;
     return null;
   }
 
@@ -630,12 +637,19 @@ window.MktforgeKit = (() => {
      that key instead of Mktforge's, and every Worker response says which
      (X-Mktforge-Billing: user | host | host-fallback).
 
-       await MktforgeKit.byok.status()        -> { hasKey, last4, status, available }
+       await MktforgeKit.byok.status()        -> { hasKey, last4, status, available,
+                                                   plan: 'hosted'|'byok', hostedKeyAllowed }
+       MktforgeKit.byok.needsOwnKey()         true when the account can't run without its own key
        await MktforgeKit.byok.save(key)       validate + store (Manage Profile)
        await MktforgeKit.byok.remove()
        MktforgeKit.byok.onChange(fn)          fn(status) now and on every change
 
-     The badge under each tool module's run button needs nothing from the
+     Accounts created without an invite code are on the "byok" plan: no
+     falling back to Mktforge's key, so without a working key of their own
+     the Workers refuse to run (402). The badge is where they find that out
+     before they try — it's shown for such an account even with no key.
+
+     The badge beside each tool module's title needs nothing from the
      modules: Mktforge.register is wrapped below so it's added after mount,
      and window.fetch is wrapped so the billing header of every Worker
      answer is noticed. */
@@ -714,15 +728,26 @@ window.MktforgeKit = (() => {
       return () => listeners.delete(fn);
     }
 
+    // The account must bring its own key (self-signup, no invite code yet).
+    function needsOwnKey(st = current) {
+      return !!st && (st.hostedKeyAllowed === false || st.plan === 'byok');
+    }
+
+    // Running right now would be refused: byok plan with no usable key.
+    function blocked(st = current) {
+      return needsOwnKey(st) && (!st.hasKey || st.status === 'rejected');
+    }
+
     /* ---- what the last Worker answer said ----
        'user'          the run used the account's key
        'host'          Mktforge's key (no key stored)
-       'host-fallback' the account's key was rejected, so Mktforge's was used */
+       'host-fallback' the account's key was rejected, so Mktforge's was used
+       'none'          refused before any paid call (byok plan, no usable key) */
     let lastBilling = null;
     const billingListeners = new Set();
     function noteBilling(value, last4) {
       lastBilling = { value, last4: last4 || null, at: Date.now() };
-      if (value === 'host-fallback' && current && current.hasKey && current.status !== 'rejected') {
+      if ((value === 'host-fallback' || value === 'none') && current && current.hasKey && current.status !== 'rejected') {
         // The Worker found out before we did: pull the fresh status.
         status({ refresh: true });
       }
@@ -746,7 +771,8 @@ window.MktforgeKit = (() => {
     /* ---- the badge ----
        Sits to the right of the module's green title (every tool module's
        <h1 class="…__eyebrow">); My Company and Manage Profile have no run.
-       Shown only when the account has a key. */
+       Shown when the account has a key — and, for an account that must
+       bring its own, when it hasn't yet, since nothing will run until it does. */
     const ANCHORS = {
       'find-my-customer':        '.fmc__eyebrow',
       'persona-builder':         '.pb__eyebrow',
@@ -768,14 +794,24 @@ window.MktforgeKit = (() => {
       if (!el || !el.isConnected) return;
       const st = current;
       const text = el.querySelector('.mf-byok__text');
-      if (!st || !st.hasKey) { el.hidden = true; el.className = 'mf-byok'; return; }
+      if (!st) { el.hidden = true; el.className = 'mf-byok'; return; }
+      const own = needsOwnKey(st);
+      if (!st.hasKey && !own) { el.hidden = true; el.className = 'mf-byok'; return; }
       const tail = st.last4 ? ` ···${st.last4}` : '';
+      const profile = '<a href="#/account-profile">Manage Profile</a>';
       // What the Workers actually did beats what the status says: a Worker
       // without the encryption secret, say, runs on the Mktforge key while
-      // the stored status is still "ok".
-      const ranOnHost = lastBilling && lastBilling.value !== 'user'
+      // the stored status is still "ok". A 'none' answer is a refusal, not
+      // a run on anyone's key, so it doesn't count here.
+      const ranOnHost = lastBilling && lastBilling.value !== 'user' && lastBilling.value !== 'none'
         && lastBilling.at > (st._at || 0);
-      if (st.status === 'rejected') {
+      if (own && !st.hasKey) {
+        el.className = 'mf-byok is-block';
+        text.innerHTML = `This account runs on your own Anthropic API key. Add one in ${profile} to run this module — or enter an invite code there.`;
+      } else if (own && st.status === 'rejected') {
+        el.className = 'mf-byok is-block';
+        text.innerHTML = `Your API key${tail} was rejected by Anthropic — runs are stopped until you replace it in ${profile}.`;
+      } else if (st.status === 'rejected') {
         el.className = 'mf-byok is-warn';
         text.textContent = `Your API key${tail} was rejected — runs are using the Mktforge key. Check it in Manage Profile.`;
       } else if (ranOnHost) {
@@ -834,7 +870,7 @@ window.MktforgeKit = (() => {
       if (e.detail) status({ refresh: true });
     });
 
-    return { status, save, remove, onChange, get current() { return current; },
+    return { status, save, remove, onChange, needsOwnKey, blocked, get current() { return current; },
              get lastBilling() { return lastBilling; }, KeyError };
   })();
 

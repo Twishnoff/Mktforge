@@ -5,6 +5,11 @@
    Anthropic API key (optional — module runs come out of it instead of
    Mktforge's key). Both belong to the account, not to a company.
 
+   Accounts created without an invite code are on the "byok" plan: the key
+   is required, not optional, and the card says so. An invite code entered
+   on the third card moves the account to the hosted plan, where Mktforge's
+   key covers runs with no key (or a broken one).
+
    Reached from the account menu in the management bar, not from the nav —
    registered with `hidden: true`, so it has a #/account-profile route of its
    own but no nav button.
@@ -107,7 +112,7 @@
             </div>
             <div class="ap__key-main">
           <h2 class="ap__h2">Use Your Own API Key</h2>
-          <p class="ap__dek ap__dek--card">Optional. Add your own Anthropic API key and every module you run
+          <p class="ap__dek ap__dek--card" data-el="key-dek">Optional. Add your own Anthropic API key and every module you run
             is billed to your Anthropic account instead of Mktforge's. Remove it any time to go back.</p>
 
           <div class="ap__key" data-el="key-body">
@@ -158,6 +163,25 @@
           </div>
             </div>
           </div>
+        </section>
+
+        <section class="ap__card" aria-label="Invite code" data-el="invite-card" hidden>
+          <h2 class="ap__h2">Have an Invite Code?</h2>
+          <p class="ap__dek ap__dek--card" data-el="invite-dek"></p>
+
+          <form class="ap__invite-form" data-el="invite-form" autocomplete="off" hidden>
+            <div class="ap__key-row">
+              <label class="ap__key-label" for="ap-invite-input">Invite code</label>
+              <input type="text" id="ap-invite-input" data-el="invite-input" placeholder="ABCD-1234-5678"
+                spellcheck="false" autocapitalize="characters" autocorrect="off" autocomplete="off">
+            </div>
+            <div class="ap__actions">
+              <span class="ap__spacer"></span>
+              <button type="submit" class="ap__btn" data-el="invite-save" disabled>Apply code</button>
+            </div>
+          </form>
+
+          <p class="ap__error" data-el="invite-error" role="alert" hidden></p>
         </section>
       </div>`;
   }
@@ -276,6 +300,13 @@
     loading.hidden = !!st;
     if (!st) { have.hidden = true; form.hidden = true; off.hidden = true; return; }
 
+    const own = !!(window.MktforgeKit && window.MktforgeKit.byok.needsOwnKey(st));
+    q('[data-el="key-dek"]').textContent = own
+      ? 'Required for this account. Modules run on your own Anthropic API key, so nothing runs until you add one. '
+        + 'Every module you run is billed to your Anthropic account.'
+      : 'Optional. Add your own Anthropic API key and every module you run is billed to your Anthropic account '
+        + 'instead of Mktforge\u2019s. Remove it any time to go back.';
+
     const available = (st.available !== false || st.hasKey) && !st.unavailable;
     off.hidden = available;
     off.textContent = st.unavailable
@@ -291,9 +322,11 @@
       const summary = q('[data-el="key-summary"]');
       const sub = q('[data-el="key-sub"]');
       if (st.status === 'rejected') {
-        dot.className = 'ap__key-dot is-warn';
+        dot.className = own ? 'ap__key-dot is-block' : 'ap__key-dot is-warn';
         summary.innerHTML = `Your key ending in <strong>${tail}</strong> was rejected by Anthropic`;
-        sub.textContent = 'Modules are running on the Mktforge key until you replace it. '
+        sub.textContent = (own
+          ? 'Modules won\u2019t run until you replace it. '
+          : 'Modules are running on the Mktforge key until you replace it. ')
           + 'It was probably revoked — check it in the Anthropic Console, then paste a working key here.';
       } else {
         dot.className = 'ap__key-dot is-ok';
@@ -316,6 +349,74 @@
 
     err.textContent = key.error;
     err.hidden = !key.error;
+
+    renderInvite(st, own);
+  }
+
+  /* ---------- invite code ----------
+     Shown once the plan is known. On the byok plan it's the way up: a valid
+     code moves the account to the hosted plan. On the hosted plan it just
+     says so — a code would be wasted. */
+
+  const invite = { busy: false, error: '', done: false };
+
+  function renderInvite(st, own) {
+    const card = q('[data-el="invite-card"]');
+    if (!card) return;
+    if (!st || st.unavailable || typeof st.plan !== 'string') { card.hidden = true; return; }
+    card.hidden = false;
+    const form = q('[data-el="invite-form"]');
+    const dek = q('[data-el="invite-dek"]');
+    const err = q('[data-el="invite-error"]');
+    if (own) {
+      form.hidden = false;
+      dek.textContent = 'An invite code switches this account to run on Mktforge\u2019s API key whenever you '
+        + 'don\u2019t have one of your own stored — or yours stops working. Enter it here.';
+      const input = q('[data-el="invite-input"]');
+      const save = q('[data-el="invite-save"]');
+      save.disabled = invite.busy || !String(input.value || '').trim();
+      save.textContent = invite.busy ? 'Checking…' : 'Apply code';
+      input.disabled = invite.busy;
+    } else {
+      form.hidden = true;
+      dek.textContent = invite.done
+        ? 'Done — this account now runs on Mktforge\u2019s API key whenever it doesn\u2019t have a working key of its own.'
+        : 'This account already runs on Mktforge\u2019s API key whenever it doesn\u2019t have a working key of its own. No code needed.';
+    }
+    err.textContent = invite.error;
+    err.hidden = !invite.error;
+  }
+
+  async function applyInvite() {
+    if (invite.busy) return;
+    const input = q('[data-el="invite-input"]');
+    const code = String(input.value || '').trim();
+    if (!code) return;
+    const redeem = window.MktforgeInvite && window.MktforgeInvite.redeem;
+    if (!redeem) { invite.error = 'Invite codes aren\u2019t available right now. Reload the page and try again.'; renderKey(); return; }
+    invite.busy = true; invite.error = '';
+    renderKey();
+    try {
+      await redeem(code);
+      input.value = '';
+      invite.done = true;
+      notify('Invite code applied. Modules can now run on the Mktforge key.');
+      // The plan changed on the server: refetch so every card (and the badge
+      // in each module) picks it up.
+      await window.MktforgeKit.byok.status({ refresh: true });
+    } catch (err) {
+      invite.error = err.message || 'That invite code couldn\u2019t be applied. Check it and try again.';
+    } finally {
+      invite.busy = false;
+      renderKey();
+    }
+  }
+
+  function bindInvite() {
+    const form = q('[data-el="invite-form"]');
+    const input = q('[data-el="invite-input"]');
+    form.addEventListener('submit', (e) => { e.preventDefault(); applyInvite(); });
+    input.addEventListener('input', () => { invite.error = ''; renderKey(); });
   }
 
   async function saveKey() {
@@ -330,6 +431,8 @@
       input.value = '';           // the plaintext is gone from the page the moment it's saved
       key.editing = false;
       notify('API key saved. Modules now run on your Anthropic account.');
+      // Just signed up with no code? The modules' notices clear with this.
+      window.MktforgeKit.byok.status({ refresh: true });
     } catch (err) {
       key.error = err.message || 'Couldn’t save that key. Try again.';
     } finally {
@@ -340,7 +443,11 @@
 
   async function removeKey() {
     if (key.busy) return;
-    if (!window.confirm('Remove your API key? Modules will go back to running on the Mktforge key.')) return;
+    const own = window.MktforgeKit.byok.needsOwnKey(key.status);
+    const warning = own
+      ? 'Remove your API key? This account can\u2019t run modules without one.'
+      : 'Remove your API key? Modules will go back to running on the Mktforge key.';
+    if (!window.confirm(warning)) return;
     key.busy = true; key.error = '';
     renderKey();
     try {
@@ -457,6 +564,7 @@
       root = container.firstElementChild;
       bind();
       bindKey();
+      bindInvite();
       render();
       renderKey();
       load();
@@ -473,6 +581,7 @@
       if (unsubAvatar) { unsubAvatar(); unsubAvatar = null; }
       if (unsubKey) { unsubKey(); unsubKey = null; }
       key.editing = false; key.error = '';
+      invite.busy = false; invite.error = ''; invite.done = false;
       root = null;
     }
   });

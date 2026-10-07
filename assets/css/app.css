@@ -771,3 +771,17 @@ body[data-nav="collapsed"] .nav__button[aria-current="page"] .nav__status {
   border-color: rgba(138, 90, 0, .3);
   white-space: normal;
 }
+
+/* The account can't run anything until it adds (or fixes) its own key. */
+.mf-byok.is-block {
+  color: #8C2E1B;
+  background: #FBE7E1;
+  border-color: rgba(140, 46, 27, .3);
+  white-space: normal;
+}
+
+.mf-byok a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}

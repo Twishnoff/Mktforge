@@ -225,6 +225,11 @@
 }
 .ap__key-dot.is-ok   { background: var(--accent); }
 .ap__key-dot.is-warn { background: #C98A00; }
+.ap__key-dot.is-block { background: #B5381F; }
+
+.ap__invite-form[hidden], .ap__card[hidden] { display: none; }
+.ap__invite-form .ap__key-row input { text-transform: uppercase; }
+.ap__invite-form .ap__key-row input::placeholder { text-transform: none; }
 
 .ap__key-sub { margin: 6px 0 0 20px; color: var(--ink-soft); font-size: 14.5px; max-width: 64ch; }
 

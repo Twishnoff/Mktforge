@@ -67,8 +67,10 @@
       </div>
 
       <div class="field">
-        <label for="create-invite">Invite code</label>
-        <input type="text" id="create-invite" autocomplete="off" spellcheck="false" required placeholder="ABCD-1234-5678">
+        <label for="create-invite">Invite code <span class="field__opt">(optional)</span></label>
+        <input type="text" id="create-invite" autocomplete="off" spellcheck="false" placeholder="ABCD-1234-5678">
+        <p class="field__hint">No code? You can still sign up — you'll run Mktforge on your own
+          Anthropic API key, added under Manage Profile. Got a code later? Enter it there to switch.</p>
       </div>
 
       <p class="msg" id="create-msg" role="alert" hidden></p>
