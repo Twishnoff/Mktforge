@@ -1,5 +1,56 @@
 # Mktforge
 
+**Free AI marketing platform for startup founders and first marketing hires.**
+
+Mktforge is a free AI marketing platform with public source code that drafts positioning, buyer personas, messaging, and competitive battle cards from a startup's website. It's built for founders and early-stage marketing teams who need a marketing foundation in an afternoon, not next quarter.
+
+[mktforge.io](https://mktforge.io) · [App](https://app.mktforge.io) · [FAQ](https://mktforge.io/#faq) · [Is Mktforge free?](https://mktforge.io/free.html) · [LinkedIn](https://www.linkedin.com/company/mktforge/)
+
+## What it does
+
+You give Mktforge a website URL and your own AI provider API key. It reads your site, applies established marketing frameworks, and drafts the core materials early-stage teams usually postpone: who to sell to, what to say, and how to win against competitors. Every module writes into one shared company profile, so later modules build on earlier research. Output is available in the app and as downloadable PDFs.
+
+## The nine modules
+
+Names on the left are how mktforge.io describes each module; the name in the app's nav is in parentheses where it differs.
+
+| Module | What it produces |
+|---|---|
+| **Documentation Manager** (My Company) | Holds and updates all marketing materials in one company profile, including imported files the agents can read |
+| **Customer Finder** (Find My Customer) | Maps your products and services to the job titles most likely to buy, plus competitors to watch |
+| **Persona Builder** | Turns a job title into a full buyer persona: priorities, goals, reporting lines, and where they gather |
+| **Positioning Crafter** (Build Positioning) | Drafts a positioning strategy from your website, buyer research, and imported documents |
+| **Message Drafter** (Draft Messaging) | Builds a messaging hierarchy and drafts homepage copy from your positioning |
+| **Message Targeter** (Target Messaging) | Writes cold email and landing page copy by job title, or from HubSpot contact data |
+| **Opportunity Finder** (Marketing Opportunities) | Finds events, channels, and influencers that reach your target customer |
+| **Market Tracker** | Monitors review sites, forums, and competitor websites for buyer and competitor activity |
+| **Battle Card Generator** | Writes a one-page competitive battle card tailored to a specific buyer and competitor |
+
+## Integrations
+
+- **Slack (MktBOT)** — @mention MktBOT in a channel to run Battle Card Generator, Persona Builder, Customer Finder, and Opportunity Finder, and receive the PDF in Slack.
+- **HubSpot** — a read-only connection that lets Message Targeter draft copy for a named contact using their profile, page views, notes, and deal context.
+
+## Pricing and access
+
+Mktforge is free to use. There's no subscription and no per-seat fee. You connect an API key from your own AI provider (currently Anthropic) and that provider bills you directly for usage. Access is invite-only; request a code at [mktforge.io](https://mktforge.io).
+
+## Source code and data
+
+The source code is public so anyone can read and evaluate how it works and how data is handled. It is not released under an open-source license; see the terms of use at [mktforge.io/terms.html](https://mktforge.io/terms.html). Mktforge is offered as-is, never sells user data, and users are responsible for their own API key and its charges. Data deletion can be requested at tyler.wishnoff@gmail.com.
+
+## Who it's for
+
+Startup founders doing their own marketing · early marketing hires building from scratch · consultants and advisors delivering positioning work for clients · marketing job seekers preparing for interviews.
+
+Built by [Tyler Wishnoff](https://www.linkedin.com/in/wishnoff/), a founding marketer who has been the first or sole marketer at multiple early-stage startups.
+
+---
+
+# Developer documentation
+
+Everything below is for people running or extending the codebase.
+
 Front-end shell: navigation bar, management bar, display field. No build step,
 no dependencies, no framework. Push the folder to GitHub Pages and it runs.
 
