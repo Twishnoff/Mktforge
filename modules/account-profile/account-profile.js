@@ -105,23 +105,6 @@
           </div>
         </section>
 
-        <section class="ap__card" aria-label="Panda Mode">
-          <div class="ap__toggle-row">
-            <div class="ap__toggle-copy">
-              <h2 class="ap__h2">Panda Mode</h2>
-              <p class="ap__dek ap__dek--card ap__dek--tight">Show the red-panda artwork around the app — in each module
-                before and during a run, and on the My Company and Manage Profile pages. Off keeps everything
-                else the same with the pictures out of the way.</p>
-            </div>
-            <label class="ap__switch">
-              <input type="checkbox" role="switch" data-el="panda" disabled>
-              <span class="ap__switch-track" aria-hidden="true"></span>
-              <span class="ap__switch-label" data-el="panda-label">Off</span>
-            </label>
-          </div>
-          <p class="ap__error" data-el="panda-error" role="alert" hidden></p>
-        </section>
-
         <section class="ap__card" aria-label="Your API key" data-el="key-card">
           <div class="ap__key-layout">
             <div class="ap__key-art" aria-hidden="true">
@@ -199,6 +182,21 @@
           </form>
 
           <p class="ap__error" data-el="invite-error" role="alert" hidden></p>
+        </section>
+
+        <section class="ap__card" aria-label="Panda Mode">
+          <div class="ap__toggle-row">
+            <div class="ap__toggle-copy">
+              <h2 class="ap__h2">Panda Mode</h2>
+              <p class="ap__dek ap__dek--card ap__dek--tight">Makes Mktforge a little more fun by unleashing the pandas within.</p>
+            </div>
+            <label class="ap__switch">
+              <input type="checkbox" role="switch" data-el="panda" disabled>
+              <span class="ap__switch-track" aria-hidden="true"></span>
+              <span class="ap__switch-label" data-el="panda-label">Off</span>
+            </label>
+          </div>
+          <p class="ap__error" data-el="panda-error" role="alert" hidden></p>
         </section>
       </div>`;
   }
