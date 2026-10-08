@@ -6,7 +6,13 @@
 
    The module loads jsPDF and autoTable on demand, then calls
    MktforgeCustomerPdf.build({ companyUrl, customerList, jobTitles,
-   painPoints, topNeeds, competitorsToWatch }).
+   painPoints, topNeeds, buyersToTarget, competitorsToWatch }).
+
+   buyersToTarget is the two { jobTitle, points } groups the user has in the
+   module's Buyers to Target columns when the PDF is made; it is written
+   under the heading "Buyers to Target" (the section used to be "Top Needs",
+   and older PDFs still say so). When it's missing — nothing selected yet —
+   the first two topNeeds groups stand in, which matches the old output.
 
    Competitors To Watch carries the agent's one-line case for each company
    in a third column — the box has no room for it, the page does. Tracking
@@ -76,7 +82,7 @@ window.MktforgeCustomerPdf = (function () {
     return doc.lastAutoTable.finalY + 24;
   }
 
-  // Grouped bullet lists — Pain Points / Initiatives and Top Needs are both
+  // Grouped bullet lists — Pain Points / Initiatives and Buyers to Target are both
   // collections of { jobTitle, points } groups.
   function addBulletSection(doc, { title, groups, startY }) {
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -178,7 +184,9 @@ window.MktforgeCustomerPdf = (function () {
     y = addBulletSection(doc, { title: 'Pain Points / Initiatives', groups: run.painPoints, startY: y });
 
     y = ensureRoom(doc, y, 120);
-    y = addBulletSection(doc, { title: 'Top Needs', groups: run.topNeeds, startY: y });
+    const buyers = Array.isArray(run.buyersToTarget) && run.buyersToTarget.length
+      ? run.buyersToTarget : (run.topNeeds || []).slice(0, 2);
+    y = addBulletSection(doc, { title: 'Buyers to Target', groups: buyers, startY: y });
 
     y = ensureRoom(doc, y, 140);
     addTableSection(doc, {

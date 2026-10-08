@@ -381,9 +381,75 @@
 .fmc__group ul { margin: 0; padding-left: 18px; font-size: 14.5px; }
 .fmc__group li + li { margin-top: 3px; }
 
-/* --- Top needs --- */
+/* --- Buyers to Target --- */
 
-.fmc__needs-title { margin: 0 0 10px; font-weight: 600; font-size: 15px; }
+/* One wide box; a dropdown heads each of its two columns. */
+.fmc__buyers-head { margin-bottom: 16px; }
+.fmc__buyers-head h2 { margin-bottom: 4px; }
+
+.fmc__box-dek { margin: 0; font-size: 14.5px; color: var(--fmc-soft); }
+
+.fmc__buyers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px 32px;
+}
+
+.fmc__buyer { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+.fmc__buyer-pick {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 40px 0 14px;
+  border: 1px solid var(--fmc-line);
+  border-radius: 8px;
+  background-color: var(--fmc-sunken);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%237A7565' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 6l4 4 4-4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fmc-ink);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.fmc__buyer-pick:hover:not(:disabled) { border-color: var(--fmc-accent); }
+.fmc__buyer-pick:focus-visible { outline: none; border-color: var(--fmc-accent); box-shadow: 0 0 0 3px var(--fmc-accent-soft); }
+.fmc__buyer-pick:disabled { cursor: default; }
+.fmc__buyer-pick[hidden] { display: none; }
+
+.fmc__buyers-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--fmc-line);
+  font-size: 13.5px;
+}
+
+.fmc__buyers-foot[hidden] { display: none; }
+
+.fmc__buyers-note { color: var(--fmc-faint); }
+.fmc__buyers-note:last-child { margin-left: auto; }
+
+.fmc__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fmc-accent);
+  cursor: pointer;
+}
+
+.fmc__link:hover { text-decoration: underline; }
+.fmc__link[hidden] { display: none; }
 
 .fmc__rank {
   list-style: none;

@@ -420,8 +420,11 @@
   const MO_HEADINGS = ['All Results', 'Events and Tradeshows', 'Smaller Group Events', 'Newsletters',
     'Influencers', 'Publications', 'Other Syndication Platforms', 'Social Media and Blogs',
     LINKS_HEADING];
-  const FMC_HEADINGS = ['Customer List', 'Job Titles', 'Pain Points / Initiatives', 'Top Needs',
-    'Competitors To Watch', LINKS_HEADING];
+  // "Buyers to Target" is what Find My Customer calls its needs section
+  // since 2026-10-08; "Top Needs" is the same section in older PDFs. Both
+  // stay listed so each one terminates the section before it.
+  const FMC_HEADINGS = ['Customer List', 'Job Titles', 'Pain Points / Initiatives', 'Buyers to Target',
+    'Top Needs', 'Competitors To Watch', LINKS_HEADING];
 
   /* The run of text under one heading, up to whichever heading comes next. */
   function section(text, heading, headings) {

@@ -16,9 +16,17 @@
        jobTitles: [string],
        painPoints: [{ jobTitle, points: [string] }],
        topNeeds:   [{ jobTitle, points: [string] }],
+       suggestedTitles: [string, string],                  // optional
        competitorsToWatch: [{ name, url, why? }] }        // optional
 
-   competitorsToWatch is the only addition to the contract. A Worker that
+   Buyers to Target (formerly the two "Top Needs" boxes): the Worker may now
+   send a topNeeds group for EVERY job title, and the user picks which two
+   are shown — and recorded in the PDF — from a dropdown over each column.
+   `suggestedTitles` names the agent's own two picks; when it's absent the
+   first two topNeeds groups are the suggestion, which is exactly what the
+   older Worker sends, so the module works against either Worker.
+
+   competitorsToWatch and suggestedTitles are the only additions to the contract. A Worker that
    doesn't send it leaves the box on "No Competitors Found" and everything
    else behaves exactly as before, so the site can ship ahead of the Worker.
    The request now also carries `competitorUrls` — My Company's tracked
@@ -88,10 +96,29 @@
         <div class="fmc__box-body is-placeholder" data-box="jobTitles">No Data</div></article>
       <article class="fmc__box"><h2>Pain Points / Initiatives</h2>
         <div class="fmc__box-body is-placeholder" data-box="painPoints">No Data</div></article>
-      <article class="fmc__box"><h2>Top Needs</h2>
-        <div class="fmc__box-body is-placeholder" data-box="topNeeds1">No Data</div></article>
-      <article class="fmc__box"><h2>Top Needs</h2>
-        <div class="fmc__box-body is-placeholder" data-box="topNeeds2">No Data</div></article>
+      <article class="fmc__box fmc__box--wide fmc__box--buyers">
+        <div class="fmc__buyers-head">
+          <h2>Buyers to Target</h2>
+          <p class="fmc__box-dek">The two job titles your marketing brief will be built around, with their top needs.</p>
+        </div>
+        <div class="fmc__buyers">
+          <div class="fmc__buyer">
+            <label class="fmc__sr" for="fmc-buyer-0">Column 1 job title</label>
+            <select class="fmc__buyer-pick" id="fmc-buyer-0" data-pick="0" hidden></select>
+            <div class="fmc__box-body is-placeholder" data-box="topNeeds1">No Data</div>
+          </div>
+          <div class="fmc__buyer">
+            <label class="fmc__sr" for="fmc-buyer-1">Column 2 job title</label>
+            <select class="fmc__buyer-pick" id="fmc-buyer-1" data-pick="1" hidden></select>
+            <div class="fmc__box-body is-placeholder" data-box="topNeeds2">No Data</div>
+          </div>
+        </div>
+        <div class="fmc__buyers-foot" data-el="buyersFoot" hidden>
+          <button type="button" class="fmc__link" data-el="resetPicks" hidden>Reset to suggested titles</button>
+          <span class="fmc__buyers-note" data-el="picksNote"></span>
+          <span class="fmc__buyers-note">Recorded in the PDF as “Buyers to Target”.</span>
+        </div>
+      </article>
       <article class="fmc__box fmc__box--wide fmc__box--tall"><h2>Competitors To Watch</h2>
         <div class="fmc__box-body is-placeholder" data-box="competitorsToWatch">No Data</div></article>
     </section>
@@ -120,13 +147,14 @@
       data:     null,     // last successful payload, as rendered
       runUrl:   '',       // the URL exactly as submitted for `data` (PDF header)
       lastUrl:  null,     // normalized URL of `data`, for the duplicate guard
+      picks:    [null, null],   // Buyers to Target: the job title in each column
       status:   '',
       error:    '',
       note:     '',
       running:  false
     }),
     held: ['form'],
-    snapshot: ['data', 'runUrl', 'lastUrl', 'status']
+    snapshot: ['data', 'runUrl', 'lastUrl', 'picks', 'status']
   });
   let state = pc.state;
   pc.bind((st) => { state = st; });
@@ -283,7 +311,14 @@
     });
   }
 
+  function hideBuyerControls() {
+    if (!el) return;
+    el.grid.querySelectorAll('[data-pick]').forEach((sel) => { sel.hidden = true; });
+    el.buyersFoot.hidden = true;
+  }
+
   function setAllBoxesLoading() {
+    hideBuyerControls();
     eachBox((b) => {
       b.className = 'fmc__box-body is-loading';
       b.innerHTML = '<span class="fmc__dot"></span><span class="fmc__dot"></span><span class="fmc__dot"></span>';
@@ -291,6 +326,7 @@
   }
 
   function setAllBoxesPlaceholder() {
+    hideBuyerControls();
     eachBox((b) => {
       b.className = 'fmc__box-body is-placeholder';
       b.textContent = 'No Data';
@@ -412,12 +448,125 @@
       </div>`).join('');
   }
 
-  function renderTopNeeds(b, group) {
+  /* ---------- Buyers to Target ----------
+     Every job title the Worker built needs for is a candidate; two are shown,
+     one per column, chosen from a dropdown over each. The agent's own two
+     picks start selected and stay marked "(Suggested)"; a title shown in the
+     other column can't be chosen twice. The choice lives in state.picks, so
+     it survives navigating away and a refresh, and the PDF records whatever
+     the two columns hold when Save as PDF is pressed. */
+
+  function needGroups(data) {
+    return ((data && data.topNeeds) || []).filter((g) => g && g.jobTitle);
+  }
+
+  function groupFor(data, title) {
+    return needGroups(data).find((g) => sameTitle(g.jobTitle, title)) || null;
+  }
+
+  /* The agent's two picks: `suggestedTitles` when the Worker names them (and
+     they have needs), else the first two groups — the pre-selector Worker
+     sends exactly two, in order, so that's its suggestion. */
+  function suggestedTitles(data) {
+    const groups = needGroups(data);
+    const named = ((data && data.suggestedTitles) || [])
+      .map((t) => groupFor(data, t))
+      .filter(Boolean)
+      .map((g) => g.jobTitle);
+    const out = [];
+    [...named, ...groups.map((g) => g.jobTitle)].forEach((t) => {
+      if (out.length < 2 && !out.some((x) => sameTitle(x, t))) out.push(t);
+    });
+    return out;
+  }
+
+  /* state.picks, repaired: an invalid or missing pick falls back to the
+     suggestion for that column, and the two columns never share a title. */
+  function currentPicks(st) {
+    const data = st.data;
+    const sug = suggestedTitles(data);
+    const picks = Array.isArray(st.picks) ? st.picks.slice(0, 2) : [];
+    const out = [];
+    for (let i = 0; i < 2; i += 1) {
+      let t = picks[i] && groupFor(data, picks[i]) ? groupFor(data, picks[i]).jobTitle : null;
+      if (!t || out.some((x) => sameTitle(x, t))) {
+        t = [sug[i], ...sug, ...needGroups(data).map((g) => g.jobTitle)]
+          .find((c) => c && !out.some((x) => sameTitle(x, c))) || null;
+      }
+      out.push(t);
+    }
+    return out;
+  }
+
+  function picksAreSuggested(st) {
+    const sug = suggestedTitles(st.data);
+    const cur = currentPicks(st);
+    return cur.every((t, i) => (t == null && sug[i] == null) || sameTitle(t, sug[i]));
+  }
+
+  /* Groups in column order, for the PDF — exactly what's on screen. */
+  function selectedNeedGroups(st) {
+    return currentPicks(st).map((t) => groupFor(st.data, t)).filter(Boolean);
+  }
+
+  function renderNeedsColumn(b, group) {
     if (!group) { setEmpty(b, 'No Data'); return; }
     b.className = 'fmc__box-body';
     b.innerHTML = `
-      <p class="fmc__needs-title">${escapeHtml(group.jobTitle)}</p>
       <ol class="fmc__rank">${(group.points || []).map((p) => `<li>${escapeHtml(p)}</li>`).join('')}</ol>`;
+  }
+
+  function renderBuyers(data) {
+    const st = state;
+    const groups = needGroups(data);
+    const sug = suggestedTitles(data);
+    const picks = currentPicks(st);
+    st.picks = picks.slice();
+
+    const selects = el.grid.querySelectorAll('[data-pick]');
+    selects.forEach((sel, col) => {
+      const other = picks[1 - col];
+      sel.hidden = groups.length === 0;
+      sel.innerHTML = groups.map((g) => {
+        const isSug = sug.some((t) => sameTitle(t, g.jobTitle));
+        const taken = other && sameTitle(other, g.jobTitle);
+        const label = escapeHtml(g.jobTitle)
+          + (isSug ? ' (Suggested)' : '')
+          + (taken ? ` — in column ${2 - col}` : '');
+        return `<option value="${escapeHtml(g.jobTitle)}"${taken ? ' disabled' : ''}>${label}</option>`;
+      }).join('');
+      sel.value = picks[col] || '';
+      sel.disabled = groups.length < 2;
+      renderNeedsColumn(col === 0 ? boxes.topNeeds1 : boxes.topNeeds2, groupFor(data, picks[col]));
+    });
+
+    const atSuggested = picksAreSuggested(st);
+    el.buyersFoot.hidden = groups.length === 0;
+    el.resetPicks.hidden = atSuggested;
+    el.picksNote.textContent = atSuggested
+      ? 'Showing the suggested titles.'
+      : 'The suggested titles were changed.';
+  }
+
+  function handlePickChange(e) {
+    const sel = e.target.closest('[data-pick]');
+    if (!sel || !state.data) return;
+    const col = Number(sel.dataset.pick);
+    const picks = currentPicks(state);
+    const chosen = groupFor(state.data, sel.value);
+    if (!chosen || (picks[1 - col] && sameTitle(picks[1 - col], chosen.jobTitle))) {
+      renderBuyers(state.data);     // refused: put the select back
+      return;
+    }
+    picks[col] = chosen.jobTitle;
+    state.picks = picks;
+    renderBuyers(state.data);
+  }
+
+  function handleResetPicks() {
+    if (!state.data) return;
+    state.picks = suggestedTitles(state.data);
+    renderBuyers(state.data);
   }
 
   /* ---------- Competitors To Watch ----------
@@ -504,9 +653,7 @@
     renderCustomerList(data.customerList);
     renderJobTitles(data.jobTitles);
     renderPainPoints(data.painPoints);
-    const needs = data.topNeeds || [];
-    renderTopNeeds(boxes.topNeeds1, needs[0]);
-    renderTopNeeds(boxes.topNeeds2, needs[1]);
+    renderBuyers(data);
     renderCompetitors(data.competitorsToWatch);
   }
 
@@ -571,6 +718,7 @@
     Mktforge.reportActivity('find-my-customer', 'running');
     st.data = null;
     st.lastUrl = null;
+    st.picks = [null, null];        // a new run starts on its own suggestion
     st.status = 'Collecting data… this can take a minute.';
     el.submit.disabled = true;
     setPdfEnabled(false);
@@ -632,6 +780,7 @@
         jobTitles:    body.jobTitles || [],
         painPoints:   body.painPoints || [],
         topNeeds:     body.topNeeds || [],
+        suggestedTitles: Array.isArray(body.suggestedTitles) ? body.suggestedTitles.slice(0, 2) : [],
         competitorsToWatch: readCompetitors(body.competitorsToWatch, rawUrl)
       };
       st.runUrl  = rawUrl;
@@ -679,7 +828,11 @@
       await Mktforge.loadScript(PDF_SRC);
       // Switched company while the PDF tools loaded: don't save it into the other one.
       if (state._cid !== pdfCid) return;
-      await window.MktforgeCustomerPdf.build({ companyUrl: state.runUrl, ...state.data });
+      // The PDF records the two buyers on screen at this moment — press it
+      // again after a swap and a new document is saved with the new pair.
+      await window.MktforgeCustomerPdf.build({
+        companyUrl: state.runUrl, ...state.data, buyersToTarget: selectedNeedGroups(state)
+      });
     } catch (err) {
       console.error('[Find My Customer] PDF export failed', err);
       if (mounted) showError('Could not generate the PDF. Please try again.');
@@ -733,7 +886,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/find-my-customer/find-my-customer.css?v=2026-09-27i',
+    styles: 'modules/find-my-customer/find-my-customer.css?v=2026-10-08a',
 
     mount(container) {
       container.innerHTML = MARKUP;
@@ -744,7 +897,8 @@
       el = {
         form: q('form'), url: q('url'), submit: q('submit'),
         error: q('error'), pdf: q('pdf'), status: q('status'),
-        grid: q('grid'), forge: q('forge'), forgeEnd: q('forgeEnd'), pdfRow: q('pdfRow')
+        grid: q('grid'), forge: q('forge'), forgeEnd: q('forgeEnd'), pdfRow: q('pdfRow'),
+        buyersFoot: q('buyersFoot'), resetPicks: q('resetPicks'), picksNote: q('picksNote')
       };
 
       boxes = {};
@@ -754,6 +908,8 @@
       el.pdf.addEventListener('click', handlePdf);
       boxes.jobTitles.addEventListener('click', handleTrackClick);
       boxes.competitorsToWatch.addEventListener('click', handleCompetitorClick);
+      el.grid.addEventListener('change', handlePickChange);
+      el.resetPicks.addEventListener('click', handleResetPicks);
       if (window.MktforgeData) {
         unsubProfile = window.MktforgeData.onProfile((p) => {
           paintTrackButtons(p.targetTitles || []);
