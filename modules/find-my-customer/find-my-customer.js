@@ -14,7 +14,7 @@
    Response shape must keep matching the Worker's /api/dashboard payload:
      { customerList: { found, customers: [{ name, size, industry }] },
        jobTitles: [string],
-       painPoints: [{ jobTitle, points: [string] }],
+       painPoints: [{ jobTitle, points: [string] }],       // top titles first, then the rest
        topNeeds:   [{ jobTitle, points: [string] }],
        suggestedTitles: [string, string],                  // optional
        competitorsToWatch: [{ name, url, why? }] }        // optional
@@ -94,7 +94,11 @@
         <div class="fmc__box-body is-placeholder" data-box="customers">No Data</div></article>
       <article class="fmc__box"><h2>Job Titles</h2>
         <div class="fmc__box-body is-placeholder" data-box="jobTitles">No Data</div></article>
-      <article class="fmc__box"><h2>Pain Points / Initiatives</h2>
+      <article class="fmc__box">
+        <div class="fmc__box-head">
+          <h2>Top Titles Pain Points / Initiatives</h2>
+          <p class="fmc__box-dek">Data for all other titles can be found in the report PDF.</p>
+        </div>
         <div class="fmc__box-body is-placeholder" data-box="painPoints">No Data</div></article>
       <article class="fmc__box fmc__box--wide fmc__box--buyers">
         <div class="fmc__buyers-head">
@@ -437,11 +441,16 @@
     }
   }
 
+  /* The Worker sends pain points for every job title, the dashboard's own
+     "top" groups first. The box shows only those first five; the PDF
+     carries all of them, so the Company Brief can read any buyer's. */
+  const TOP_PAIN_GROUPS = 5;
+
   function renderPainPoints(groups) {
     const b = boxes.painPoints;
     if (!groups || groups.length === 0) { setEmpty(b, 'No Data'); return; }
     b.className = 'fmc__box-body';
-    b.innerHTML = groups.map((g) => `
+    b.innerHTML = groups.slice(0, TOP_PAIN_GROUPS).map((g) => `
       <div class="fmc__group">
         <h3>${escapeHtml(g.jobTitle)}</h3>
         <ul>${(g.points || []).map((p) => `<li>${escapeHtml(p)}</li>`).join('')}</ul>
@@ -886,7 +895,7 @@
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy (GitHub Pages lets browsers cache for ~10 minutes) fetches the
     // new one instead of pairing new markup with old styles.
-    styles: 'modules/find-my-customer/find-my-customer.css?v=2026-10-08a',
+    styles: 'modules/find-my-customer/find-my-customer.css?v=2026-10-08b',
 
     mount(container) {
       container.innerHTML = MARKUP;

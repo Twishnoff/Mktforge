@@ -381,10 +381,15 @@
 .fmc__group ul { margin: 0; padding-left: 18px; font-size: 14.5px; }
 .fmc__group li + li { margin-top: 3px; }
 
+/* --- Box headers with a line under the title --- */
+
+.fmc__box-head { margin-bottom: 4px; }
+.fmc__box-head h2 { margin-bottom: 4px; }
+
 /* --- Buyers to Target --- */
 
 /* One wide box; a dropdown heads each of its two columns. */
-.fmc__buyers-head { margin-bottom: 16px; }
+.fmc__buyers-head { margin-bottom: 6px; }
 .fmc__buyers-head h2 { margin-bottom: 4px; }
 
 .fmc__box-dek { margin: 0; font-size: 14.5px; color: var(--fmc-soft); }
