@@ -283,3 +283,72 @@
   .ap__key-art { flex-basis: auto; width: 180px; }
   .ap__key-main { width: 100%; }
 }
+
+/* --- Panda Mode switch --- */
+
+.ap__toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+
+.ap__toggle-copy { flex: 1 1 auto; min-width: 0; }
+.ap__dek--tight { margin-bottom: 0; }
+
+.ap__switch {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ap__switch input {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  border: 0;
+}
+
+.ap__switch-track {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--paper-line);
+  transition: background .15s ease;
+}
+
+.ap__switch-track::after {
+  content: "";
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+  transition: transform .15s ease;
+}
+
+.ap__switch input:checked + .ap__switch-track { background: var(--accent); }
+.ap__switch input:checked + .ap__switch-track::after { transform: translateX(20px); }
+.ap__switch input:focus-visible + .ap__switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ap__switch input:disabled + .ap__switch-track { opacity: .55; }
+.ap__switch input:disabled ~ .ap__switch-label { color: var(--muted); }
+
+.ap__switch-label {
+  min-width: 3.5em;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+@media (max-width: 560px) {
+  .ap__toggle-row { flex-direction: column; align-items: flex-start; gap: 12px; }
+}

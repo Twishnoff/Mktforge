@@ -103,6 +103,7 @@
 
      Account
        getAvatar() / saveAvatar(dataUrl) / onAvatar(fn)
+       getPandaMode() / savePandaMode(bool) / onPandaMode(fn)
        util.imageToAvatarDataUrl(file), util.normalizeUrl, util.isValidUrl
        util.channelRule(url), util.channelKey(url), util.sameChannel(a, b)
                                        tracked channels (My Company's Tracked News and
@@ -402,6 +403,46 @@ window.MktforgeData = (() => {
   }
 
   function onAvatar(fn) { avatarListeners.add(fn); return () => avatarListeners.delete(fn); }
+
+  /* ---------- Panda Mode ----------
+     Whether the red-panda artwork shows in the app. An account setting
+     (users/{uid}.account.pandaMode), off for every account until the person
+     turns it on under Manage Profile. The shell reads it once at boot and
+     toggles html.no-pandas; app.css does the rest. */
+  const pandaListeners = new Set();
+  let pandaCache = null;          // null = not read yet
+
+  async function getPandaMode({ fresh = false } = {}) {
+    if (pandaCache !== null && !fresh) return pandaCache;
+    if (isLocal()) {
+      pandaCache = rootRead().pandaMode === true;
+    } else {
+      const d = await getDb();
+      const snap = await readAccountDoc(d, 'Loading your settings');   // see getAvatar
+      const account = (snap.exists && snap.data().account) || null;
+      pandaCache = !!(account && account.pandaMode === true);
+    }
+    return pandaCache;
+  }
+
+  async function savePandaMode(on) {
+    const value = on === true;
+    if (isLocal()) {
+      const data = rootRead();
+      if (value) data.pandaMode = true; else delete data.pandaMode;
+      rootWrite(data);
+    } else {
+      const d = await getDb();
+      await withTimeout(userRef(d).set({ account: { pandaMode: value } }, { merge: true }),
+                        TIMEOUT_MS, 'Saving your settings');
+    }
+    pandaCache = value;
+    pandaListeners.forEach((fn) => { try { fn(value); } catch (e) { console.error(e); } });
+    document.dispatchEvent(new CustomEvent('mktforge:panda-mode', { detail: value }));
+    return value;
+  }
+
+  function onPandaMode(fn) { pandaListeners.add(fn); return () => pandaListeners.delete(fn); }
 
   /* ---------- Tracked channels ----------
      My Company's "Tracked News and Media URLs". Each is a CHANNEL — a Medium
@@ -1832,6 +1873,7 @@ window.MktforgeData = (() => {
     onProfile, onFiles,
     // account
     getAvatar, saveAvatar, onAvatar,
+    getPandaMode, savePandaMode, onPandaMode,
     // pure helpers
     trackerId, trackerCompetitorId, trackerTitleId, competitorKey, isViewable,
     MAX_FILE_BYTES,

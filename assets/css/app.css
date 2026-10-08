@@ -789,3 +789,83 @@ body[data-nav="collapsed"] .nav__button[aria-current="page"] .nav__status {
   font-weight: 600;
   text-decoration: underline;
 }
+
+/* ==========================================================================
+   Panda Mode off (html.no-pandas) — Manage Profile → Panda Mode
+   Every red-panda image and forging clip is hidden and the layout around
+   it closes up: intro copy sits centred in a shorter box, a plain spinner
+   stands in for the blacksmith while a run goes, integration cards put
+   their button under the copy, and Manage Profile's key card loses its
+   art column. The html class is set in index.html so nothing flashes, and
+   cleared by the shell once the account says Panda Mode is on.
+   ========================================================================== */
+
+/* the artwork itself */
+html.no-pandas .pb__intro-img,   html.no-pandas .bpos__intro-img, html.no-pandas .fmc__intro-img,
+html.no-pandas .mo__intro-img,   html.no-pandas .dmsg__intro-img, html.no-pandas .mtrk__intro-img,
+html.no-pandas .tmsg__intro-img, html.no-pandas .bcg__intro-img,
+html.no-pandas .pb__forge-stage,   html.no-pandas .bpos__forge-stage, html.no-pandas .fmc__forge-stage,
+html.no-pandas .mo__forge-stage,   html.no-pandas .dmsg__forge-stage, html.no-pandas .mtrk__forge-stage,
+html.no-pandas .tmsg__forge-stage, html.no-pandas .bcg__forge-stage,
+html.no-pandas .mc__panda, html.no-pandas .mc__butterfly, html.no-pandas .mc__hs-art,
+html.no-pandas .ap__key-art {
+  display: none !important;
+}
+
+/* the intro box before a run: copy alone, centred, and not panda-tall */
+html.no-pandas .pb__grid.is-idle > .pb__idle,     html.no-pandas .bpos__grid.is-idle > .bpos__idle,
+html.no-pandas .fmc__grid.is-idle > .fmc__idle,   html.no-pandas .mo__results.is-idle > .mo__idle,
+html.no-pandas .dmsg__grid.is-idle > .dmsg__idle, html.no-pandas .tmsg__stage.is-idle > .tmsg__idle,
+html.no-pandas .bcg__grid.is-idle > .bcg__idle,
+html.no-pandas .mtrk__intro-box {
+  height: auto;
+  min-height: 0;
+  padding: 56px 40px;
+}
+
+html.no-pandas .pb__intro-copy,   html.no-pandas .bpos__intro-copy, html.no-pandas .fmc__intro-copy,
+html.no-pandas .mo__intro-copy,   html.no-pandas .dmsg__intro-copy, html.no-pandas .mtrk__intro-copy,
+html.no-pandas .tmsg__intro-copy, html.no-pandas .bcg__intro-copy {
+  flex-basis: auto;
+  max-width: 560px;
+  text-align: center;
+}
+
+/* while a run goes: a quiet spinner where the blacksmith was */
+html.no-pandas .pb__idle-loading::before,   html.no-pandas .bpos__idle-loading::before,
+html.no-pandas .fmc__idle-loading::before,  html.no-pandas .mo__idle-loading::before,
+html.no-pandas .dmsg__idle-loading::before, html.no-pandas .tmsg__idle-loading::before,
+html.no-pandas .bcg__idle-loading::before,  html.no-pandas .mtrk__working::before {
+  content: "";
+  display: block;
+  width: 36px;
+  height: 36px;
+  margin: 8px auto 4px;
+  border-radius: 50%;
+  border: 3px solid var(--accent-tint);
+  border-top-color: var(--accent);
+  animation: mf-nopanda-spin 0.9s linear infinite;
+}
+
+@keyframes mf-nopanda-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  html.no-pandas .pb__idle-loading::before,   html.no-pandas .bpos__idle-loading::before,
+  html.no-pandas .fmc__idle-loading::before,  html.no-pandas .mo__idle-loading::before,
+  html.no-pandas .dmsg__idle-loading::before, html.no-pandas .tmsg__idle-loading::before,
+  html.no-pandas .bcg__idle-loading::before,  html.no-pandas .mtrk__working::before {
+    animation: none;
+    border-color: var(--accent);
+  }
+}
+
+/* My Company: the column sits centred again and the profile card keeps all
+   four rounded corners; the HubSpot / Slack cards put their button under
+   the copy */
+html.no-pandas .mc { margin-left: auto; }
+html.no-pandas .mc__card.mc__card--profile { border-top-right-radius: var(--mc-radius, var(--radius-card)); }
+html.no-pandas .mc__hs-idle { flex-direction: column; align-items: flex-start; gap: 14px; }
+html.no-pandas .mc__hs-idle-side { align-items: flex-start; }
+
+/* Manage Profile: the key card is a single column */
+html.no-pandas .ap__key-layout { display: block; }

@@ -105,6 +105,23 @@
           </div>
         </section>
 
+        <section class="ap__card" aria-label="Panda Mode">
+          <div class="ap__toggle-row">
+            <div class="ap__toggle-copy">
+              <h2 class="ap__h2">Panda Mode</h2>
+              <p class="ap__dek ap__dek--card ap__dek--tight">Show the red-panda artwork around the app — in each module
+                before and during a run, and on the My Company and Manage Profile pages. Off keeps everything
+                else the same with the pictures out of the way.</p>
+            </div>
+            <label class="ap__switch">
+              <input type="checkbox" role="switch" data-el="panda" disabled>
+              <span class="ap__switch-track" aria-hidden="true"></span>
+              <span class="ap__switch-label" data-el="panda-label">Off</span>
+            </label>
+          </div>
+          <p class="ap__error" data-el="panda-error" role="alert" hidden></p>
+        </section>
+
         <section class="ap__card" aria-label="Your API key" data-el="key-card">
           <div class="ap__key-layout">
             <div class="ap__key-art" aria-hidden="true">
@@ -488,6 +505,62 @@
     kit.status({ refresh: true });
   }
 
+  /* ---------- Panda Mode ----------
+     One switch, saved the moment it's flipped (there's nothing else to
+     fill in). The shell listens for the save and hides or shows the
+     artwork at once; a failed save puts the switch back. */
+
+  const panda = { on: false, loaded: false, saving: false, error: '' };
+  let unsubPanda = null;
+
+  function renderPanda() {
+    const input = q('[data-el="panda"]');
+    if (!input) return;
+    input.checked = panda.on;
+    input.disabled = !panda.loaded || panda.saving;
+    const label = q('[data-el="panda-label"]');
+    label.textContent = panda.saving ? 'Saving…' : (panda.on ? 'On' : 'Off');
+    const err = q('[data-el="panda-error"]');
+    err.textContent = panda.error;
+    err.hidden = !panda.error;
+  }
+
+  async function handlePandaChange(e) {
+    const next = !!e.target.checked;
+    if (panda.saving || next === panda.on) return;
+    const prev = panda.on;
+    panda.on = next;
+    panda.saving = true;
+    panda.error = '';
+    renderPanda();
+    try {
+      await Data().savePandaMode(next);
+    } catch (err) {
+      console.error('[Mktforge] could not save Panda Mode', err);
+      panda.on = prev;
+      panda.error = 'Couldn’t save that. Please try again.';
+    } finally {
+      panda.saving = false;
+      renderPanda();
+    }
+  }
+
+  function bindPanda() {
+    q('[data-el="panda"]').addEventListener('change', handlePandaChange);
+  }
+
+  async function loadPanda() {
+    try {
+      panda.on = await Data().getPandaMode();
+      panda.error = '';
+    } catch (err) {
+      console.error('[Mktforge] could not load Panda Mode', err);
+      panda.error = 'Couldn’t load this setting. Refresh the page to try again.';
+    }
+    panda.loaded = true;
+    renderPanda();
+  }
+
   /* ---------- load ---------- */
 
   async function load() {
@@ -555,7 +628,7 @@
     id:     'account-profile',
     label:  'Manage Profile',
     icon:   'user',
-    styles: 'modules/account-profile/account-profile.css',
+    styles: 'modules/account-profile/account-profile.css?v=2026-10-08',
     hidden: true,              // reached from the management bar's account menu
     companyAware: true,        // the account's own picture: the same in every company
 
@@ -565,10 +638,14 @@
       bind();
       bindKey();
       bindInvite();
+      bindPanda();
       render();
       renderKey();
+      renderPanda();
       load();
       loadKey();
+      loadPanda();
+      unsubPanda = Data().onPandaMode((on) => { panda.on = on; renderPanda(); });
 
       // Another tab — or a future second place to change it — stays in step.
       unsubAvatar = Data().onAvatar((photo) => {
@@ -580,6 +657,7 @@
     unmount() {
       if (unsubAvatar) { unsubAvatar(); unsubAvatar = null; }
       if (unsubKey) { unsubKey(); unsubKey = null; }
+      if (unsubPanda) { unsubPanda(); unsubPanda = null; }
       key.editing = false; key.error = '';
       invite.busy = false; invite.error = ''; invite.done = false;
       root = null;

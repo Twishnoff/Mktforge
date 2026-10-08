@@ -330,6 +330,20 @@ window.Mktforge = (() => {
   /* Reads the stored picture once at boot, then keeps the circle in step with
      whatever Manage Profile saves. A failure here is not worth interrupting
      anyone over — the circle simply keeps the default picture. */
+  /* Panda Mode (Manage Profile). The artwork is hidden from the first paint
+     — html.no-pandas is set in index.html — and only shown once the account
+     says so, so nobody with it off sees a panda flash by while it loads. */
+  function initPandaMode() {
+    const Data = window.MktforgeData;
+    const apply = (on) => document.documentElement.classList.toggle('no-pandas', !on);
+    apply(false);
+    if (!Data || typeof Data.getPandaMode !== 'function') return;
+    Data.getPandaMode()
+      .then(apply)
+      .catch((err) => console.warn('[Mktforge] panda mode unavailable', err));
+    Data.onPandaMode(apply);
+  }
+
   function initAvatar() {
     const Data = window.MktforgeData;
     if (!Data || typeof Data.getAvatar !== 'function') return;
@@ -895,6 +909,7 @@ window.Mktforge = (() => {
     renderProfile();
     initProfileMenu();
     initAvatar();
+    initPandaMode();
     initCompanyMenu();
     renderNav();
     initLogo();
