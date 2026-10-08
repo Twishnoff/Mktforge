@@ -864,8 +864,9 @@ html.no-pandas .bcg__idle-loading::before,  html.no-pandas .mtrk__working::befor
    the copy */
 html.no-pandas .mc { margin-left: auto; }
 html.no-pandas .mc__card.mc__card--profile { border-top-right-radius: var(--mc-radius, var(--radius-card)); }
-html.no-pandas .mc__hs-idle { flex-direction: column; align-items: flex-start; gap: 14px; }
-html.no-pandas .mc__hs-idle-side { align-items: flex-start; }
+/* With the wiring panda gone the side column is just the button, so the
+   row stays a row: button on the right, centred against the copy. */
+html.no-pandas .mc__hs-idle-side { padding-left: 12px; }
 
 /* Manage Profile: the key card is a single column */
 html.no-pandas .ap__key-layout { display: block; }

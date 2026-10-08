@@ -1093,13 +1093,21 @@
       return;
     }
 
-    box.innerHTML = `${head(`<p class="mc__hs-status is-ok"><span class="mc__hs-dot" aria-hidden="true"></span>
+    // Connected: copy on the left, Disconnect centred against it on the right
+    // (the same two-column row the not-connected card uses).
+    box.innerHTML = `<div class="mc__hs-idle mc__hs-idle--connected">
+        <div class="mc__hs-idle-main">
+          ${head(`<p class="mc__hs-status is-ok"><span class="mc__hs-dot" aria-hidden="true"></span>
             Connected to <strong>${esc(portal)}</strong> · read-only access</p>`)}
-        <button type="button" class="mc__delete" data-hs="disconnect" ${busy ? 'disabled' : ''}>
-          ${busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}</button>
-      </div>
-      <p class="mc__hs-note">${since ? `Connected ${esc(since)}. ` : ''}Mktforge currently has read-only access to this company’s HubSpot account.</p>
-      ${err}`;
+          </div>
+          <p class="mc__hs-note">${since ? `Connected ${esc(since)}. ` : ''}Mktforge currently has read-only access to this company’s HubSpot account.</p>
+          ${err}
+        </div>
+        <div class="mc__hs-idle-side">
+          <button type="button" class="mc__delete" data-hs="disconnect" ${busy ? 'disabled' : ''}>
+            ${busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}</button>
+        </div>
+      </div>`;
   }
 
   async function loadHubSpot() {
@@ -1310,15 +1318,21 @@
 
     const since = hsTime(s.installedAt);
     const people = s.linkedUsers === 1 ? '1 person linked' : `${s.linkedUsers || 0} people linked`;
-    box.innerHTML = `${head(`<p class="mc__hs-status is-ok"><span class="mc__hs-dot" aria-hidden="true"></span>
+    box.innerHTML = `<div class="mc__hs-idle mc__hs-idle--connected">
+        <div class="mc__hs-idle-main">
+          ${head(`<p class="mc__hs-status is-ok"><span class="mc__hs-dot" aria-hidden="true"></span>
             Connected to <strong>${esc(s.teamName || 'your workspace')}</strong> · ${esc(people)}${s.youLinked ? ' · you’re linked' : ''}</p>`)}
-        <button type="button" class="mc__delete" data-sl="disconnect" ${busy ? 'disabled' : ''}>
-          ${busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}</button>
-      </div>
-      <p class="mc__hs-note">${since ? `Connected ${esc(since)}. ` : ''}Mention <strong>@MktBOT</strong> in a channel or send it a DM.
-        Try “make a battle card for VP of Sales vs competitor.com”, “what events are coming up for Data Engineers?”
-        or “add acme.com to our competitors”. Type <code>/mktforge</code> for help.</p>
-      ${err}`;
+          </div>
+          <p class="mc__hs-note">${since ? `Connected ${esc(since)}. ` : ''}Mention <strong>@MktBOT</strong> in a channel or send it a DM.
+            Try “make a battle card for VP of Sales vs competitor.com”, “what events are coming up for Data Engineers?”
+            or “add acme.com to our competitors”. Type <code>/mktforge</code> for help.</p>
+          ${err}
+        </div>
+        <div class="mc__hs-idle-side">
+          <button type="button" class="mc__delete" data-sl="disconnect" ${busy ? 'disabled' : ''}>
+            ${busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}</button>
+        </div>
+      </div>`;
   }
 
   async function loadSlack() {
