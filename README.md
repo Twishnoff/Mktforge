@@ -1237,3 +1237,4 @@ Verification and password-reset emails are sent by Firebase from
 `noreply@<project-id>.firebaseapp.com`. No SMTP setup, no cost. They can land
 in spam — the verify screen says to check there. A custom sending domain is
 configurable later if it becomes a nuisance.
+<!-- Day 1: first commit from a local clone -->
