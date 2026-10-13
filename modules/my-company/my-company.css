@@ -989,3 +989,38 @@ a.mc__value:hover, .mc__chip a:hover { text-decoration: underline; }
   .mc__table--imported th:nth-child(2),
   .mc__table--imported td:nth-child(2) { display: table-cell; }
 }
+
+/* --- saved resources: compact rows (2026-10-13b) --- */
+
+.mc__name-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mc__table .mc__cell-name { min-width: 0; width: 100%; }
+.mc__file { white-space: normal; line-height: 1.35; }
+
+.mc__icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .12s ease, background .12s ease, border-color .12s ease;
+}
+.mc__icon-btn:hover { background: var(--paper-dim); color: var(--ink); }
+.mc__icon-btn--quiet { width: 26px; height: 26px; opacity: .55; }
+.mc__table tr:hover .mc__icon-btn--quiet, .mc__icon-btn--quiet:focus-visible { opacity: 1; }
+.mc__icon-btn.is-on { color: var(--accent); opacity: 1; }
+.mc__icon-btn--danger { border-color: var(--mc-line); background: var(--mc-surface); color: var(--mc-crit); width: 32px; height: 32px; }
+.mc__icon-btn--danger:hover { background: var(--mc-crit); border-color: var(--mc-crit); color: #fff; }
+
+.mc__pill--danger { border-color: var(--mc-crit); background: var(--mc-crit); color: #fff; }
+.mc__pill--danger:hover:not(:disabled) { background: #8F2E19; color: #fff; }
+
+/* Keeps the page from getting shorter than the scroll position after a
+   tab or filter change (see keepPlace in my-company.js). */
+.mc__scroll-slack { height: 0; }
+.mc__table td.mc__cell-action { white-space: nowrap; vertical-align: middle; }
+.mc__cell-action .mc__icon-btn--danger { vertical-align: middle; }
