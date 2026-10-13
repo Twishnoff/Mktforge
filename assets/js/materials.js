@@ -13,14 +13,14 @@
    sub-object keeps the user's own spelling for the file name and the table.
 
      battle-card-generator  { jobTitle, competitorHost, industry,
-                              display: { jobTitle, competitor, industry } }
+                              display: { jobTitle, competitor, company, industry } }
      persona-builder        { jobTitle, industry, companySize,
                               display: { jobTitle, industry } }
      marketing-opportunities{ jobTitles[], industry, display: { jobTitles[], industry } }
-     find-my-customer       { display: { company } }
+     find-my-customer       { display: { company, titles[] (Buyers to Target) } }
      build-positioning      { display: { champion, competitor, industry } }
-     draft-messaging        { display: { champion, competitor, industry } }
-     company-brief          { display: { company } }
+     draft-messaging        { display: { champion, competitor, industry, positioningDoc } }
+     company-brief          { display: { company, titles[] (top titles) } }
 
    DOCUMENT MODEL  (stored as JSON on the file as `result`, version 1)
    A layout-free description of what the PDF shows, rendered to Word by
@@ -93,7 +93,8 @@ window.MktforgeMaterials = (() => {
       case 'battle-card-generator':
         return {
           jobTitle: normTitle(r.jobTitle), competitorHost: hostOf(r.competitorUrl), industry: normIndustry(r.industry),
-          display: { jobTitle: clean(r.jobTitle), competitor: clean(r.competitorName) || hostOf(r.competitorUrl), industry: clean(r.industry) }
+          display: { jobTitle: clean(r.jobTitle), competitor: clean(r.competitorName) || hostOf(r.competitorUrl),
+                     company: clean(r.companyName) || hostOf(r.companyUrl), industry: clean(r.industry) }
         };
       case 'persona-builder':
         return {
@@ -108,53 +109,83 @@ window.MktforgeMaterials = (() => {
         };
       }
       case 'find-my-customer':
-        return { display: { company: clean(r.companyName) || hostOf(r.companyUrl), companyHost: hostOf(r.companyUrl) } };
+        return { display: { company: clean(r.companyName) || hostOf(r.companyUrl), companyHost: hostOf(r.companyUrl),
+                            titles: (r.titles || []).map(clean).filter(Boolean) } };
       case 'build-positioning':
       case 'draft-messaging':
         return {
           display: { champion: clean(r.champion), competitor: clean(r.competitorName) || hostOf(r.competitorUrl),
-                     competitorHost: hostOf(r.competitorUrl), industry: clean(r.industry) }
+                     competitorHost: hostOf(r.competitorUrl), industry: clean(r.industry),
+                     positioningDoc: clean(r.positioningDoc) }
         };
       case 'company-brief':
-        return { display: { company: clean(r.companyName) || hostOf(r.companyUrl) } };
+        return { display: { company: clean(r.companyName) || hostOf(r.companyUrl), titles: (r.titles || []).map(clean).filter(Boolean) } };
       default:
         return { display: {} };
     }
   }
 
+  /* ---------- file names ----------
+     "BDC Manager" -> "BDC Managers"; two titles -> "A and B". */
+  const plural = (t) => { const v = clean(t); return !v ? '' : /s$/i.test(v) ? v : `${v}s`; };
+  const andList = (list) => (list || []).map(clean).filter(Boolean).slice(0, 2).map(plural).join(' and ');
+  const inIndustry = (ind) => (clean(ind) ? `in the ${clean(ind)} industry` : 'in any industry');
+  /* "Enterprise ($1B+ ARR)" -> "Enterprise"; "No Preference" -> "Any Size". */
+  function sizeLabel(size) {
+    const v = clean(size).toLowerCase();
+    if (!v || /no preference|any/.test(v)) return 'Any Size';
+    if (v.startsWith('enterprise')) return 'Enterprise';
+    if (v.startsWith('mid')) return 'Midmarket';
+    if (v.startsWith('small')) return 'Small Business';
+    return clean(size);
+  }
+
   /* The file name a generated document gets. Same rules as mktforge-slack's
-     nameFor() so files look alike whichever side made them. */
+     nameFor() so files look alike whichever side made them. Returns null
+     when the inputs don't carry enough to name the file (the caller then
+     falls back to "<Module Name> N"). */
   function nameFor(moduleId, inputs) {
     const d = (inputs && inputs.display) || {};
-    const short = SHORT_NAMES[moduleId] || MODULE_NAMES[moduleId] || 'Document';
-    const dash = ' — ';
-    let tail = '';
+    let name = '';
     switch (moduleId) {
       case 'battle-card-generator':
-        tail = [d.jobTitle, d.competitor].filter(Boolean).join(' vs ');
+        if (!d.competitor || !d.jobTitle) return null;
+        name = `${d.competitor} vs ${d.company || 'Us'} Battle Card - ${d.jobTitle}${d.industry ? ` (${d.industry})` : ''}`;
         break;
       case 'persona-builder':
-        tail = [d.jobTitle, d.industry].filter(Boolean).join(' · ');
+        if (!d.jobTitle) return null;
+        name = `${d.jobTitle} Persona - ${d.industry || 'Any Industry'} - ${sizeLabel(d.companySize)}`;
         break;
       case 'marketing-opportunities': {
-        const t = d.jobTitles || [];
-        tail = t.length <= 2 ? t.join(', ') : `${t.slice(0, 2).join(', ')} +${t.length - 2} more`;
-        if (d.industry) tail = tail ? `${tail} · ${d.industry}` : d.industry;
+        const t = andList(d.jobTitles);
+        if (!t) return null;
+        name = `Marketing Channels for ${t} ${inIndustry(d.industry)}`;
         break;
       }
-      case 'find-my-customer':
-      case 'company-brief':
-        tail = d.company || '';
+      case 'find-my-customer': {
+        const t = andList(d.titles);
+        if (!t) return null;
+        name = `Target Customers List - ${t}`;
         break;
+      }
       case 'build-positioning':
-      case 'draft-messaging':
-        tail = [d.champion, d.competitor].filter(Boolean).join(' vs ');
+        if (!d.competitor || !d.champion) return null;
+        name = `Positioning Document Against ${d.competitor} for ${plural(d.champion)} ${inIndustry(d.industry)}`;
         break;
+      case 'draft-messaging':
+        if (!d.positioningDoc) return null;
+        name = `Messaging for ${d.positioningDoc}`;
+        break;
+      case 'company-brief': {
+        const t = andList(d.titles);
+        if (!d.company) return null;
+        name = `${d.company} Marketing Brief${t ? ` for ${t}` : ''}`;
+        break;
+      }
       default:
-        tail = '';
+        return null;
     }
-    const name = tail ? `${short}${dash}${tail}` : short;
-    return name.replace(/[\\/:*?"<>|]/g, '').slice(0, 200);
+    return name.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim().slice(0, 200);
   }
 
   /* One line describing a file's inputs for the Saved Resources table. */

@@ -565,7 +565,7 @@ window.MktforgeCompanyBriefPdf = (() => {
       // layout is its own thing), so it stays PDF-only in My Company.
       const M = window.MktforgeMaterials;
       return D.savePdfDoc(doc, { moduleId: 'company-brief', moduleName: 'Company Brief', fallbackName,
-        inputs: M ? M.inputsFor('company-brief', { companyName: model.company || '' }) : null });
+        inputs: M ? M.inputsFor('company-brief', { companyName: model.company || '', titles: model.topTitles || [] }) : null });
     }
     doc.save(fallbackName);
     return null;

@@ -794,7 +794,7 @@ window.MktforgeData = (() => {
       const M = window.MktforgeMaterials;
       if (inputs && M) {
         const name = M.nameFor(moduleId, inputs);
-        if (name && name !== (M.SHORT_NAMES[moduleId] || '')) return name;
+        if (name) return name;
       }
       return nextCounterName(moduleId, moduleName);
     }

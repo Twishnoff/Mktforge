@@ -281,7 +281,8 @@ window.MktforgeMessagingPdf = (function () {
       return window.MktforgeData.savePdfDoc(doc, {
         moduleId: 'draft-messaging', moduleName: 'Draft Messaging', fallbackName,
         inputs: M ? M.inputsFor('draft-messaging', {
-          champion: input.champion, competitorName: input.competitorName, industry: input.industry || ''
+          champion: input.champion, competitorName: input.competitorName, industry: input.industry || '',
+          positioningDoc: sources.positioning || ''
         }) : null,
         result: R ? R.model() : null
       });

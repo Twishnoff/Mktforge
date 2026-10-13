@@ -214,7 +214,8 @@ window.MktforgeCustomerPdf = (function () {
       const M = window.MktforgeMaterials;
       return window.MktforgeData.savePdfDoc(doc, {
         moduleId: 'find-my-customer', moduleName: 'Find My Customer', fallbackName: fileName,
-        inputs: M ? M.inputsFor('find-my-customer', { companyUrl: run.companyUrl, companyName: run.companyName || '' }) : null,
+        inputs: M ? M.inputsFor('find-my-customer', { companyUrl: run.companyUrl, companyName: run.companyName || '',
+          titles: (buyers || []).map((g) => g && g.jobTitle) }) : null,
         result: M ? toDoc(run, customers, buyers) : null
       });
     }
