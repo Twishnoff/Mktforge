@@ -232,6 +232,7 @@
             <div class="mc__hs mc__sl" data-el="slack"><p class="mc__loading">Checking Slack…</p></div>
           </div>
         </section>
+        <div class="mc__scroll-slack" data-el="scroll-slack" aria-hidden="true"></div>
       </div>
         <!-- Sits at the very bottom of the page in the empty space left of the
              column, a fixed distance from the nav, so it follows the nav when it
@@ -443,14 +444,48 @@
 
   function renderFiles() {
     if (!root) return;
-    syncTabs();
-    renderToolbar();
-    renderTable();
+    keepPlace(() => { syncTabs(); renderToolbar(); renderTable(); });
+  }
+
+  /* Re-rendering the table changes its height; without this the page
+     jumps because the browser clamps the scroll position to the new, shorter
+     page. The scroll offset is restored and, when the page got too short to
+     hold it, a slack spacer at the bottom of the module makes up the
+     difference until the person scrolls back up. */
+  function scroller() { return (root && root.closest('.display')) || document.scrollingElement; }
+
+  function keepPlace(fn) {
+    const sc = scroller();
+    const top = sc ? sc.scrollTop : 0;
+    keepingPlace = true;
+    try { fn(); } finally { keepingPlace = false; }
+    if (!sc || !root) return;
+    const slack = q('[data-el="scroll-slack"]');
+    if (slack) slack.style.height = '0px';
+    const deficit = top - (sc.scrollHeight - sc.clientHeight);
+    if (slack && deficit > 0) slack.style.height = `${Math.ceil(deficit)}px`;
+    sc.scrollTop = top;
+  }
+
+  function trimSlack() {
+    const slack = root && q('[data-el="scroll-slack"]');
+    const sc = scroller();
+    if (!slack || !sc) return;
+    const h = parseFloat(slack.style.height) || 0;
+    if (!h) return;
+    // Once the person has scrolled up past the spacer it isn't needed.
+    if (sc.scrollTop + sc.clientHeight <= sc.scrollHeight - h - 4) slack.style.height = '0px';
   }
 
   function renderTable() {
     const box = q('[data-el="files-table"]');
     if (!box) return;
+    if (!keepingPlace) { keepPlace(() => renderTableNow(box)); return; }
+    renderTableNow(box);
+  }
+
+  let keepingPlace = false;
+  function renderTableNow(box) {
     if (state.filesError) {
       box.innerHTML = `<p class="mc__error">${esc(state.filesError)} <button type="button" class="mc__link" data-files-retry>Try again</button></p>`;
       return;
@@ -466,9 +501,9 @@
         ? 'No files match. Clear the search or pick another module.'
         : 'No generated materials yet. Every PDF you create in another module is saved here automatically.';
 
-    const head = imported
-      ? '<th scope="col">File</th><th scope="col">Type</th><th scope="col">Size</th><th scope="col">Added</th><th scope="col"><span class="mc__sr">Actions</span></th>'
-      : '<th scope="col">File</th><th scope="col">Inputs</th><th scope="col">Module</th><th scope="col">Created</th><th scope="col"><span class="mc__sr">Actions</span></th>';
+    // One wide File column; module, inputs and date live on the line under
+    // the name (the fields are still stored and searchable).
+    const head = '<th scope="col">File</th><th scope="col"><span class="mc__sr">Actions</span></th>';
 
     box.innerHTML = rows.length ? `
       <div class="mc__table-wrap${state.menu ? ' has-menu' : ''}">
@@ -532,24 +567,19 @@
       </div>`;
   }
 
-  function moreMenuHtml(f) {
-    const items = [`<button type="button" class="mc__menu-item" data-rename="${esc(f.id)}">Rename</button>`];
-    if (f.source === 'imported') {
-      items.push(f.derivedFrom
-        ? `<button type="button" class="mc__menu-item" data-unlink="${esc(f.id)}">Unlink from original</button>`
-        : `<button type="button" class="mc__menu-item" data-link="${esc(f.id)}">Link to original…</button>`);
-    }
-    const armed = state.armedDelete === f.id;
-    items.push(`<button type="button" class="mc__menu-item mc__menu-item--danger${armed ? ' is-armed' : ''}" data-delete="${esc(f.id)}">${armed ? 'Confirm delete' : 'Delete'}</button>`);
-    return `<div class="mc__menu mc__menu--right" role="menu">${items.join('')}</div>`;
-  }
+  const ICON = {
+    pencil: '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    trash: '<svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>',
+    link: '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>'
+  };
 
   function fileRowHtml(f) {
     const r = state.renaming && state.renaming.id === f.id ? state.renaming : null;
     const ext = extFor(f);
     const imported = f.source === 'imported';
-    const menu = state.menu && state.menu.id === f.id ? state.menu.kind : null;
-    const formats = imported ? '' : (f.hasResult ? 'PDF, Word' : 'PDF');
+    const menuOpen = state.menu && state.menu.id === f.id && state.menu.kind === 'download';
+    const formats = imported ? kindLabel(f) : (f.hasResult ? 'PDF, Word' : 'PDF');
+    const subline = [formatSize(f.size), formats, formatDate(f.createdAt)].filter(Boolean).join(' · ');
 
     const nameCell = r
       ? `<div class="mc__rename">
@@ -561,31 +591,34 @@
          </div>
          <p class="mc__field-error" id="mc-rename-error" data-rename-error ${r.error ? '' : 'hidden'}>${esc(r.error || '')}</p>`
       : `<div class="mc__name-stack">
-           <div><button type="button" class="mc__file" data-open="${esc(f.id)}"
-                 title="${Data().isViewable(f.mimeType) ? 'Open' : 'Download'}">${esc(f.name)}${imported ? esc(ext) : ''}</button>${fileNote(f)}</div>
-           <span class="mc__meta mc__meta--sub">${esc([formatSize(f.size), formats].filter(Boolean).join(' · '))}</span>
+           <div class="mc__name-line">
+             <button type="button" class="mc__file" data-open="${esc(f.id)}"
+                 title="${Data().isViewable(f.mimeType) ? 'Open' : 'Download'}">${esc(f.name)}${imported ? esc(ext) : ''}</button>
+             <button type="button" class="mc__icon-btn mc__icon-btn--quiet" data-rename="${esc(f.id)}" aria-label="Rename ${esc(f.name)}" title="Rename">${ICON.pencil}</button>
+             ${imported ? `<button type="button" class="mc__icon-btn mc__icon-btn--quiet${f.derivedFrom ? ' is-on' : ''}" data-${f.derivedFrom ? 'unlink' : 'link'}="${esc(f.id)}"
+                 aria-label="${f.derivedFrom ? 'Unlink from original' : 'Link to the generated file this is an edited copy of'}" title="${f.derivedFrom ? 'Unlink from original' : 'Link to original…'}">${ICON.link}</button>` : ''}
+             ${fileNote(f)}
+           </div>
+           <span class="mc__meta mc__meta--sub">${esc(subline)}</span>
            ${lineageHtml(f)}
          </div>`;
+
+    const armed = state.armedDelete === f.id;
+    const trash = armed
+      ? `<button type="button" class="mc__pill mc__pill--danger" data-delete="${esc(f.id)}">Delete?</button>`
+      : `<button type="button" class="mc__icon-btn mc__icon-btn--danger" data-delete="${esc(f.id)}" aria-label="Delete ${esc(f.name)}" title="Delete">${ICON.trash}</button>`;
 
     const actions = r
       ? `<button type="button" class="mc__pill mc__pill--accent" data-rename-save="${esc(f.id)}" ${r.error || r.saving ? 'disabled' : ''}>${r.saving ? 'Saving…' : 'Save'}</button>
          <button type="button" class="mc__pill" data-rename-cancel="${esc(f.id)}" ${r.saving ? 'disabled' : ''}>Cancel</button>`
       : imported
-        ? `<button type="button" class="mc__pill mc__pill--accent" data-open="${esc(f.id)}" data-open-mode="download">${Data().isViewable(f.mimeType) ? 'Open' : 'Download'}</button>
-           <span class="mc__menu-wrap"><button type="button" class="mc__more${menu === 'more' ? ' is-open' : ''}" data-menu="more:${esc(f.id)}" aria-haspopup="menu" aria-expanded="${menu === 'more'}" aria-label="More actions for ${esc(f.name)}">···</button>${menu === 'more' ? moreMenuHtml(f) : ''}</span>`
-        : `<span class="mc__menu-wrap"><button type="button" class="mc__pill mc__pill--accent${menu === 'download' ? ' is-open' : ''}" data-menu="download:${esc(f.id)}" aria-haspopup="menu" aria-expanded="${menu === 'download'}">Download ▾</button>${menu === 'download' ? downloadMenuHtml(f) : ''}</span>
-           <span class="mc__menu-wrap"><button type="button" class="mc__more${menu === 'more' ? ' is-open' : ''}" data-menu="more:${esc(f.id)}" aria-haspopup="menu" aria-expanded="${menu === 'more'}" aria-label="More actions for ${esc(f.name)}">···</button>${menu === 'more' ? moreMenuHtml(f) : ''}</span>`;
-
-    const cells = imported
-      ? `<td>${esc(kindLabel(f))}</td><td>${esc(formatSize(f.size))}</td><td>${esc(formatDate(f.createdAt))}</td>`
-      : `<td class="mc__cell-inputs">${esc((M() && M().inputsSummary(f.moduleId, f.inputs)) || '—')}</td>
-         <td>${esc(shortModule(f))}</td><td>${esc(formatDate(f.createdAt))}</td>`;
+        ? `<button type="button" class="mc__pill mc__pill--accent" data-open="${esc(f.id)}" data-open-mode="download">${Data().isViewable(f.mimeType) ? 'Open' : 'Download'}</button>${trash}`
+        : `<span class="mc__menu-wrap"><button type="button" class="mc__pill mc__pill--accent${menuOpen ? ' is-open' : ''}" data-menu="download:${esc(f.id)}" aria-haspopup="menu" aria-expanded="${menuOpen}">Download ▾</button>${menuOpen ? downloadMenuHtml(f) : ''}</span>${trash}`;
 
     const linkRow = state.linking === f.id ? linkRowHtml(f) : '';
     return `
       <tr data-file="${esc(f.id)}"${r ? ' class="is-renaming"' : ''}>
         <td class="mc__cell-name">${nameCell}</td>
-        ${cells}
         <td class="mc__cell-action">${actions}</td>
       </tr>${linkRow}`;
   }
@@ -596,7 +629,7 @@
       .map((g) => `<option value="${esc(g.id)}">${esc(g.name)} — ${esc(formatDate(g.createdAt))}</option>`).join('');
     return `
       <tr class="mc__link-row" data-file-link="${esc(f.id)}">
-        <td colspan="5">
+        <td colspan="2">
           <label class="mc__link-label" for="mc-link-${esc(f.id)}">This file is an edited copy of</label>
           <select id="mc-link-${esc(f.id)}" class="mc__link-select" data-link-select="${esc(f.id)}">
             <option value="">Choose the original…</option>${options}
@@ -1100,8 +1133,8 @@
 
   /* Clicks anywhere outside an open menu close it. */
   function handleDocumentClick(e) {
-    if (!mounted || !state.menu) return;
-    if (e.target.closest && e.target.closest('.mc__menu-wrap')) return;
+    if (!mounted || (!state.menu && !state.armedDelete)) return;
+    if (e.target.closest && (e.target.closest('.mc__menu-wrap') || e.target.closest('[data-delete]'))) return;
     closeMenus();
   }
 
@@ -1737,7 +1770,7 @@
     icon:   'factory',
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/my-company/my-company.css?v=2026-10-13',
+    styles: 'modules/my-company/my-company.css?v=2026-10-13b',
     companyAware: true,
 
     mount(container) {
@@ -1777,6 +1810,8 @@
       resources.addEventListener('change', handleFilesChange);
       resources.addEventListener('keydown', handleFilesKeydown);
       document.addEventListener('click', handleDocumentClick);
+      const sc = scroller();
+      if (sc) sc.addEventListener('scroll', trimSlack, { passive: true });
       wireImport();
       renderUploads();
 
@@ -1811,6 +1846,8 @@
     unmount() {
       mounted = false;
       document.removeEventListener('click', handleDocumentClick);
+      const sc = scroller();
+      if (sc) sc.removeEventListener('scroll', trimSlack);
       state.menu = null;
       state.armedDelete = null;
       comboCleanup.forEach((fn) => fn());
