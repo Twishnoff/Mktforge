@@ -22,9 +22,16 @@
      .../files/{fileId}                 { name, moduleId, moduleName, size, chunks, createdAt,
                                           source ('generated' | 'imported'), ext, mimeType,
                                           textChunks, textChars, textStatus,
-                                          digest? (JSON string, short summary for agents) }
+                                          digest? (JSON string, short summary for agents),
+                                          inputs? (what the run was made from — see materials.js),
+                                          resultChunks? (>0 when a document model is stored),
+                                          derivedFrom? (fileId of the generated original this
+                                                        imported file is an edited copy of),
+                                          supersededBy? (fileId of the edited copy of this file),
+                                          createdVia? ('app' | 'slack') }
      .../files/{fileId}/chunks/{i}      { data: Blob }       original bytes
      .../files/{fileId}/text/{i}        { data: string }     extracted text
+     .../files/{fileId}/result/{i}      { data: string }     document model JSON (Word export)
      .../competitorLedger/{id}          Market Tracker: what the agent has already seen
      .../tracker/{boxId}                Market Tracker: { title, kind, rows: [...], ... }
 
@@ -79,13 +86,20 @@
      Per company (on a handle, or top-level for the active company)
        getProfile()                    -> Promise<profile>
        saveProfile(profile)            -> Promise<profile>; rejects code 'duplicate-company'
-       savePdfDoc(jsPdfDoc, { moduleId, moduleName, fallbackName })
-                                       -> downloads as "<Module Name> N.pdf" and
-                                          saves a copy to the company
+       savePdfDoc(jsPdfDoc, { moduleId, moduleName, fallbackName, inputs?, result? })
+                                       -> downloads the PDF, named from its inputs
+                                          ("Battle Card — <title> vs <competitor>", or
+                                          "<Module Name> N" without inputs) and saves a
+                                          copy to the company with its inputs and, when
+                                          given, the document model for Word export
        listFiles()                     -> Promise<[{ id, name, moduleId, moduleName, source, ext,
-                                                  mimeType, size, createdAt, textStatus }]>
-       importFile(file, { onStage })   -> Promise<{ id, name }>
+                                                  mimeType, size, createdAt, textStatus, inputs,
+                                                  hasResult, derivedFrom, supersededBy }]>
+       importFile(file, { onStage })   -> Promise<{ id, name, linked? }>; a Word file exported
+                                          from Mktforge is tied to its original (derivedFrom)
        getFileText(id, { withLinks })  -> Promise<string>
+       getFileResult(id)               -> Promise<docModel|null>   (materials.js)
+       linkFile(id, originalId) / unlinkFile(id)
        openFile(id)                    -> opens the file in a new tab
        deleteFile(id) / renameFile(id, name) / nameTaken(name, exceptId)
        readFile(id) / getFileDigest(id) / setFileDigest(id, digest)
@@ -124,6 +138,7 @@ window.MktforgeData = (() => {
 
   const TEXT_CHUNK_CHARS = 300000;          // ≤ ~900 KB UTF-8 per document
   const MAX_TEXT_CHUNKS = 5;
+  const RESULT_MAX_CHARS = 600000;          // document model JSON (Word export); 2 parts at most
 
   const MAX_COMPANIES = 10;
   const ACTIVE_KEY = 'mktforge.company';    // sessionStorage: this tab's company
@@ -630,6 +645,7 @@ window.MktforgeData = (() => {
      it (plan D3) rather than being cut off half-written. */
   const inflight = new Set();
   const WRITES = ['saveProfile', 'savePdfDoc', 'importFile', 'deleteFile', 'renameFile', 'setFileDigest',
+    'linkFile', 'unlinkFile',
     'savePositioningAnswers', 'saveTrackerBox', 'deleteTrackerBox', 'saveTitleLedger', 'deleteTitleLedger',
     'saveCompetitorLedger', 'deleteCompetitorLedger', 'saveTargetMessaging'];
   function tracked(fn) {
@@ -770,17 +786,28 @@ window.MktforgeData = (() => {
       return files.some((f) => f.id !== exceptId && sameName(f.name, name));
     }
 
-    /* "<Module Name> N", where N is the company's per-module counter. If a
-       renamed file already uses that name, the counter keeps going. */
-    async function reserveName(moduleId, moduleName) {
-      let taken = new Set();
-      try { taken = new Set((await listFiles()).map((f) => f.name.trim().toLowerCase())); }
-      catch (err) { console.warn('[Mktforge] could not check existing file names', err); }
-      for (let guard = 0; guard < 50; guard += 1) {
-        const name = await nextCounterName(moduleId, moduleName);
-        if (!taken.has(name.toLowerCase())) return name;
+    /* Generated files are named from their inputs ("Battle Card — BDC
+       Manager vs Mia Labs"); two runs with the same inputs share a name and
+       are told apart by date. Without inputs (an older caller) the name is
+       "<Module Name> N" from the company's per-module counter. */
+    async function reserveName(moduleId, moduleName, inputs) {
+      const M = window.MktforgeMaterials;
+      if (inputs && M) {
+        const name = M.nameFor(moduleId, inputs);
+        if (name && name !== (M.SHORT_NAMES[moduleId] || '')) return name;
       }
-      throw new Error('Could not find a free file name.');
+      return nextCounterName(moduleId, moduleName);
+    }
+
+    function resultParts(result) {
+      if (result == null) return null;
+      let raw;
+      try { raw = typeof result === 'string' ? result : JSON.stringify(result); }
+      catch (e) { return null; }
+      if (!raw || raw.length > RESULT_MAX_CHARS) return null;
+      const parts = [];
+      for (let i = 0; i < raw.length; i += TEXT_CHUNK_CHARS) parts.push(raw.slice(i, i + TEXT_CHUNK_CHARS));
+      return parts;
     }
 
     async function nextCounterName(moduleId, moduleName) {
@@ -813,8 +840,9 @@ window.MktforgeData = (() => {
       return parts;
     }
 
-    /* extra: { source, ext, mimeType, textStatus } — text: string or null */
-    async function storeFile({ name, moduleId, moduleName, blob, extra = {}, text = null }) {
+    /* extra: { source, ext, mimeType, textStatus, inputs, derivedFrom, ... }
+       text: string or null — result: document model (object) or null */
+    async function storeFile({ name, moduleId, moduleName, blob, extra = {}, text = null, result = null }) {
       if (blob.size > MAX_FILE_BYTES) {
         throw Object.assign(new Error(`This file is larger than ${MAX_FILE_BYTES / (1024 * 1024)} MB.`), { code: 'too-large' });
       }
@@ -824,13 +852,17 @@ window.MktforgeData = (() => {
         textChars: parts.reduce((n, x) => n + x.length, 0),
         textStatus: parts.length ? 'ok' : 'empty'
       };
+      const rparts = resultParts(result);
       const fields = { name, moduleId, moduleName, size: blob.size, ...extra, ...textFields };
+      Object.keys(fields).forEach((k) => { if (fields[k] === undefined) delete fields[k]; });
 
       if (isLocal()) {
         const data = localRead();
         data.files = data.files || [];
         const id = `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
         data.files.push({ id, ...fields, createdAt: Date.now(),
+                          resultChunks: rparts ? rparts.length : 0,
+                          result: rparts ? rparts.join('') : undefined,
                           text: parts == null ? undefined : parts.join(''),
                           dataUrl: await blobToDataUrl(blob) });
         localWrite(data);
@@ -858,12 +890,27 @@ window.MktforgeData = (() => {
           await withTimeout(meta.collection('text').doc(String(j)).set({ data: parts[j] }),
                             30000, 'Saving the file’s text');
         }
+        // The document model is a nice-to-have (Word export). If its
+        // subcollection can't be written — rules not published yet, say —
+        // the file is still saved; only the Word option is missing.
+        let resultChunks = 0;
+        if (rparts) {
+          try {
+            for (let j = 0; j < rparts.length; j += 1) {
+              await withTimeout(meta.collection('result').doc(String(j)).set({ data: rparts[j] }),
+                                30000, 'Saving the document model');
+            }
+            resultChunks = rparts.length;
+          } catch (err) {
+            console.warn('[Mktforge] could not store the document model (Word export unavailable for this file)', err);
+          }
+        }
         await withTimeout(meta.set({
-          ...fields, chunks: chunkCount,
+          ...fields, chunks: chunkCount, resultChunks,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         }), TIMEOUT_MS, 'Saving the file');
       } catch (err) {
-        deleteChunks(d, meta, chunkCount, (parts && parts.length) || 0).catch(() => {});
+        deleteChunks(d, meta, chunkCount, (parts && parts.length) || 0, (rparts && rparts.length) || 0).catch(() => {});
         throw err;
       }
       return meta.id;
@@ -895,18 +942,124 @@ window.MktforgeData = (() => {
       if (!file.size) throw Object.assign(new Error('This file is empty.'), { code: 'empty' });
 
       onStage('reading');
-      const { text, truncated } = await X.text(file, { name: file.name, type: file.type });
+      const { text, truncated, stamp } = await X.text(file, { name: file.name, type: file.type });
+
+      // A Word file exported from Mktforge names the file it came from. When
+      // that original is in this company, the import becomes its edited copy:
+      // it keeps the original's module and inputs (so everything that looks
+      // for "the battle card for this title" can find it) while staying an
+      // imported file (so agents trust it first).
+      let original = null;
+      if (stamp) {
+        try {
+          const files = await listFiles();
+          original = stamp.fileId
+            ? files.find((f) => f.id === stamp.fileId && f.source !== 'imported') || null
+            : files.find((f) => f.source !== 'imported' && window.MktforgeMaterials.refFor(f.id) === stamp.ref) || null;
+        } catch (e) { original = null; }
+      }
 
       onStage('saving');
       const { base, ext } = splitName(file.name);
       const name = await uniqueName(base);
+      const extra = { source: 'imported', ext, mimeType: file.type || MIME_BY_KIND[kind] || 'application/octet-stream',
+                      kind, truncated: !!truncated, createdVia: 'app' };
+      if (original) {
+        Object.assign(extra, { derivedFrom: original.id, derivedRef: window.MktforgeMaterials.refFor(original.id) });
+        if (original.inputs) extra.inputs = original.inputs;
+      }
       const id = await storeFile({
-        name, moduleId: 'imported', moduleName: 'Imported', blob: file, text,
-        extra: { source: 'imported', ext, mimeType: file.type || MIME_BY_KIND[kind] || 'application/octet-stream',
-                 kind, truncated: !!truncated }
+        name, moduleId: original ? original.moduleId : 'imported',
+        moduleName: original ? original.moduleName : 'Imported', blob: file, text, extra
       });
+      if (original) {
+        try { await setSuperseded(original.id, id); }
+        catch (err) { console.warn('[Mktforge] could not mark the original as superseded', err); }
+      }
       tellFiles();
-      return { id, name, ext, empty: !text, truncated: !!truncated };
+      return { id, name, ext, empty: !text, truncated: !!truncated,
+               linked: original ? { id: original.id, name: original.name } : null };
+    }
+
+    /* ---------- edited copies ----------
+       derivedFrom on the copy, supersededBy on the original. Both are plain
+       pointers; nothing is moved or deleted. */
+
+    async function setSuperseded(originalId, copyId) {
+      if (isLocal()) {
+        const data = localRead();
+        const f = (data.files || []).find((x) => x.id === originalId);
+        if (f) { f.supersededBy = copyId || null; localWrite(data); }
+        return;
+      }
+      const d = await getDb();
+      await withTimeout(filesRef(d).doc(originalId).set(
+        { supersededBy: copyId || firebase.firestore.FieldValue.delete() }, { merge: true }),
+        TIMEOUT_MS, 'Linking the files');
+    }
+
+    async function setDerived(copyId, original) {
+      const fields = original
+        ? { derivedFrom: original.id, derivedRef: window.MktforgeMaterials.refFor(original.id),
+            moduleId: original.moduleId, moduleName: original.moduleName,
+            ...(original.inputs ? { inputs: original.inputs } : {}) }
+        : { derivedFrom: null, derivedRef: null, moduleId: 'imported', moduleName: 'Imported' };
+      if (isLocal()) {
+        const data = localRead();
+        const f = (data.files || []).find((x) => x.id === copyId);
+        if (f) { Object.assign(f, fields); if (!original) delete f.inputs; localWrite(data); }
+        return;
+      }
+      const d = await getDb();
+      const del = firebase.firestore.FieldValue.delete();
+      const patch = { ...fields };
+      if (!original) { patch.derivedFrom = del; patch.derivedRef = del; patch.inputs = del; }
+      await withTimeout(filesRef(d).doc(copyId).set(patch, { merge: true }), TIMEOUT_MS, 'Linking the files');
+    }
+
+    /* Ties an imported file to the generated file it is an edited copy of
+       (the manual path, for files that lost their stamp). */
+    async function linkFile(copyId, originalId) {
+      const files = await listFiles();
+      const copy = files.find((f) => f.id === copyId);
+      const original = files.find((f) => f.id === originalId);
+      if (!copy || copy.source !== 'imported') throw new Error('Only an imported file can be linked to an original.');
+      if (!original || original.source === 'imported') throw new Error('Choose a generated file as the original.');
+      if (copy.derivedFrom && copy.derivedFrom !== originalId) await setSuperseded(copy.derivedFrom, null).catch(() => {});
+      await setDerived(copyId, original);
+      await setSuperseded(originalId, copyId);
+      tellFiles();
+    }
+
+    async function unlinkFile(copyId) {
+      const files = await listFiles();
+      const copy = files.find((f) => f.id === copyId);
+      if (!copy || !copy.derivedFrom) return;
+      await setSuperseded(copy.derivedFrom, null).catch(() => {});
+      await setDerived(copyId, null);
+      tellFiles();
+    }
+
+    /* The stored document model (materials.js) for Word export, or null. */
+    async function getFileResult(id) {
+      let raw = '';
+      if (isLocal()) {
+        const f = (localRead().files || []).find((x) => x.id === id);
+        raw = f && f.result ? f.result : '';
+      } else {
+        const d = await getDb();
+        const meta = filesRef(d).doc(id);
+        const snap = await withTimeout(meta.get(), TIMEOUT_MS, 'Reading a saved file');
+        if (!snap.exists) throw new Error('That file no longer exists.');
+        const n = Number(snap.data().resultChunks) || 0;
+        if (!n) return null;
+        const parts = await withTimeout(Promise.all(
+          Array.from({ length: n }, (_, i) => meta.collection('result').doc(String(i)).get())
+        ), 30000, 'Reading a saved file');
+        raw = parts.map((p) => (p.exists ? p.data().data : '')).join('');
+      }
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch (e) { return null; }
     }
 
     /* Stored text for any saved file. Generated PDFs have none until an agent
@@ -959,10 +1112,10 @@ window.MktforgeData = (() => {
       await withTimeout(meta.set(fields, { merge: true }), TIMEOUT_MS, 'Saving text');
     }
 
-    async function savePdfDoc(doc, { moduleId, moduleName, fallbackName }) {
+    async function savePdfDoc(doc, { moduleId, moduleName, fallbackName, inputs = null, result = null }) {
       let name = null;
       try {
-        name = await reserveName(moduleId, moduleName);
+        name = await reserveName(moduleId, moduleName, inputs);
       } catch (err) {
         console.error('[Mktforge] could not name the PDF', err);
       }
@@ -975,8 +1128,9 @@ window.MktforgeData = (() => {
       }
 
       try {
-        const id = await storeFile({ name, moduleId, moduleName, blob: doc.output('blob'),
-                                     extra: { source: 'generated', ext: '.pdf', mimeType: 'application/pdf', kind: 'pdf' } });
+        const extra = { source: 'generated', ext: '.pdf', mimeType: 'application/pdf', kind: 'pdf', createdVia: 'app' };
+        if (inputs) extra.inputs = inputs;
+        const id = await storeFile({ name, moduleId, moduleName, blob: doc.output('blob'), extra, result });
         tellFiles();
         notify(`Saved to My Company as “${name}”.`);
         return { id, name };
@@ -990,7 +1144,9 @@ window.MktforgeData = (() => {
     async function listFiles() {
       if (isLocal()) {
         return (localRead().files || [])
-          .map(({ dataUrl, digest, text, ...rest }) => ({ source: 'generated', ext: '', ...rest }))
+          .map(({ dataUrl, digest, text, result, ...rest }) => ({ source: 'generated', ext: '', ...rest,
+            hasResult: (Number(rest.resultChunks) || 0) > 0, inputs: rest.inputs || null,
+            derivedFrom: rest.derivedFrom || null, supersededBy: rest.supersededBy || null }))
           .sort((a, b) => b.createdAt - a.createdAt);
       }
       const d = await getDb();
@@ -1002,7 +1158,11 @@ window.MktforgeData = (() => {
                  source: f.source === 'imported' ? 'imported' : 'generated',
                  ext: f.ext || '', mimeType: f.mimeType || 'application/pdf', kind: f.kind || 'pdf',
                  textStatus: f.textStatus || '', truncated: !!f.truncated,
-                 size: f.size || 0, createdAt: toMillis(f.createdAt) };
+                 size: f.size || 0, createdAt: toMillis(f.createdAt),
+                 inputs: f.inputs && typeof f.inputs === 'object' ? f.inputs : null,
+                 hasResult: (Number(f.resultChunks) || 0) > 0,
+                 derivedFrom: f.derivedFrom || null, supersededBy: f.supersededBy || null,
+                 createdVia: f.createdVia || '' };
       });
     }
 
@@ -1061,8 +1221,10 @@ window.MktforgeData = (() => {
     }
 
     async function deleteFile(id) {
+      let m = null;
       if (isLocal()) {
         const data = localRead();
+        m = (data.files || []).find((f) => f.id === id) || null;
         data.files = (data.files || []).filter((f) => f.id !== id);
         localWrite(data);
       } else {
@@ -1070,22 +1232,25 @@ window.MktforgeData = (() => {
         const meta = filesRef(d).doc(id);
         const snap = await withTimeout(meta.get(), TIMEOUT_MS, 'Deleting the file');
         if (snap.exists) {
+          m = snap.data();
           // Metadata first so the row disappears even if a chunk delete fails.
           await withTimeout(meta.delete(), TIMEOUT_MS, 'Deleting the file');
-          await withTimeout(deleteChunks(d, meta, snap.data().chunks || 1, snap.data().textChunks || 0),
+          await withTimeout(deleteChunks(d, meta, m.chunks || 1, m.textChunks || 0, m.resultChunks || 0),
                             30000, 'Deleting the file');
         }
       }
+      // Pointers to this file on its original or its edited copy go too.
+      if (m && m.derivedFrom) await setSuperseded(m.derivedFrom, null).catch(() => {});
+      if (m && m.supersededBy) await setDerived(m.supersededBy, null).catch(() => {});
       tellFiles();
     }
 
+    /* Names needn't be unique: generated files are named from their inputs,
+       so two runs can share one, and the table shows the date beside each. */
     async function renameFile(id, rawName) {
       const name = String(rawName || '').trim();
       if (!name) throw Object.assign(new Error('Enter a file name.'), { code: 'empty' });
       if (name.length > 200) throw Object.assign(new Error('That name is too long.'), { code: 'long' });
-      if (await nameTaken(name, id)) {
-        throw Object.assign(new Error('File name already exists. Choose another.'), { code: 'duplicate' });
-      }
       if (isLocal()) {
         const data = localRead();
         const f = (data.files || []).find((x) => x.id === id);
@@ -1358,7 +1523,7 @@ window.MktforgeData = (() => {
         if (snap.empty) break;
         for (const doc of snap.docs) {
           const m = doc.data();
-          await withTimeout(deleteChunks(d, doc.ref, m.chunks || 1, Math.max(m.textChunks || 0, MAX_TEXT_CHUNKS)),
+          await withTimeout(deleteChunks(d, doc.ref, m.chunks || 1, Math.max(m.textChunks || 0, MAX_TEXT_CHUNKS), Math.max(m.resultChunks || 0, 2)),
                             30000, 'Removing a company file');
           await withTimeout(doc.ref.delete(), TIMEOUT_MS, 'Removing a company file');
         }
@@ -1380,6 +1545,7 @@ window.MktforgeData = (() => {
       getProfile, saveProfile, prefill,
       savePdfDoc, listFiles, openFile, deleteFile, renameFile, nameTaken,
       readFile, getFileDigest, setFileDigest, importFile, getFileText,
+      getFileResult, linkFile, unlinkFile,
       getPositioningAnswers, savePositioningAnswers,
       getTargetMessaging, saveTargetMessaging,
       listTrackerBoxes, saveTrackerBox, deleteTrackerBox,
@@ -1410,7 +1576,7 @@ window.MktforgeData = (() => {
   const VIEWABLE = /^(application\/pdf|text\/plain|text\/csv|text\/markdown|application\/json)$/;
   const isViewable = (mimeType) => VIEWABLE.test(mimeType || 'application/pdf');
 
-  async function deleteChunks(d, meta, count, textCount = 0) {
+  async function deleteChunks(d, meta, count, textCount = 0, resultCount = 0) {
     for (let i = 0; i < count; i += 20) {
       const batch = d.batch();
       for (let j = i; j < Math.min(i + 20, count); j += 1) {
@@ -1418,9 +1584,10 @@ window.MktforgeData = (() => {
       }
       await batch.commit();
     }
-    if (textCount) {
+    if (textCount || resultCount) {
       const batch = d.batch();
       for (let j = 0; j < textCount; j += 1) batch.delete(meta.collection('text').doc(String(j)));
+      for (let j = 0; j < resultCount; j += 1) batch.delete(meta.collection('result').doc(String(j)));
       await batch.commit();
     }
   }

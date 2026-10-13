@@ -47,6 +47,26 @@ window.MktforgeMessagingPdf = (function () {
     (boxes || []).forEach((b) => { titles[b.key] = b.title; stages[b.key] = b.stage; });
 
     const company = input.companyName || 'Your company';
+    const date = new Date(run.generatedAt || Date.now()).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
+    // Everything drawn below is also recorded as a document model (the
+    // Word export). Nothing before the first heading is recorded: the
+    // Word header carries the title and the meta line.
+    const M = window.MktforgeMaterials;
+    const R = M ? M.recorder({
+      moduleId: 'draft-messaging',
+      title: company,
+      subtitle: 'Draft Messaging · Messaging & Homepage Copy (Stages 6–9)',
+      meta: [
+        { label: 'Primary Champion', value: input.champion || '—' },
+        { label: 'Category', value: input.category || '—' },
+        { label: 'Closest Competitor', value: input.competitorName || '—' },
+        { label: 'Generated', value: date }
+      ],
+      note: 'First-draft copy — a hypothesis to test with real buyers, and a foundation to write from, not finished copy.',
+      style: 'report', orientation: 'portrait', footer: 'Draft Messaging'
+    }) : null;
+    const colorName = (c) => (c === SOFT ? 'soft' : c === ACCENT ? 'accent' : undefined);
 
     function ensure(h) {
       if (y + h <= H - MARGIN - 14) return;
@@ -54,9 +74,10 @@ window.MktforgeMessagingPdf = (function () {
       y = MARGIN;
     }
 
-    function text(str, { size = 10, bold = false, color = INK, indent = 0, gap = 4, lh = 1.35 } = {}) {
+    function text(str, { size = 10, bold = false, color = INK, indent = 0, gap = 4, lh = 1.35, record = true } = {}) {
       const s = pdfSafe(str == null ? '' : str).trim();
       if (!s) return;
+      if (R && record) R.text(str, { size, bold, color: colorName(color), indent });
       doc.setFont('helvetica', bold ? 'bold' : 'normal');
       doc.setFontSize(size);
       doc.setTextColor(...color);
@@ -71,26 +92,34 @@ window.MktforgeMessagingPdf = (function () {
     }
 
     function bullets(items, { numbered = false, prefix = '' } = {}) {
+      if (R) R.bullets(items, { numbered, prefix });
       (items || []).filter(Boolean).forEach((item, i) => {
-        text(`${numbered ? `${i + 1}.` : '•'} ${prefix}${item}`, { indent: 10, gap: 2 });
+        text(`${numbered ? `${i + 1}.` : '•'} ${prefix}${item}`, { indent: 10, gap: 2, record: false });
       });
       y += 4;
     }
 
-    function label(str) { text(str, { size: 9, bold: true, color: SOFT, gap: 2 }); }
+    function label(str) {
+      if (R) R.label(str);
+      text(str, { size: 9, bold: true, color: SOFT, gap: 2, record: false });
+    }
 
     function heading(str, stage) {
+      if (R) R.heading(str, stage);
       ensure(40);
       y += 8;
       doc.setDrawColor(...LINE);
       doc.setLineWidth(0.8);
       doc.line(MARGIN, y, W - MARGIN, y);
       y += 10;
-      if (stage) text(stage.toUpperCase(), { size: 8, bold: true, color: ACCENT, gap: 0 });
-      text(str, { size: 15, bold: true, gap: 6 });
+      if (stage) text(stage.toUpperCase(), { size: 8, bold: true, color: ACCENT, gap: 0, record: false });
+      text(str, { size: 15, bold: true, gap: 6, record: false });
     }
 
-    function subheading(str) { text(str, { size: 12, bold: true, gap: 4 }); }
+    function subheading(str) {
+      if (R) R.subheading(str);
+      text(str, { size: 12, bold: true, gap: 4, record: false });
+    }
 
     const proofTag = (status) => (status === 'real' ? '' : '[Placeholder — proof to collect] ');
 
@@ -99,7 +128,6 @@ window.MktforgeMessagingPdf = (function () {
     doc.rect(0, 0, W, 6, 'F');
     text('Draft Messaging · Messaging & Homepage Copy (Stages 6–9)', { size: 9, bold: true, color: ACCENT, gap: 2 });
     text(company, { size: 20, bold: true, gap: 6 });
-    const date = new Date(run.generatedAt || Date.now()).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
     text([
       `Primary Champion: ${input.champion || '—'}`,
       `Category: ${input.category || '—'}`,
@@ -250,7 +278,13 @@ window.MktforgeMessagingPdf = (function () {
 
     const fallbackName = `messaging-${String(input.champion || 'draft').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}-${new Date().toISOString().slice(0, 10)}.pdf`;
     if (window.MktforgeData) {
-      return window.MktforgeData.savePdfDoc(doc, { moduleId: 'draft-messaging', moduleName: 'Draft Messaging', fallbackName });
+      return window.MktforgeData.savePdfDoc(doc, {
+        moduleId: 'draft-messaging', moduleName: 'Draft Messaging', fallbackName,
+        inputs: M ? M.inputsFor('draft-messaging', {
+          champion: input.champion, competitorName: input.competitorName, industry: input.industry || ''
+        }) : null,
+        result: R ? R.model() : null
+      });
     }
     doc.save(fallbackName);
     return null;

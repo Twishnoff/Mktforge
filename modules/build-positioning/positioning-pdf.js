@@ -67,6 +67,27 @@ window.MktforgePositioningPdf = (function () {
     const input = run.input || {};
     const company = input.companyName || input.companyUrl || 'Your company';
     const competitor = input.competitorName || input.competitorHost || 'Closest competitor';
+    const date = new Date(run.generatedAt || Date.now()).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
+    // Everything drawn below is also recorded as a document model (the
+    // Word export). Nothing before the first heading is recorded: the
+    // Word header carries the title and the meta line.
+    const M = window.MktforgeMaterials;
+    const R = M ? M.recorder({
+      moduleId: 'build-positioning',
+      title: `${company} vs. ${competitor}`,
+      subtitle: 'Build Positioning · Positioning (Stages 0–5)',
+      meta: [
+        { label: 'Primary Champion', value: input.champion || '—' },
+        { label: 'Closest Competitor', value: input.competitorUrl || '—' },
+        { label: 'Target Industry', value: input.industry || 'Any' },
+        { label: 'Company URL', value: input.companyUrl || '—' },
+        { label: 'Generated', value: date }
+      ],
+      note: 'Draft positioning — a hypothesis to test with real buyers before writing copy.',
+      style: 'report', orientation: 'portrait', footer: 'Build Positioning'
+    }) : null;
+    const colorName = (c) => (c === SOFT ? 'soft' : c === ACCENT ? 'accent' : undefined);
 
     function ensure(h) {
       if (y + h <= H - MARGIN - 14) return;
@@ -74,9 +95,10 @@ window.MktforgePositioningPdf = (function () {
       y = MARGIN;
     }
 
-    function text(str, { size = 10, bold = false, color = INK, indent = 0, gap = 4, lh = 1.35 } = {}) {
+    function text(str, { size = 10, bold = false, color = INK, indent = 0, gap = 4, lh = 1.35, record = true } = {}) {
       const s = pdfSafe(str == null ? '' : str).trim();
       if (!s) return;
+      if (R && record) R.text(str, { size, bold, color: colorName(color), indent });
       doc.setFont('helvetica', bold ? 'bold' : 'normal');
       doc.setFontSize(size);
       doc.setTextColor(...color);
@@ -91,23 +113,28 @@ window.MktforgePositioningPdf = (function () {
     }
 
     function bullets(items, { numbered = false, prefix = '' } = {}) {
+      if (R) R.bullets(items, { numbered, prefix });
       (items || []).filter(Boolean).forEach((item, i) => {
-        text(`${numbered ? `${i + 1}.` : '•'} ${prefix}${item}`, { indent: 10, gap: 2 });
+        text(`${numbered ? `${i + 1}.` : '•'} ${prefix}${item}`, { indent: 10, gap: 2, record: false });
       });
       y += 4;
     }
 
-    function label(str) { text(str, { size: 9, bold: true, color: SOFT, gap: 2 }); }
+    function label(str) {
+      if (R) R.label(str);
+      text(str, { size: 9, bold: true, color: SOFT, gap: 2, record: false });
+    }
 
     function heading(str, stage) {
+      if (R) R.heading(str, stage);
       ensure(40);
       y += 8;
       doc.setDrawColor(...LINE);
       doc.setLineWidth(0.8);
       doc.line(MARGIN, y, W - MARGIN, y);
       y += 10;
-      if (stage) text(stage.toUpperCase(), { size: 8, bold: true, color: ACCENT, gap: 0 });
-      text(str, { size: 15, bold: true, gap: 6 });
+      if (stage) text(stage.toUpperCase(), { size: 8, bold: true, color: ACCENT, gap: 0, record: false });
+      text(str, { size: 15, bold: true, gap: 6, record: false });
     }
 
     /* --- title block --- */
@@ -115,7 +142,6 @@ window.MktforgePositioningPdf = (function () {
     doc.rect(0, 0, W, 6, 'F');
     text('Build Positioning · Positioning (Stages 0–5)', { size: 9, bold: true, color: ACCENT, gap: 2 });
     text(`${company} vs. ${competitor}`, { size: 20, bold: true, gap: 6 });
-    const date = new Date(run.generatedAt || Date.now()).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
     text([
       `Primary Champion: ${input.champion || '—'}`,
       `Closest Competitor: ${input.competitorUrl || '—'}`,
@@ -274,7 +300,14 @@ window.MktforgePositioningPdf = (function () {
 
     const fallbackName = `positioning-${String(input.champion || 'draft').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}-${new Date().toISOString().slice(0, 10)}.pdf`;
     if (window.MktforgeData) {
-      return window.MktforgeData.savePdfDoc(doc, { moduleId: 'build-positioning', moduleName: 'Build Positioning', fallbackName });
+      return window.MktforgeData.savePdfDoc(doc, {
+        moduleId: 'build-positioning', moduleName: 'Build Positioning', fallbackName,
+        inputs: M ? M.inputsFor('build-positioning', {
+          champion: input.champion, competitorUrl: input.competitorUrl || input.competitorHost,
+          competitorName: input.competitorName, industry: input.industry
+        }) : null,
+        result: R ? R.model() : null
+      });
     }
     doc.save(fallbackName);
     return null;

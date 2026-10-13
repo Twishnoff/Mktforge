@@ -321,14 +321,49 @@ window.MktforgePersonaPdf = (function () {
     }
 
     const fileName = `persona-${slugify(title)}-${new Date().toISOString().slice(0, 10)}.pdf`;
-    // Mktforge: download as "Persona Builder N.pdf" and keep a copy in My Company.
+    // Mktforge: download as "Persona — <title>.pdf" and keep a copy in My
+    // Company, with its inputs and a document model for Word export.
     if (window.MktforgeData) {
+      const M = window.MktforgeMaterials;
+      const notSpecified = /^(not specified|unspecified|n\/a|none)$/i;
       return window.MktforgeData.savePdfDoc(doc, {
-        moduleId: 'persona-builder', moduleName: 'Persona Builder', fallbackName: fileName
+        moduleId: 'persona-builder', moduleName: 'Persona Builder', fallbackName: fileName,
+        inputs: M ? M.inputsFor('persona-builder', {
+          jobTitle: overview.primary_job_title || '',
+          industry: notSpecified.test(overview.industry_label || '') ? '' : (overview.industry_label || ''),
+          companySize: overview.company_size_label || ''
+        }) : null,
+        result: M ? toDoc(persona, infoLine) : null
       });
     }
     doc.save(fileName);
   }
 
-  return { build };
+  /* The same content as the PDF, as a document model (materials.js) for
+     the Word export; boxes keep the on-screen two-row arrangement. */
+  function toDoc(persona, infoLine) {
+    const M = window.MktforgeMaterials;
+    const o = persona.overview || {};
+    const m = M.model({
+      moduleId: 'persona-builder',
+      title: `Persona Draft: ${o.primary_job_title || 'Persona'}`,
+      meta: [
+        { label: 'Job Level', value: o.job_level || '—' },
+        { label: 'Company Size', value: o.company_size_label || '—' },
+        { label: 'Industry', value: o.industry_label || 'Unspecified' }
+      ],
+      note: 'First draft only — validate with real customer conversations.',
+      style: 'cards', orientation: 'landscape', footer: 'Persona Builder'
+    });
+    const sec = (key) => ({ title: BOX_TITLES[key], blocks: M.blocksFromLines(buildPdfLines(key, persona)) });
+    const listSec = (key, items, empty) => ({ title: BOX_TITLES[key],
+      blocks: items.length ? [{ t: 'list', items, style: 'number' }] : [{ t: 'p', text: empty }] });
+    m.sections.push({ row: [sec('overview'), sec('profiles'), sec('gather')] });
+    m.sections.push({ row: [sec('org'),
+      listSec('work', persona.work_priorities || [], 'No priorities found.'),
+      listSec('development', persona.development_priorities || [], 'No priorities found.')] });
+    return m;
+  }
+
+  return { build, toDoc };
 })();

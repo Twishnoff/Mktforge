@@ -200,7 +200,26 @@ window.MktforgeExtract = (() => {
       if (t) texts.push(t);
     }
     if (!zip.file('word/document.xml')) throw new Error('This doesn’t look like a Word document.');
-    return { text: texts.join('\n\n') };
+    return { text: texts.join('\n\n'), properties: await customProperties(zip) };
+  }
+
+  /* docProps/custom.xml as { name: value }. A Word export from Mktforge
+     carries its origin here (materials.js stampProperties); Word keeps the
+     properties through edits and Save As. */
+  async function customProperties(zip) {
+    const file = zip.file('docProps/custom.xml');
+    if (!file) return null;
+    try {
+      const out = {};
+      byLocal(parseXml(await file.async('string')), 'property').forEach((p) => {
+        const name = p.getAttribute('name');
+        const val = p.firstElementChild ? p.firstElementChild.textContent : '';
+        if (name) out[name] = val;
+      });
+      return out;
+    } catch (e) {
+      return null;
+    }
   }
 
   async function fromPptx(blob) {
@@ -309,7 +328,14 @@ window.MktforgeExtract = (() => {
     let t = tidy(res.text);
     let truncated = !!res.truncated;
     if (t.length > MAX_TEXT_CHARS) { t = t.slice(0, MAX_TEXT_CHARS); truncated = true; }
-    return { text: t, kind, pages: res.pages || null, truncated };
+    // Was this exported from Mktforge? Document properties first (exact),
+    // then the "Mktforge ref MF-…" footer line (survives Google Docs etc.).
+    let stamp = null;
+    const M = window.MktforgeMaterials;
+    if (M) {
+      stamp = M.stampFromProperties(res.properties) || M.stampFromText(t);
+    }
+    return { text: t, kind, pages: res.pages || null, truncated, stamp };
   }
 
   return { text, supported, unsupportedReason, ACCEPT, LABELS, extOf };

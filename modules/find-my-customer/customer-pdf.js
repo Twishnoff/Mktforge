@@ -208,14 +208,47 @@ window.MktforgeCustomerPdf = (function () {
     }
 
     const fileName = `find-my-customer-${slugify(run.companyUrl)}.pdf`;
-    // Mktforge: download as "Find My Customer N.pdf" and keep a copy in My Company.
+    // Mktforge: download as "Find My Customer — <company>.pdf" and keep a
+    // copy in My Company, with its inputs and a document model for Word export.
     if (window.MktforgeData) {
+      const M = window.MktforgeMaterials;
       return window.MktforgeData.savePdfDoc(doc, {
-        moduleId: 'find-my-customer', moduleName: 'Find My Customer', fallbackName: fileName
+        moduleId: 'find-my-customer', moduleName: 'Find My Customer', fallbackName: fileName,
+        inputs: M ? M.inputsFor('find-my-customer', { companyUrl: run.companyUrl, companyName: run.companyName || '' }) : null,
+        result: M ? toDoc(run, customers, buyers) : null
       });
     }
     doc.save(fileName);
   }
 
-  return { build };
+  /* The same content as the PDF, as a document model (materials.js). */
+  function toDoc(run, customers, buyers) {
+    const M = window.MktforgeMaterials;
+    const m = M.model({
+      moduleId: 'find-my-customer',
+      title: 'Find My Customer — Results',
+      meta: [{ label: 'Company URL', value: run.companyUrl }, { label: 'Generated', value: new Date().toLocaleString() }],
+      style: 'report', orientation: 'portrait', footer: 'Find My Customer'
+    });
+    const groups = (list) => (list || []).filter((g) => g && g.jobTitle).flatMap((g) => [
+      { t: 'label', text: String(g.jobTitle) },
+      { t: 'list', items: g.points && g.points.length ? g.points : ['No Data'] }
+    ]);
+    m.sections.push({ title: 'Customer List', blocks: customers.length
+      ? [{ t: 'table', head: ['Customer', 'Size', 'Industry'], rows: customers.map((c) => [c.name || 'Untitled', c.size || 'N/A', c.industry || 'N/A']) }]
+      : [{ t: 'p', text: 'No Customers Found' }] });
+    m.sections.push({ title: 'Job Titles', blocks: (run.jobTitles || []).length
+      ? [{ t: 'list', items: run.jobTitles }] : [{ t: 'p', text: 'No Data' }] });
+    const pains = groups(run.painPoints);
+    m.sections.push({ title: 'Pain Points / Initiatives', blocks: pains.length ? pains : [{ t: 'p', text: 'No Data' }] });
+    const buy = groups(buyers);
+    m.sections.push({ title: 'Buyers to Target', blocks: buy.length ? buy : [{ t: 'p', text: 'No Data' }] });
+    const comps = run.competitorsToWatch || [];
+    m.sections.push({ title: 'Competitors To Watch', blocks: comps.length
+      ? [{ t: 'table', head: ['Competitor', 'URL', 'Why they compete'], rows: comps.map((c) => [c.name || '', c.url ? { text: c.url, url: c.url } : '', c.why || '']) }]
+      : [{ t: 'p', text: 'No Competitors Found' }] });
+    return m;
+  }
+
+  return { build, toDoc };
 })();

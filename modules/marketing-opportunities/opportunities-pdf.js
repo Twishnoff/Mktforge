@@ -147,14 +147,44 @@ window.MktforgeOpportunitiesPdf = (function () {
     }
 
     const fileName = `marketing-opportunities-${slugify(run.companyName || run.companyUrl)}.pdf`;
-    // Mktforge: download as "Marketing Opportunities N.pdf" and keep a copy in My Company.
+    // Mktforge: download as "Marketing Opps — <titles>.pdf" and keep a copy
+    // in My Company, with its inputs and a document model for Word export.
     if (window.MktforgeData) {
+      const M = window.MktforgeMaterials;
       return window.MktforgeData.savePdfDoc(doc, {
-        moduleId: 'marketing-opportunities', moduleName: 'Marketing Opportunities', fallbackName: fileName
+        moduleId: 'marketing-opportunities', moduleName: 'Marketing Opportunities', fallbackName: fileName,
+        inputs: M ? M.inputsFor('marketing-opportunities', { jobTitles: run.jobTitles, industry: run.industry || '' }) : null,
+        result: M ? toDoc(run, { CATEGORY_LABELS, CATEGORY_ORDER, safeUrl }) : null
       });
     }
     doc.save(fileName);
   }
 
-  return { build };
+  /* The same content as the PDF, as a document model (materials.js). */
+  function toDoc(run, { CATEGORY_LABELS, CATEGORY_ORDER, safeUrl }) {
+    const M = window.MktforgeMaterials;
+    const m = M.model({
+      moduleId: 'marketing-opportunities',
+      title: 'Marketing Opportunities — Results',
+      meta: [
+        { label: 'Company', value: run.companyName ? `${run.companyName} (${run.companyUrl})` : run.companyUrl },
+        { label: 'Job Titles Provided', value: run.jobTitles.join(', ') || 'N/A' },
+        { label: 'Industry Provided', value: run.industry || 'N/A' },
+        { label: 'Generated', value: new Date().toLocaleString() }
+      ],
+      style: 'report', orientation: 'portrait', footer: 'Marketing Opportunities'
+    });
+    const link = (i) => { const url = safeUrl(i.url); return url ? { text: url, url } : 'N/A'; };
+    const table = (items, withChannel) => (items.length
+      ? [{ t: 'table', head: withChannel ? ['Name', 'Channel', 'Link'] : ['Name', 'Link'],
+           rows: items.map((i) => (withChannel ? [i.name || 'Untitled', i.channel || '', link(i)] : [i.name || 'Untitled', link(i)])) }]
+      : [{ t: 'p', text: 'No Relevant Results Found' }]);
+    m.sections.push({ title: 'All Results', blocks: table(run.allResults || [], true) });
+    CATEGORY_ORDER.forEach((key) => {
+      m.sections.push({ title: CATEGORY_LABELS[key], blocks: table((run.results && run.results[key]) || [], false) });
+    });
+    return m;
+  }
+
+  return { build, toDoc };
 })();

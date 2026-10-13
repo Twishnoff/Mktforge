@@ -113,6 +113,13 @@ window.MktforgeBattleCardPdf = (function () {
     return lines;
   }
 
+  // "Their Key Features" is titled after the researched competitor, same
+  // as on the page (see setTheirTitle in battle-card-generator.js) — falls
+  // back to the same generic placeholder when no competitor name came back.
+  function boxTitlesFor(run) {
+    return { ...BOX_TITLES, theirFeatures: T.theirFeaturesTitle(run.competitorName) };
+  }
+
   // Extra breathing room between the title's divider line and the body
   // copy below it (previously the copy started right on top of the line).
   const BOX_TITLE_BODY_GAP = 8;
@@ -251,10 +258,7 @@ window.MktforgeBattleCardPdf = (function () {
     // "Their Key Features" is titled after the researched competitor, same
     // as on the page (see setTheirTitle in battle-card-generator.js) — falls back to
     // the same generic placeholder when no competitor name came back.
-    const boxTitles = {
-      ...BOX_TITLES,
-      theirFeatures: T.theirFeaturesTitle(run.competitorName),
-    };
+    const boxTitles = boxTitlesFor(run);
 
     let y = MARGIN;
 
@@ -579,14 +583,53 @@ window.MktforgeBattleCardPdf = (function () {
     }
 
     const fileName = `battle-card-${slugify(run.competitorName)}.pdf`;
-    // Mktforge: download as "Battle Card Generator N.pdf" and keep a copy in My Company.
+    // Mktforge: download as "Battle Card — <title> vs <competitor>.pdf" and
+    // keep a copy in My Company, with its inputs and a document model so
+    // the file can also be downloaded as Word.
     if (window.MktforgeData) {
+      const M = window.MktforgeMaterials;
       return window.MktforgeData.savePdfDoc(doc, {
-        moduleId: 'battle-card-generator', moduleName: 'Battle Card Generator', fallbackName: fileName
+        moduleId: 'battle-card-generator', moduleName: 'Battle Card Generator', fallbackName: fileName,
+        inputs: M ? M.inputsFor('battle-card-generator', run) : null,
+        result: M ? toDoc(run, generated) : null
       });
     }
     doc.save(fileName);
   }
 
-  return { build: buildPdf };
+  /* The same content as the PDF, as a layout-free document model
+     (materials.js) — rendered to Word by docx-export.js. Boxes keep the
+     PDF's row arrangement; Key Talking Points become Q/A pairs. */
+  function toDoc(run, generated) {
+    const M = window.MktforgeMaterials;
+    const boxes = run.boxes || {};
+    const titles = boxTitlesFor(run);
+    const m = M.model({
+      moduleId: 'battle-card-generator',
+      title: `Competitive Battle Card: ${run.competitorName}`,
+      meta: [
+        { label: 'Generated', value: generated },
+        { label: 'Company', value: run.companyName },
+        { label: 'Target Competitor', value: run.competitorName },
+        { label: 'Target Job Title', value: run.jobTitle },
+        { label: 'Specified Industry', value: run.industry || 'Unspecified' }
+      ],
+      style: 'cards', orientation: 'landscape', footer: 'Battle Card Generator'
+    });
+    const sec = (key, blocks) => ({ title: titles[key], blocks });
+    const fromLines = (key) => sec(key, M.blocksFromLines(buildPdfLines(key, boxes)));
+
+    const initiatives = T.capInitiatives(boxes.topInitiatives || []);
+    const tp = boxes.talkingPoints || [];
+    m.sections.push({ row: [fromLines('competitorProduct'), fromLines('ourFeatures'), fromLines('theirFeatures'),
+      sec('topInitiatives', initiatives.length ? [{ t: 'list', items: initiatives, style: 'letter' }] : [{ t: 'p', text: 'No Relevant Results Found' }])] });
+    m.sections.push({ row: [fromLines('whereWeWin'), fromLines('competitorChallenges')] });
+    m.sections.push({ row: [fromLines('customerReferences'), fromLines('pricing')] });
+    m.sections.push(sec('talkingPoints', tp.length
+      ? tp.map((i) => ({ t: 'qa', q: i.question, a: capToLimit(i.answer) }))
+      : [{ t: 'p', text: 'No Relevant Results Found' }]));
+    return m;
+  }
+
+  return { build: buildPdf, toDoc };
 })();

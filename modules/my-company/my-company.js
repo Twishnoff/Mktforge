@@ -39,6 +39,10 @@
      (same as Market Tracker's channel list). Editing always shows every tag. */
   const CHIPS_SHOWN = 3;
 
+  /* Saved Resources shows this many rows, then "Show more" adds PAGE_STEP. */
+  const PAGE = 15;
+  const PAGE_STEP = 10;
+
   /* Saved URL chips show just the address itself — no scheme, "www." or
      trailing slash — to save space. The stored value is untouched, and the
      chip still links to the full URL. */
@@ -120,6 +124,13 @@
       files: null,
       filesError: '',
       renaming: null,        // { id, value, error, saving } while a file name is being edited
+      tab: 'generated',      // 'generated' | 'imported'
+      filter: 'all',         // moduleId chip on the Generated tab
+      query: '',             // search box
+      shown: PAGE,           // rows shown before "Show more"
+      menu: null,            // { id, kind: 'download' | 'more' } — the open row menu
+      linking: null,         // file id whose "Link to original" picker is open
+      armedDelete: null,     // file id whose Delete has been clicked once
       uploads: [],           // import status lines
       pumping: false,
       hs: null,              // HubSpot status from the Worker, null until loaded
@@ -174,6 +185,44 @@
           </form>
         </section>
 
+        <!-- Saved Resources sits right under the profile; Integrations
+             follows. One block with two tabs (Generated / Imported) instead
+             of two stacked tables, so both are a click from the top however
+             many files a company holds. The whole section is a drop target. -->
+        <section class="mc__resources" aria-labelledby="mc-resources-title" data-el="resources">
+          <div class="mc__res-head">
+            <div class="mc__res-title">
+              <h2 class="mc__h2" id="mc-resources-title">Your Saved Resources</h2>
+              <button type="button" class="mc__pill mc__pill--accent" data-el="import-btn">
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>
+                Import files</button>
+              <input type="file" multiple hidden data-el="import-input" accept="${window.MktforgeExtract ? window.MktforgeExtract.ACCEPT : ''}">
+            </div>
+            <div class="mc__tabs" role="tablist" aria-label="Saved resources">
+              <button type="button" role="tab" class="mc__tab" data-tab="generated" aria-selected="true">Generated<span class="mc__tab-count" data-count="generated"></span></button>
+              <button type="button" role="tab" class="mc__tab" data-tab="imported" aria-selected="false">Imported<span class="mc__tab-count" data-count="imported"></span></button>
+            </div>
+          </div>
+          <p class="mc__subdek">Everything Mktforge’s agents read when they research for you. Your imported files are
+            treated as the most accurate source, and when two files disagree, the newer one wins.</p>
+
+          <div class="mc__drop" data-el="drop" hidden>
+            <div class="mc__drop-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V5"/><path d="M7 10l5-5 5 5"/><path d="M4 19h16"/></svg>
+            </div>
+            <div class="mc__drop-text">
+              <p class="mc__drop-main"><strong>Drop files here to add them to this company</strong> or
+                <button type="button" class="mc__link" data-el="import-link">browse your computer</button></p>
+              <p class="mc__drop-sub">PDF, Word, PowerPoint, Excel, CSV, text, Markdown, JSON or HTML · up to 15 MB each ·
+                A Word file you downloaded from Mktforge and edited is tied back to its original automatically.</p>
+            </div>
+          </div>
+          <ul class="mc__uploads" data-el="uploads" aria-live="polite"></ul>
+
+          <div class="mc__toolbar" data-el="toolbar"></div>
+          <div data-el="files-table"><p class="mc__loading">Loading…</p></div>
+        </section>
+
         <section class="mc__integrations" aria-labelledby="mc-integrations-title">
           <h2 class="mc__h2" id="mc-integrations-title">Integrations</h2>
           <div class="mc__card mc__card--tight">
@@ -181,32 +230,6 @@
           </div>
           <div class="mc__card mc__card--tight mc__card--slack">
             <div class="mc__hs mc__sl" data-el="slack"><p class="mc__loading">Checking Slack…</p></div>
-          </div>
-        </section>
-
-        <section class="mc__resources" aria-labelledby="mc-resources-title" data-el="resources">
-          <h2 class="mc__h2" id="mc-resources-title">Your Saved Resources</h2>
-          <p class="mc__subdek">Everything Mktforge’s agents read when they research for you. Your imported files are
-            treated as the most accurate source, and when two files disagree, the newer one wins.</p>
-
-          <div class="mc__group">
-            <h3 class="mc__h3">Generated Materials</h3>
-            <div data-el="files-generated"><p class="mc__loading">Loading…</p></div>
-          </div>
-
-          <div class="mc__group mc__group--import" data-el="import-zone">
-            <div class="mc__group-head">
-              <h3 class="mc__h3">Imported Materials</h3>
-              <button type="button" class="mc__btn mc__btn--sm" data-el="import-btn">Import Files</button>
-              <input type="file" multiple hidden data-el="import-input" accept="${window.MktforgeExtract ? window.MktforgeExtract.ACCEPT : ''}">
-            </div>
-            <div class="mc__drop" data-el="drop">
-              <p class="mc__drop-main"><strong>Drag and drop files here</strong> or
-                <button type="button" class="mc__link" data-el="import-link">browse your computer</button></p>
-              <p class="mc__drop-sub">PDF, Word, PowerPoint, Excel, CSV, text, Markdown, JSON or HTML · up to 15 MB each</p>
-            </div>
-            <ul class="mc__uploads" data-el="uploads" aria-live="polite"></ul>
-            <div data-el="files-imported"><p class="mc__loading">Loading…</p></div>
           </div>
         </section>
       </div>
@@ -360,38 +383,104 @@
   const extFor = (f) => (f.source === 'imported' ? (f.ext || '') : '.pdf');
   const kindLabel = (f) => (window.MktforgeExtract && window.MktforgeExtract.LABELS[f.kind]) || (f.ext ? f.ext.slice(1).toUpperCase() : 'File');
 
+  /* ---------- Saved Resources: tabs, filter chips, search, table ---------- */
+
+  const M = () => window.MktforgeMaterials;
+  const shortModule = (f) => (M() && M().SHORT_NAMES[f.moduleId]) || f.moduleName || '';
+  const sortedFiles = () => [...(state.files || [])].sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0));
+  const onTab = (f) => (state.tab === 'imported' ? f.source === 'imported' : f.source !== 'imported');
+
+  function matchesQuery(f, qstr) {
+    if (!qstr) return true;
+    const hay = [f.name, f.moduleName, M() ? M().inputsSummary(f.moduleId, f.inputs) : '', kindLabel(f)]
+      .join(' ').toLowerCase();
+    return qstr.split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+  }
+
+  function visibleFiles() {
+    const qstr = state.query.trim().toLowerCase();
+    return sortedFiles().filter((f) => onTab(f)
+      && (state.tab === 'imported' || state.filter === 'all' || f.moduleId === state.filter)
+      && matchesQuery(f, qstr));
+  }
+
+  function syncTabs() {
+    const files = state.files || [];
+    const gen = files.filter((f) => f.source !== 'imported').length;
+    const imp = files.length - gen;
+    root.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === state.tab ? 'true' : 'false'));
+    const cg = q('[data-count="generated"]'); if (cg) cg.textContent = state.files ? ` · ${gen}` : '';
+    const ci = q('[data-count="imported"]'); if (ci) ci.textContent = state.files ? ` · ${imp}` : '';
+    const drop = q('[data-el="drop"]');
+    if (drop) drop.hidden = state.tab !== 'imported';
+  }
+
+  function renderToolbar() {
+    const bar = q('[data-el="toolbar"]');
+    if (!bar) return;
+    const files = state.files || [];
+    const search = `
+      <label class="mc__search">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input type="search" data-el="search" value="${esc(state.query)}"
+               placeholder="${state.tab === 'imported' ? 'Search imported files' : 'Search files'}" aria-label="Search files">
+      </label>`;
+    if (state.tab === 'imported') {
+      const n = files.filter((f) => f.source === 'imported').length;
+      bar.innerHTML = `<span class="mc__toolbar-note">${n ? `${n} imported file${n === 1 ? '' : 's'} · newest first` : ''}</span>${search}`;
+      return;
+    }
+    const counts = {};
+    files.filter((f) => f.source !== 'imported').forEach((f) => { counts[f.moduleId] = (counts[f.moduleId] || 0) + 1; });
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    const order = Object.keys((M() && M().SHORT_NAMES) || {}).filter((id) => counts[id]);
+    Object.keys(counts).forEach((id) => { if (!order.includes(id)) order.push(id); });
+    const chip = (id, label, n) => `<button type="button" class="mc__chip-btn${state.filter === id ? ' is-on' : ''}"
+      data-filter="${esc(id)}" aria-pressed="${state.filter === id ? 'true' : 'false'}">${esc(label)} · ${n}</button>`;
+    const chips = [chip('all', 'All', total), ...order.map((id) => chip(id, (M() && M().SHORT_NAMES[id]) || id, counts[id]))];
+    bar.innerHTML = `<div class="mc__chips-row" role="group" aria-label="Filter by module">${chips.join('')}</div>${search}`;
+  }
+
   function renderFiles() {
-    const boxes = { generated: q('[data-el="files-generated"]'), imported: q('[data-el="files-imported"]') };
+    if (!root) return;
+    syncTabs();
+    renderToolbar();
+    renderTable();
+  }
+
+  function renderTable() {
+    const box = q('[data-el="files-table"]');
+    if (!box) return;
     if (state.filesError) {
-      Object.values(boxes).forEach((box) => {
-        box.innerHTML = `<p class="mc__error">${esc(state.filesError)} <button type="button" class="mc__link" data-files-retry>Try again</button></p>`;
-      });
+      box.innerHTML = `<p class="mc__error">${esc(state.filesError)} <button type="button" class="mc__link" data-files-retry>Try again</button></p>`;
       return;
     }
-    if (!state.files) {
-      Object.values(boxes).forEach((box) => { box.innerHTML = '<p class="mc__loading">Loading…</p>'; });
-      return;
-    }
-    // Newest first in both lists.
-    const sorted = [...state.files].sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0));
-    const generated = sorted.filter((f) => f.source !== 'imported');
-    const imported = sorted.filter((f) => f.source === 'imported');
+    if (!state.files) { box.innerHTML = '<p class="mc__loading">Loading…</p>'; return; }
 
-    boxes.generated.innerHTML = generated.length ? `
-      <div class="mc__table-wrap">
-        <table class="mc__table">
-          <thead><tr><th scope="col">File</th><th scope="col">Module</th><th scope="col">Created</th><th scope="col"><span class="mc__sr">Actions</span></th></tr></thead>
-          <tbody>${generated.map((f) => fileRowHtml(f)).join('')}</tbody>
-        </table>
-      </div>` : '<p class="mc__empty">No generated materials yet. Every PDF you create in another module is saved here automatically.</p>';
+    const all = visibleFiles();
+    const rows = all.slice(0, state.shown);
+    const imported = state.tab === 'imported';
+    const empty = imported
+      ? 'No imported files yet. Add customer research, call notes, sales decks or anything else you want Mktforge’s agents to use.'
+      : (state.query || state.filter !== 'all')
+        ? 'No files match. Clear the search or pick another module.'
+        : 'No generated materials yet. Every PDF you create in another module is saved here automatically.';
 
-    boxes.imported.innerHTML = imported.length ? `
-      <div class="mc__table-wrap">
-        <table class="mc__table">
-          <thead><tr><th scope="col">File</th><th scope="col">Type</th><th scope="col">Imported</th><th scope="col"><span class="mc__sr">Actions</span></th></tr></thead>
-          <tbody>${imported.map((f) => fileRowHtml(f)).join('')}</tbody>
+    const head = imported
+      ? '<th scope="col">File</th><th scope="col">Type</th><th scope="col">Size</th><th scope="col">Added</th><th scope="col"><span class="mc__sr">Actions</span></th>'
+      : '<th scope="col">File</th><th scope="col">Inputs</th><th scope="col">Module</th><th scope="col">Created</th><th scope="col"><span class="mc__sr">Actions</span></th>';
+
+    box.innerHTML = rows.length ? `
+      <div class="mc__table-wrap${state.menu ? ' has-menu' : ''}">
+        <table class="mc__table${imported ? ' mc__table--imported' : ''}">
+          <thead><tr>${head}</tr></thead>
+          <tbody>${rows.map((f) => fileRowHtml(f)).join('')}</tbody>
         </table>
-      </div>` : '<p class="mc__empty">No imported files yet. Add customer research, call notes, sales decks or anything else you want Mktforge’s agents to use.</p>';
+      </div>
+      <div class="mc__table-foot">
+        <span class="mc__toolbar-note">Showing ${rows.length} of ${all.length}</span>
+        ${all.length > rows.length ? `<button type="button" class="mc__pill" data-el="show-more">Show ${Math.min(PAGE_STEP, all.length - rows.length)} more</button>` : ''}
+      </div>` : `<p class="mc__empty">${empty}</p>`;
 
     const r = state.renaming;
     if (r) {
@@ -400,6 +489,8 @@
       input.focus();
       input.setSelectionRange(input.value.length, input.value.length);
     }
+    const sel = q('[data-link-select]');
+    if (sel) sel.focus();
   }
 
   function fileNote(f) {
@@ -409,9 +500,57 @@
     return '';
   }
 
+  const fileById = (id) => (state.files || []).find((x) => x.id === id) || null;
+
+  /* "Edited copy of …" on the copy, "Edited copy exists" on the original. */
+  function lineageHtml(f) {
+    if (f.source === 'imported' && f.derivedFrom) {
+      const o = fileById(f.derivedFrom);
+      return `<span class="mc__badge mc__badge--link" title="Agents treat this file as the current version of its original.">Edited copy of ${esc(o ? o.name : 'a generated file')}</span>`;
+    }
+    if (f.source !== 'imported' && f.supersededBy) {
+      const c = fileById(f.supersededBy);
+      return `<span class="mc__badge" title="${esc(c ? `“${c.name}” is an edited copy of this file.` : 'An edited copy of this file was imported.')}">Edited copy exists</span>`;
+    }
+    return '';
+  }
+
+  function downloadMenuHtml(f) {
+    const word = f.hasResult
+      ? `<button type="button" class="mc__menu-item" data-dl="docx:${esc(f.id)}">
+           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2B5797" stroke-width="2"><path d="M6 2h8l6 6v14H6z"/><path d="M14 2v6h6"/><path d="M9 13l1.5 5 1.5-4 1.5 4 1.5-5"/></svg>
+           Word (.docx)<span class="mc__menu-hint">editable</span></button>`
+      : `<span class="mc__menu-item is-off" title="Made before Word export existed — run the module again for a Word version.">
+           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h8l6 6v14H6z"/><path d="M14 2v6h6"/><path d="M9 13l1.5 5 1.5-4 1.5 4 1.5-5"/></svg>
+           Word (.docx)<span class="mc__menu-hint">not available</span></span>`;
+    return `
+      <div class="mc__menu mc__menu--right" role="menu">
+        <button type="button" class="mc__menu-item" data-dl="pdf:${esc(f.id)}">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B23A2E" stroke-width="2"><path d="M6 2h8l6 6v14H6z"/><path d="M14 2v6h6"/></svg>
+          PDF<span class="mc__menu-hint">${esc(formatSize(f.size))}</span></button>
+        ${word}
+      </div>`;
+  }
+
+  function moreMenuHtml(f) {
+    const items = [`<button type="button" class="mc__menu-item" data-rename="${esc(f.id)}">Rename</button>`];
+    if (f.source === 'imported') {
+      items.push(f.derivedFrom
+        ? `<button type="button" class="mc__menu-item" data-unlink="${esc(f.id)}">Unlink from original</button>`
+        : `<button type="button" class="mc__menu-item" data-link="${esc(f.id)}">Link to original…</button>`);
+    }
+    const armed = state.armedDelete === f.id;
+    items.push(`<button type="button" class="mc__menu-item mc__menu-item--danger${armed ? ' is-armed' : ''}" data-delete="${esc(f.id)}">${armed ? 'Confirm delete' : 'Delete'}</button>`);
+    return `<div class="mc__menu mc__menu--right" role="menu">${items.join('')}</div>`;
+  }
+
   function fileRowHtml(f) {
     const r = state.renaming && state.renaming.id === f.id ? state.renaming : null;
     const ext = extFor(f);
+    const imported = f.source === 'imported';
+    const menu = state.menu && state.menu.id === f.id ? state.menu.kind : null;
+    const formats = imported ? '' : (f.hasResult ? 'PDF, Word' : 'PDF');
+
     const nameCell = r
       ? `<div class="mc__rename">
            <input type="text" class="mc__rename-input" data-rename-input="${esc(f.id)}"
@@ -421,19 +560,50 @@
            <span class="mc__meta">${esc(ext)}</span>
          </div>
          <p class="mc__field-error" id="mc-rename-error" data-rename-error ${r.error ? '' : 'hidden'}>${esc(r.error || '')}</p>`
-      : `<button type="button" class="mc__file" data-open="${esc(f.id)}"
-                 title="${Data().isViewable(f.mimeType) ? 'Open' : 'Download'}">${esc(f.name)}${esc(ext)}</button>
-         <span class="mc__meta">${esc(formatSize(f.size))}</span>${fileNote(f)}`;
-    const renameBtn = r
-      ? `<button type="button" class="mc__rename-btn is-saving" data-rename-save="${esc(f.id)}"
-                 ${r.error || r.saving ? 'disabled' : ''}>${r.saving ? 'Saving…' : 'Save'}</button>`
-      : `<button type="button" class="mc__rename-btn" data-rename="${esc(f.id)}">Rename</button>`;
+      : `<div class="mc__name-stack">
+           <div><button type="button" class="mc__file" data-open="${esc(f.id)}"
+                 title="${Data().isViewable(f.mimeType) ? 'Open' : 'Download'}">${esc(f.name)}${imported ? esc(ext) : ''}</button>${fileNote(f)}</div>
+           <span class="mc__meta mc__meta--sub">${esc([formatSize(f.size), formats].filter(Boolean).join(' · '))}</span>
+           ${lineageHtml(f)}
+         </div>`;
+
+    const actions = r
+      ? `<button type="button" class="mc__pill mc__pill--accent" data-rename-save="${esc(f.id)}" ${r.error || r.saving ? 'disabled' : ''}>${r.saving ? 'Saving…' : 'Save'}</button>
+         <button type="button" class="mc__pill" data-rename-cancel="${esc(f.id)}" ${r.saving ? 'disabled' : ''}>Cancel</button>`
+      : imported
+        ? `<button type="button" class="mc__pill mc__pill--accent" data-open="${esc(f.id)}" data-open-mode="download">${Data().isViewable(f.mimeType) ? 'Open' : 'Download'}</button>
+           <span class="mc__menu-wrap"><button type="button" class="mc__more${menu === 'more' ? ' is-open' : ''}" data-menu="more:${esc(f.id)}" aria-haspopup="menu" aria-expanded="${menu === 'more'}" aria-label="More actions for ${esc(f.name)}">···</button>${menu === 'more' ? moreMenuHtml(f) : ''}</span>`
+        : `<span class="mc__menu-wrap"><button type="button" class="mc__pill mc__pill--accent${menu === 'download' ? ' is-open' : ''}" data-menu="download:${esc(f.id)}" aria-haspopup="menu" aria-expanded="${menu === 'download'}">Download ▾</button>${menu === 'download' ? downloadMenuHtml(f) : ''}</span>
+           <span class="mc__menu-wrap"><button type="button" class="mc__more${menu === 'more' ? ' is-open' : ''}" data-menu="more:${esc(f.id)}" aria-haspopup="menu" aria-expanded="${menu === 'more'}" aria-label="More actions for ${esc(f.name)}">···</button>${menu === 'more' ? moreMenuHtml(f) : ''}</span>`;
+
+    const cells = imported
+      ? `<td>${esc(kindLabel(f))}</td><td>${esc(formatSize(f.size))}</td><td>${esc(formatDate(f.createdAt))}</td>`
+      : `<td class="mc__cell-inputs">${esc((M() && M().inputsSummary(f.moduleId, f.inputs)) || '—')}</td>
+         <td>${esc(shortModule(f))}</td><td>${esc(formatDate(f.createdAt))}</td>`;
+
+    const linkRow = state.linking === f.id ? linkRowHtml(f) : '';
     return `
       <tr data-file="${esc(f.id)}"${r ? ' class="is-renaming"' : ''}>
         <td class="mc__cell-name">${nameCell}</td>
-        <td>${esc(f.source === 'imported' ? kindLabel(f) : (f.moduleName || ''))}</td>
-        <td>${esc(formatDate(f.createdAt))}</td>
-        <td class="mc__cell-action">${renameBtn}<button type="button" class="mc__delete" data-delete="${esc(f.id)}">Delete</button></td>
+        ${cells}
+        <td class="mc__cell-action">${actions}</td>
+      </tr>${linkRow}`;
+  }
+
+  /* The "Link to original…" picker: every generated file, newest first. */
+  function linkRowHtml(f) {
+    const options = sortedFiles().filter((g) => g.source !== 'imported')
+      .map((g) => `<option value="${esc(g.id)}">${esc(g.name)} — ${esc(formatDate(g.createdAt))}</option>`).join('');
+    return `
+      <tr class="mc__link-row" data-file-link="${esc(f.id)}">
+        <td colspan="5">
+          <label class="mc__link-label" for="mc-link-${esc(f.id)}">This file is an edited copy of</label>
+          <select id="mc-link-${esc(f.id)}" class="mc__link-select" data-link-select="${esc(f.id)}">
+            <option value="">Choose the original…</option>${options}
+          </select>
+          <button type="button" class="mc__pill" data-link-cancel="${esc(f.id)}">Cancel</button>
+          <span class="mc__meta">Agents will read the copy in place of the original.</span>
+        </td>
       </tr>`;
   }
 
@@ -470,6 +640,7 @@
       }
       state.uploads.push(u);
     });
+    showImportedTab();
     renderUploads();
     pump(state);
   }
@@ -492,6 +663,7 @@
           u.status = 'done';
           u.note = res.empty ? 'Imported — no readable text found' : res.truncated ? 'Imported — only the first part could be read' : 'Imported';
           if (res.name !== u.name.replace(/\.[^.]+$/, '')) u.note += ` as “${res.name}${res.ext}”`;
+          if (res.linked) u.note += ` · linked to “${res.linked.name}”`;
           const id = u.id;
           setTimeout(() => {
             st.uploads = st.uploads.filter((x) => x.id !== id);
@@ -511,7 +683,7 @@
   }
 
   function wireImport() {
-    const zone = q('[data-el="import-zone"]');
+    const zone = q('[data-el="resources"]');      // the whole section takes a drop
     const input = q('[data-el="import-input"]');
     const browse = () => input.click();
     q('[data-el="import-btn"]').addEventListener('click', browse);
@@ -542,6 +714,16 @@
       zone.classList.remove('is-dragging');
       addUploads(e.dataTransfer.files);
     });
+  }
+
+  /* A file dropped on the Generated tab lands on the Imported tab, so the
+     person sees it arrive. */
+  function showImportedTab() {
+    if (state.tab === 'imported') return;
+    state.tab = 'imported';
+    state.shown = PAGE;
+    state.menu = null;
+    renderFiles();
     q('[data-el="uploads"]').addEventListener('click', (e) => {
       const x = e.target.closest('[data-dismiss]');
       if (!x) return;
@@ -552,8 +734,6 @@
 
   /* ---------- rename ---------- */
 
-  const RENAME_DUPLICATE = 'File name already exists. Choose another.';
-
   function cleanFileName(v, id) {
     const f = (state.files || []).find((x) => x.id === id);
     const ext = f ? extFor(f) : '.pdf';
@@ -561,13 +741,12 @@
     return (ext && t.toLowerCase().endsWith(ext.toLowerCase()) ? t.slice(0, -ext.length) : t).trim();
   }
 
+  /* Names needn't be unique any more — generated files are named from their
+     inputs, so two runs can share one; the Created column tells them apart. */
   function renameProblem(id, value) {
     const name = cleanFileName(value, id);
     if (!name) return 'Enter a file name.';
-    const lower = name.toLowerCase();
-    if ((state.files || []).some((f) => f.id !== id && f.name.trim().toLowerCase() === lower)) {
-      return RENAME_DUPLICATE;
-    }
+    if (name.length > 200) return 'That name is too long.';
     return '';
   }
 
@@ -588,6 +767,7 @@
     const f = (state.files || []).find((x) => x.id === id);
     if (!f) return;
     state.renaming = { id, value: f.name, error: '', saving: false };
+    state.menu = null;
     renderFiles();
     const input = q('[data-rename-input]');
     if (input) input.select();
@@ -624,8 +804,7 @@
     } catch (ex) {
       console.error('[My Company] rename failed', ex);
       r.saving = false;
-      r.error = ex && ex.code === 'duplicate' ? RENAME_DUPLICATE
-              : (ex && ex.code ? ex.message : 'Couldn’t rename that file. Please try again.');
+      r.error = ex && ex.code ? ex.message : 'Couldn’t rename that file. Please try again.';
     }
     if (onScreen(st)) renderFiles();
   }
@@ -639,6 +818,7 @@
   }
 
   function handleFilesKeydown(e) {
+    if (e.key === 'Escape' && (state.menu || state.linking)) { state.linking = null; closeMenus(); renderTable(); return; }
     if (!e.target.closest('[data-rename-input]')) return;
     if (e.key === 'Enter') { e.preventDefault(); saveRename(); }
     else if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
@@ -895,8 +1075,6 @@
 
   /* ---------- files ---------- */
 
-  const pendingDelete = new Map();
-
   async function loadFiles() {
     const st = state;
     st.filesError = '';
@@ -910,22 +1088,110 @@
     if (onScreen(st)) renderFiles();
   }
 
+  const notifyUser = (message, tone = 'error') =>
+    document.dispatchEvent(new CustomEvent('mktforge:notify', { detail: { message, tone } }));
+
+  function closeMenus() {
+    if (!state.menu && !state.armedDelete) return;
+    state.menu = null;
+    state.armedDelete = null;
+    if (mounted) renderTable();
+  }
+
+  /* Clicks anywhere outside an open menu close it. */
+  function handleDocumentClick(e) {
+    if (!mounted || !state.menu) return;
+    if (e.target.closest && e.target.closest('.mc__menu-wrap')) return;
+    closeMenus();
+  }
+
+  /* Downloads the saved PDF, or builds the Word file from the stored
+     document model and stamps it with the file's origin. */
+  async function downloadFile(id, format) {
+    const f = fileById(id);
+    if (!f) return;
+    const D = here();
+    if (format === 'pdf') {
+      await D.openFile(id, { viewable: false });
+      return;
+    }
+    const model = await D.getFileResult(id);
+    if (!model) throw new Error('This file has no Word version. Run the module again to get one.');
+    await window.Mktforge.loadScript('assets/js/docx-export.js');
+    await window.MktforgeDocx.download(model, {
+      fileId: f.id, companyId: state._cid, moduleId: f.moduleId, inputs: f.inputs, createdAt: f.createdAt, fileName: f.name
+    });
+    notifyUser(`Downloaded “${f.name}.docx”. Edit it and import it back to replace the original.`, 'info');
+  }
+
   async function handleFilesClick(e) {
     if (e.target.closest('[data-files-retry]')) { loadFiles(); return; }
+
+    const tab = e.target.closest('[data-tab]');
+    if (tab) {
+      if (state.tab !== tab.dataset.tab) {
+        state.tab = tab.dataset.tab; state.shown = PAGE; state.menu = null; state.linking = null;
+        renderFiles();
+      }
+      return;
+    }
+    const chip = e.target.closest('[data-filter]');
+    if (chip) {
+      state.filter = chip.dataset.filter; state.shown = PAGE; state.menu = null;
+      renderToolbar(); renderTable();
+      return;
+    }
+    if (e.target.closest('[data-el="show-more"]')) { state.shown += PAGE_STEP; renderTable(); return; }
+
+    const menuBtn = e.target.closest('[data-menu]');
+    if (menuBtn) {
+      const [kind, id] = menuBtn.dataset.menu.split(':');
+      const same = state.menu && state.menu.id === id && state.menu.kind === kind;
+      state.menu = same ? null : { id, kind };
+      state.armedDelete = null;
+      renderTable();
+      return;
+    }
+
+    const dl = e.target.closest('[data-dl]');
+    if (dl) {
+      const [format, id] = dl.dataset.dl.split(':');
+      state.menu = null;
+      renderTable();
+      try { await downloadFile(id, format); }
+      catch (ex) {
+        console.error('[My Company] download failed', ex);
+        notifyUser(ex && ex.message ? ex.message : 'Couldn’t download that file. Please try again.');
+      }
+      return;
+    }
+
     const renameBtn = e.target.closest('[data-rename]');
     if (renameBtn) { startRename(renameBtn.dataset.rename); return; }
     if (e.target.closest('[data-rename-save]')) { saveRename(); return; }
+    if (e.target.closest('[data-rename-cancel]')) { cancelRename(); return; }
+
+    const link = e.target.closest('[data-link]');
+    if (link) { state.linking = link.dataset.link; state.menu = null; renderTable(); return; }
+    if (e.target.closest('[data-link-cancel]')) { state.linking = null; renderTable(); return; }
+    const unlink = e.target.closest('[data-unlink]');
+    if (unlink) {
+      state.menu = null; renderTable();
+      try { await here().unlinkFile(unlink.dataset.unlink); }
+      catch (ex) { console.error('[My Company] unlink failed', ex); notifyUser('Couldn’t unlink that file. Please try again.'); }
+      return;
+    }
 
     const open = e.target.closest('[data-open]');
     if (open) {
       open.disabled = true;
       try {
-        const f = (state.files || []).find((x) => x.id === open.dataset.open);
-        await here().openFile(open.dataset.open, { viewable: !f || Data().isViewable(f.mimeType) });
+        const f = fileById(open.dataset.open);
+        const viewable = open.dataset.openMode === 'download' ? false : (!f || Data().isViewable(f.mimeType));
+        await here().openFile(open.dataset.open, { viewable });
       } catch (ex) {
         console.error('[My Company] open failed', ex);
-        document.dispatchEvent(new CustomEvent('mktforge:notify',
-          { detail: { message: ex.message || 'Couldn’t open that file.', tone: 'error' } }));
+        notifyUser(ex.message || 'Couldn’t open that file.');
       } finally {
         open.disabled = false;
       }
@@ -936,29 +1202,48 @@
     if (!del) return;
     const id = del.dataset.delete;
 
-    // Two-step: first click arms, second click (within 4s) deletes.
-    if (!pendingDelete.has(id)) {
-      del.textContent = 'Confirm delete';
-      del.classList.add('is-armed');
-      pendingDelete.set(id, setTimeout(() => {
-        pendingDelete.delete(id);
-        if (del.isConnected) { del.textContent = 'Delete'; del.classList.remove('is-armed'); }
-      }, 4000));
+    // Two-step: the first click arms ("Confirm delete"), the second deletes.
+    if (state.armedDelete !== id) {
+      state.armedDelete = id;
+      renderTable();
       return;
     }
-
-    clearTimeout(pendingDelete.get(id));
-    pendingDelete.delete(id);
+    state.armedDelete = null;
+    state.menu = null;
     del.disabled = true;
     del.textContent = 'Deleting…';
     try {
       await here().deleteFile(id);          // onFiles listener refreshes the table
     } catch (ex) {
       console.error('[My Company] delete failed', ex);
-      document.dispatchEvent(new CustomEvent('mktforge:notify',
-        { detail: { message: 'Couldn’t delete that file. Please try again.', tone: 'error' } }));
-      if (del.isConnected) { del.disabled = false; del.textContent = 'Delete'; del.classList.remove('is-armed'); }
+      notifyUser('Couldn’t delete that file. Please try again.');
+      renderTable();
     }
+  }
+
+  /* The search box and the "Link to original" picker. */
+  function handleFilesChange(e) {
+    const sel = e.target.closest('[data-link-select]');
+    if (!sel || !sel.value) return;
+    const copyId = sel.dataset.linkSelect;
+    const originalId = sel.value;
+    sel.disabled = true;
+    here().linkFile(copyId, originalId).then(() => {
+      state.linking = null;                // onFiles refreshes the rows
+    }).catch((ex) => {
+      console.error('[My Company] link failed', ex);
+      notifyUser(ex && ex.message ? ex.message : 'Couldn’t link those files. Please try again.');
+      sel.disabled = false;
+    });
+  }
+
+  function handleSearchInput(e) {
+    const input = e.target.closest('[data-el="search"]');
+    if (!input) return;
+    state.query = input.value;
+    state.shown = PAGE;
+    state.menu = null;
+    renderTable();
   }
 
   /* ---------- load ---------- */
@@ -1452,7 +1737,7 @@
     icon:   'factory',
     // The ?v= changes whenever this stylesheet does, so a browser holding the
     // old copy fetches the new one instead of pairing new markup with old styles.
-    styles: 'modules/my-company/my-company.css?v=2026-10-07a',
+    styles: 'modules/my-company/my-company.css?v=2026-10-13',
     companyAware: true,
 
     mount(container) {
@@ -1488,7 +1773,10 @@
       const resources = q('[data-el="resources"]');
       resources.addEventListener('click', handleFilesClick);
       resources.addEventListener('input', handleFilesInput);
+      resources.addEventListener('input', handleSearchInput);
+      resources.addEventListener('change', handleFilesChange);
       resources.addEventListener('keydown', handleFilesKeydown);
+      document.addEventListener('click', handleDocumentClick);
       wireImport();
       renderUploads();
 
@@ -1522,10 +1810,11 @@
 
     unmount() {
       mounted = false;
+      document.removeEventListener('click', handleDocumentClick);
+      state.menu = null;
+      state.armedDelete = null;
       comboCleanup.forEach((fn) => fn());
       comboCleanup = [];
-      pendingDelete.forEach((t) => clearTimeout(t));
-      pendingDelete.clear();
       if (unsubFiles) { unsubFiles(); unsubFiles = null; }
       if (unsubProfile) { unsubProfile(); unsubProfile = null; }
       if (unsubCompanies) { unsubCompanies(); unsubCompanies = null; }

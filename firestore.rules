@@ -89,10 +89,28 @@ service cloud.firestore {
                 || (request.resource.data.textChunks is int && request.resource.data.textChunks <= 5))
             && (!('digest' in request.resource.data)
                 || (request.resource.data.digest is string
-                    && request.resource.data.digest.size() <= 20000));
+                    && request.resource.data.digest.size() <= 20000))
+            // What the run was made from (job title, competitor, industry…),
+            // the edited-copy links, and how many document-model parts exist.
+            && (!('inputs' in request.resource.data) || request.resource.data.inputs is map)
+            && (!('resultChunks' in request.resource.data)
+                || (request.resource.data.resultChunks is int && request.resource.data.resultChunks <= 2))
+            && (!('derivedFrom' in request.resource.data)
+                || (request.resource.data.derivedFrom is string && request.resource.data.derivedFrom.size() <= 64))
+            && (!('supersededBy' in request.resource.data)
+                || (request.resource.data.supersededBy is string && request.resource.data.supersededBy.size() <= 64));
 
           // Text pulled out of the file for Mktforge's agents.
           match /text/{partId} {
+            allow read, delete: if isOwner(uid);
+            allow create, update: if isOwner(uid) && companyActive(uid, cid)
+              && request.resource.data.data is string
+              && request.resource.data.data.size() <= 950 * 1024;
+          }
+
+          // The document model a generated file was drawn from (JSON), so it
+          // can be exported as Word. Optional: a file without it is PDF-only.
+          match /result/{partId} {
             allow read, delete: if isOwner(uid);
             allow create, update: if isOwner(uid) && companyActive(uid, cid)
               && request.resource.data.data is string

@@ -561,7 +561,11 @@ window.MktforgeCompanyBriefPdf = (() => {
     const fallbackName = `Company Brief - ${(model.company || 'Company').replace(/[^\w\- ]+/g, '')}.pdf`;
     const D = data || window.MktforgeData;
     if (D && typeof D.savePdfDoc === 'function') {
-      return D.savePdfDoc(doc, { moduleId: 'company-brief', moduleName: 'Company Brief', fallbackName });
+      // Named "Company Brief — <company>"; no document model yet (the brief's
+      // layout is its own thing), so it stays PDF-only in My Company.
+      const M = window.MktforgeMaterials;
+      return D.savePdfDoc(doc, { moduleId: 'company-brief', moduleName: 'Company Brief', fallbackName,
+        inputs: M ? M.inputsFor('company-brief', { companyName: model.company || '' }) : null });
     }
     doc.save(fallbackName);
     return null;
