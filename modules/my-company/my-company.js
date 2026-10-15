@@ -38,6 +38,8 @@
   /* Rows marked collapse show this many saved chips, then "+ X more. Show All"
      (same as Market Tracker's channel list). Editing always shows every tag. */
   const CHIPS_SHOWN = 3;
+  /* Saved Resources shows its search box only once a tab holds this many files. */
+  const SEARCH_AT = 25;
 
   /* Saved Resources shows this many rows, then "Show more" adds PAGE_STEP. */
   const PAGE = 15;
@@ -125,7 +127,7 @@
       filesError: '',
       renaming: null,        // { id, value, error, saving } while a file name is being edited
       tab: 'generated',      // 'generated' | 'imported'
-      filter: 'all',         // moduleId chip on the Generated tab
+      filter: 'all',         // module dropdown on the Generated tab
       query: '',             // search box
       shown: PAGE,           // rows shown before "Show more"
       menu: null,            // { id, kind: 'download' | 'more' } — the open row menu
@@ -384,7 +386,7 @@
   const extFor = (f) => (f.source === 'imported' ? (f.ext || '') : '.pdf');
   const kindLabel = (f) => (window.MktforgeExtract && window.MktforgeExtract.LABELS[f.kind]) || (f.ext ? f.ext.slice(1).toUpperCase() : 'File');
 
-  /* ---------- Saved Resources: tabs, filter chips, search, table ---------- */
+  /* ---------- Saved Resources: tabs, module dropdown, search, table ---------- */
 
   const M = () => window.MktforgeMaterials;
   const shortModule = (f) => (M() && M().SHORT_NAMES[f.moduleId]) || f.moduleName || '';
@@ -420,7 +422,9 @@
     const bar = q('[data-el="toolbar"]');
     if (!bar) return;
     const files = state.files || [];
-    const search = `
+    /* The search box stays hidden until a library is big enough to need it —
+       the module dropdown narrows a small library on its own. */
+    const search = files.filter(onTab).length < SEARCH_AT ? '' : `
       <label class="mc__search">
         <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
         <input type="search" data-el="search" value="${esc(state.query)}"
@@ -436,10 +440,11 @@
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
     const order = Object.keys((M() && M().SHORT_NAMES) || {}).filter((id) => counts[id]);
     Object.keys(counts).forEach((id) => { if (!order.includes(id)) order.push(id); });
-    const chip = (id, label, n) => `<button type="button" class="mc__chip-btn${state.filter === id ? ' is-on' : ''}"
-      data-filter="${esc(id)}" aria-pressed="${state.filter === id ? 'true' : 'false'}">${esc(label)} · ${n}</button>`;
-    const chips = [chip('all', 'All', total), ...order.map((id) => chip(id, (M() && M().SHORT_NAMES[id]) || id, counts[id]))];
-    bar.innerHTML = `<div class="mc__chips-row" role="group" aria-label="Filter by module">${chips.join('')}</div>${search}`;
+    if (state.filter !== 'all' && !counts[state.filter]) state.filter = 'all';   // module emptied out
+    const opt = (id, label, n) => `<option value="${esc(id)}"${state.filter === id ? ' selected' : ''}>${esc(label)} (${n})</option>`;
+    const options = [opt('all', 'Show all', total), ...order.map((id) => opt(id, (M() && M().SHORT_NAMES[id]) || id, counts[id]))];
+    bar.innerHTML = `<label class="mc__filter"><span class="mc__filter-label">Filter</span>
+      <select class="mc__filter-select" data-el="filter" aria-label="Filter by module">${options.join('')}</select></label>${search}`;
   }
 
   function renderFiles() {
@@ -498,7 +503,7 @@
     const empty = imported
       ? 'No imported files yet. Add customer research, call notes, sales decks or anything else you want Mktforge’s agents to use.'
       : (state.query || state.filter !== 'all')
-        ? 'No files match. Clear the search or pick another module.'
+        ? 'No files match. Pick another module or clear the search.'
         : 'No generated materials yet. Every PDF you create in another module is saved here automatically.';
 
     // One wide File column; module, inputs and date live on the line under
@@ -1168,12 +1173,6 @@
       }
       return;
     }
-    const chip = e.target.closest('[data-filter]');
-    if (chip) {
-      state.filter = chip.dataset.filter; state.shown = PAGE; state.menu = null;
-      renderToolbar(); renderTable();
-      return;
-    }
     if (e.target.closest('[data-el="show-more"]')) { state.shown += PAGE_STEP; renderTable(); return; }
 
     const menuBtn = e.target.closest('[data-menu]');
@@ -1254,8 +1253,14 @@
     }
   }
 
-  /* The search box and the "Link to original" picker. */
+  /* The module dropdown, the search box and the "Link to original" picker. */
   function handleFilesChange(e) {
+    const filt = e.target.closest('[data-el="filter"]');
+    if (filt) {
+      state.filter = filt.value; state.shown = PAGE; state.menu = null;
+      renderTable();
+      return;
+    }
     const sel = e.target.closest('[data-link-select]');
     if (!sel || !sel.value) return;
     const copyId = sel.dataset.linkSelect;

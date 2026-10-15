@@ -830,20 +830,23 @@ a.mc__value:hover, .mc__chip a:hover { text-decoration: underline; }
   margin: 0 0 14px;
 }
 
-.mc__chips-row { display: flex; gap: 8px; flex-wrap: wrap; }
-
-.mc__chip-btn {
-  height: 32px;
-  padding: 0 14px;
+/* Module filter: one dropdown ("Show all" or a single module) instead of chips. */
+.mc__filter { display: inline-flex; align-items: center; gap: 10px; }
+.mc__filter-label { font: 500 13.5px var(--font-body); color: var(--muted); }
+.mc .mc__filter-select {
+  height: 34px;
+  padding: 0 32px 0 12px;
   border: 1px solid var(--mc-line);
-  border-radius: 999px;
-  background: var(--mc-surface);
-  color: var(--ink-soft);
-  font: 500 13.5px var(--font-body);
+  border-radius: 6px;
+  background: var(--mc-surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>") no-repeat right 11px center;
+  color: var(--ink);
+  font: 500 14px var(--font-body);
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
-.mc__chip-btn:hover { background: var(--paper-dim); color: var(--ink); }
-.mc__chip-btn.is-on { background: var(--accent); border-color: var(--accent); color: #F2F7F4; }
+.mc .mc__filter-select:hover { background-color: var(--paper-dim); }
+.mc .mc__filter-select:focus { outline: none; border-color: var(--accent); }
 
 .mc__search {
   display: flex;
