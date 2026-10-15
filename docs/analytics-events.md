@@ -41,7 +41,7 @@ have several companies.
 
 | Event | Fires from | Properties beyond the common set | Meaning |
 | --- | --- | --- | --- |
-| `site_pageview` | posthog-js autocapture on mktforge.io | `path`, `referrer`, `utm_*` (PostHog captures these by default) | A page of the marketing site was viewed. Anonymous. |
+| `$pageview` | posthog-js on mktforge.io (`capture_pageview: true`; off in the app) | `$current_url`, `$referrer`, `utm_*` (PostHog's own) | A page of the marketing site was viewed. Anonymous. The one `$`-prefixed event in the contract, because it is PostHog's built-in rather than ours. |
 | `signup_started` | `login.js` when the create-account view is shown (`show('create')`, including `?view=create` deep links from the site) | `invite_code_present` (bool) | Someone opened the sign-up form. Anonymous; aliased to the uid if they finish. |
 | `signup_completed` | `login.js` after `MktforgeAuth.signUp()` resolves **and** `MktforgeInvite.register()` / `.redeem()` has returned, so `plan` is known | `invite_code_present`, `invite_label` (from redeem, if any) | Account exists in Firebase Auth and on the access allowlist. Sets person properties `plan`, `signup_source`, `signed_up_at`. |
 | `email_verified` | `login.js` when `MktforgeAuth.refresh()` returns `verified: true` (the verify screen's "I've verified" path) | — | The verification link was clicked. Fires client-side the first time the app sees it, which may be minutes after the click; good enough for a funnel. |
@@ -98,7 +98,7 @@ the second touch.
 
 The funnel, in order, with the event that defines each step:
 
-1. `site_pageview`
+1. `$pageview` (site)
 2. `signup_started`
 3. `signup_completed`
 4. `email_verified`

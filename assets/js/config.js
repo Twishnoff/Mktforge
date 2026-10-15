@@ -105,6 +105,15 @@ window.MKTFORGE_CONFIG = {
     API_BASE_URL: 'https://customer-tracker.tyler-wishnoff.workers.dev'
   },
 
+  posthog: {
+    // Product analytics. The project key is public (it only identifies the
+    // project, like the Firebase apiKey above); see docs/analytics-events.md
+    // for the event contract. Autocapture and session replay stay off in the
+    // app: the inputs are each user's own company data.
+    API_KEY:  'phc_sJwT9rVz5GHRRmz29Lppw2niseaSunXgikT7AQRyAxNg',
+    API_HOST: 'https://us.i.posthog.com'
+  },
+
   access: {
     // Invite codes, the allowlist, and each account's own Anthropic API key
     // (Manage Profile → "Use your own API key"), all on the access Worker.
