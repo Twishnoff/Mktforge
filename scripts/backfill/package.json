@@ -1,0 +1,13 @@
+{
+  "name": "mktforge-backfill",
+  "private": true,
+  "type": "module",
+  "description": "One-off: rebuild historical PostHog events from Firebase Auth + Firestore (docs/analytics-events.md, Backfill)",
+  "scripts": {
+    "dry": "node backfill-posthog.mjs --dry-run",
+    "send": "node backfill-posthog.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

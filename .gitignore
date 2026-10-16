@@ -1,2 +1,3 @@
 # Backups Claude leaves beside files it replaces
 *.bak
+protect.json
