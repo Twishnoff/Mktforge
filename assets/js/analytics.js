@@ -4,9 +4,12 @@
    The event contract is docs/analytics-events.md. If an event is not in that
    file it does not get sent; add it there first.
 
-     MktforgeAnalytics.capture(name, props)   one event, common props added
+     MktforgeAnalytics.capture(name, props, opts)  one event, common props added;
+                                                   opts.beforeUnload sends it at once
      MktforgeAnalytics.identify(user)         called for you on sign-in
      MktforgeAnalytics.reset()                called for you on sign-out
+     MktforgeAnalytics.signupSource()         where this browser first came from
+     MktforgeAnalytics.runId()                a fresh id for one module run
 
    Loads posthog-js from PostHog's CDN. Calls made before it has loaded are
    queued and flushed, so modules can call capture() at any time. Autocapture,
@@ -69,9 +72,40 @@ window.MktforgeAnalytics = (() => {
 
   /* ---------- public ---------- */
 
-  function capture(name, props = {}) {
+  function capture(name, props = {}, opts = {}) {
     if (!enabled) return;
-    when(() => window.posthog.capture(name, { ...common(), ...props }));
+    // Before a redirect the batch would be lost; send_instantly + sendBeacon
+    // hands it to the browser, which delivers it after the page is gone.
+    const send = opts.beforeUnload ? { send_instantly: true, transport: 'sendBeacon' } : undefined;
+    when(() => window.posthog.capture(name, { ...common(), ...props }, send));
+  }
+
+  /* signup_source (see docs/analytics-events.md): invite label, else the first
+     UTM this browser saw, else the first referring domain, else direct.
+     posthog-js keeps the first URL and referrer it saw in persistence
+     ($initial_person_info: { u, r }), shared across subdomains by cookie. */
+  function signupSource(inviteLabel) {
+    if (inviteLabel) return String(inviteLabel);
+    let url = location.href, ref = document.referrer;
+    try {
+      const info = ready && window.posthog.get_property('$initial_person_info');
+      if (info && info.u) { url = info.u; ref = info.r || ''; }
+    } catch (e) { /* persistence unavailable */ }
+    try {
+      const q = new URL(url).searchParams;
+      const src = q.get('utm_source');
+      if (src) return q.get('utm_campaign') ? `${src}/${q.get('utm_campaign')}` : src;
+    } catch (e) { /* bad url */ }
+    try {
+      const host = ref && new URL(ref).hostname.replace(/^www\./, '');
+      if (host && !/(^|\.)mktforge\.io$/.test(host)) return host;
+    } catch (e) { /* bad referrer */ }
+    return 'direct';
+  }
+
+  function runId() {
+    return (crypto.randomUUID && crypto.randomUUID())
+      || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
   function identify(user) {
@@ -96,5 +130,5 @@ window.MktforgeAnalytics = (() => {
     if (u && u.uid) identify(u); else if (identified) reset();
   });
 
-  return { capture, identify, reset };
+  return { capture, identify, reset, signupSource, runId };
 })();

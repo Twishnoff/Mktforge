@@ -815,6 +815,7 @@ window.Mktforge = (() => {
 
     try {
       next.mount(mount);
+      if (window.MktforgeAnalytics) window.MktforgeAnalytics.capture('module_opened', { module: next.id });
     } catch (e) {
       console.error(`[Mktforge] ${next.id} mount failed`, e);
       mount.innerHTML = `<div style="padding:40px;font-family:var(--font-mono);color:#A8371F">

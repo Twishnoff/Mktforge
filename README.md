@@ -31,6 +31,56 @@ Names on the left are how mktforge.io describes each module; the name in the app
 - **Slack (MktBOT)** — @mention MktBOT in a channel to run Battle Card Generator, Persona Builder, Customer Finder, and Opportunity Finder, and receive the PDF in Slack.
 - **HubSpot** — a read-only connection that lets Message Targeter draft copy for a named contact using their profile, page views, notes, and deal context.
 
+## How a signup moves through the system
+
+The app and site report product events to PostHog; Mktforge's own HubSpot portal is the system of record for every user (being built, Week 2 of the [GTM build log](https://twishnoff.github.io/GTM-Build-Tracker/)); the Workers write state back and act on it. Dashed pieces are planned, solid ones are live. The event contract is [`docs/analytics-events.md`](docs/analytics-events.md).
+
+```mermaid
+flowchart LR
+    subgraph browser["Site + app (browser)"]
+        site["mktforge.io<br/>$pageview"]
+        form["Sign-up form<br/>signup_started → signup_completed"]
+        verify["Email link clicked<br/>email_verified"]
+        key["Manage Profile<br/>api_key_added"]
+        run["Module submit<br/>module_run_started"]
+        pdf["Save PDF<br/>pdf_saved"]
+    end
+
+    subgraph workers["Cloudflare Workers"]
+        access["mktforge-access<br/>allowlist + plan"]
+        modules["module Workers<br/>module_run_completed"]
+        sync["hubspot-sync<br/>(queued)"]
+    end
+
+    posthog[("PostHog<br/>events + funnel")]
+    hubspot[("HubSpot portal<br/>contact properties<br/>+ timeline")]
+    workflows{{"HubSpot workflows<br/>lifecycle · score"}}
+    nudge["Nudge / hosted-access emails"]
+    zap["Zapier: score ≥ 80"]
+    slack["Slack alert + task"]
+    kv["KV allowlist<br/>(hosted plan)"]
+
+    site --> form --> verify --> key --> run --> pdf
+    site -.-> posthog
+    form --> posthog
+    verify --> posthog
+    key --> posthog
+    run --> posthog
+    pdf --> posthog
+    form --> access
+    run --> modules --> posthog
+    access -.-> sync
+    modules -.-> sync
+    sync -.-> hubspot
+    hubspot -.-> workflows
+    workflows -.-> nudge
+    workflows -.-> zap -.-> slack
+    hubspot -. "plan = hosted webhook" .-> access --> kv
+
+    classDef planned stroke-dasharray: 5 5
+    class sync,hubspot,workflows,nudge,zap,slack,kv planned
+```
+
 ## Pricing and access
 
 Mktforge is free to use. There's no subscription and no per-seat fee. You connect an API key from your own AI provider (currently Anthropic) and that provider bills you directly for usage. Access is invite-only; request a code at [mktforge.io](https://mktforge.io).

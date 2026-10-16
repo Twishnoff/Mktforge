@@ -29,7 +29,7 @@ contact (the Week 2 system of record). A user's connected HubSpot account (the
 | `company_id` | string | `MktforgeData.activeCompanyId` | Absent until the first company exists |
 | `plan` | `byok` \| `hosted` | `MktforgeKit.byok.status().plan` (client), access record (server) | Accounts created without an invite code are `byok` |
 | `signup_source` | string | Person property, set once at `signup_completed` | See "Signup source" below |
-| `app_version` | string | Git short SHA baked in at deploy | Lets a funnel break be tied to a release |
+| `app_version` | string | Git short SHA baked in at deploy | Lets a funnel break be tied to a release. **Not sent yet**: the app deploys straight from the repo with no build step, so there is nowhere to bake it in |
 
 `uid`, `plan` and `signup_source` are also **person properties** (set with `$set`), so
 PostHog can filter people, not only events. `company_id` is event-only: a person can
@@ -55,7 +55,7 @@ have several companies.
 | --- | --- | --- | --- |
 | `company_created` | `data.js` `createCompany()` on success | `company_count` (after creation), `auto` (bool: created by `onlyIfNone` on first sign-in vs. by the user) | A company record exists. The first one is created automatically, so `auto: true` is not a user action and is excluded from the activation definition. |
 | `module_opened` | `app.js` `route()` when a module mounts | `module` | Navigation. Cheap, and it separates "verified but never looked at a tool" from "looked and did not run". |
-| `module_run_started` | `module-kit.js` fetch wrapper, on any request to a `*.workers.dev` host that is a module Worker (not `mktforge-access`, `hubspot-connect`, `mktforge-slack`) | `module`, `worker`, `run_id` (client-generated UUID, also sent to the Worker as `X-Mktforge-Run-Id`) | A paid call left the browser. `module` comes from the mounted module, `worker` from the hostname; they differ for `draft-messaging` (serves build-positioning, draft-messaging and research) and `customer-overview-dashboard` (find-my-customer). |
+| `module_run_started` | `module-kit.js` fetch wrapper, on any non-GET request to a `*.workers.dev` host that is a module Worker (not `mktforge-access`, `hubspot-connect`, `mktforge-slack`); GETs are status polls, not runs | `module`, `worker`, `run_id` (client-generated UUID; sent to the Worker as `X-Mktforge-Run-Id` from Day 6, once the Workers' CORS allow-list accepts the header) | A paid call left the browser. `module` comes from the mounted module, `worker` from the hostname; they differ for `draft-messaging` (serves build-positioning, draft-messaging and research) and `customer-overview-dashboard` (find-my-customer). |
 | `module_run_completed` | **Server-side**, from each module Worker via PostHog's `/capture` endpoint, through one helper in `shared/mktforge-auth.js` | `module`, `worker`, `run_id`, `duration_ms`, `billing` (`user` \| `host` \| `host-fallback` \| `none`), `outcome` (`success` \| `error`), `error_code` (e.g. `hosted_key_required`, `user_key_rejected`, `rate_limited`, `upstream`), `input_tokens`, `output_tokens` where the Worker has them | The Worker finished, whichever way. Sent from the server so a closed tab, a refusal, or a 500 still lands. `billing` is the same value as the `X-Mktforge-Billing` header. `distinct_id` is the uid from the verified ID token. |
 | `pdf_saved` | `data.js` `savePdfDoc()` after `storeFile()` succeeds (the one path every module's PDF goes through) | `module`, `file_id`, `format` (`pdf`; `docx` once Word export lands), `size_bytes`, `inputs_summary` | A generated document was saved to My Company. The download itself is not tracked: it never fails and does not prove the output was wanted. |
 | `hubspot_connected` | **Server-side** in `hubspot-connect` when the OAuth callback stores a token (the client leaves the page to authorize, so it cannot reliably fire this) | `portal_id` | A company is connected to a HubSpot portal. |
@@ -84,6 +84,12 @@ have several companies.
 
 Week 3's outbound campaign tags its links `utm_source=outbound&utm_campaign=<play>`,
 so campaign-driven signups are separable from organic ones in both PostHog and HubSpot.
+
+## Enforcement
+
+`scripts/check-analytics-events.mjs` runs in CI (`.github/workflows/ci.yml`) on every
+pull request and fails the build if the code sends an event name that is not in this
+file. Add the row here first, then the `capture()` call.
 
 ## Activation
 

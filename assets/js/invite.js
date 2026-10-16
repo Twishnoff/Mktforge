@@ -54,7 +54,16 @@ window.MktforgeInvite = (() => {
     return payload;
   }
 
-  const redeem = (code) => post('/redeem', { code }, 'redeem that code');
+  async function redeem(code) {
+    const payload = await post('/redeem', { code }, 'redeem that code');
+    // An existing byok account moved to hosted; a brand-new signup is not a change.
+    if (payload.upgraded && window.MktforgeAnalytics) {
+      window.MktforgeAnalytics.capture('plan_changed', {
+        from: 'byok', to: payload.plan || 'hosted', via: 'invite_code', $set: { plan: payload.plan || 'hosted' }
+      });
+    }
+    return payload;
+  }
   const register = () => post('/register', {}, 'set up your account');
 
   return { redeem, register };

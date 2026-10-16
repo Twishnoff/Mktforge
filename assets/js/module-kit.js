@@ -23,6 +23,7 @@
 window.MktforgeKit = (() => {
 
   const NO_ACCESS = "Your account doesn't have access to this module. Request access from your administrator.";
+  const track = (name, props) => { if (window.MktforgeAnalytics) window.MktforgeAnalytics.capture(name, props); };
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   /* ---------- account email ---------- */
@@ -523,7 +524,7 @@ window.MktforgeKit = (() => {
         if (!url) throw new HubSpotError('Slack didn’t return an approval link.', 'no_url', 0);
         window.location.assign(url);
       },
-      disconnect: () => request('POST', '/disconnect'),
+      disconnect: () => request('POST', '/disconnect').then((r) => { track('slack_disconnected', {}); return r; }),
       completeLink: (code) => request('POST', '/link/complete', { body: { code } }),
       /* A workspace already connected to another company: the Worker parks
          the new install and the app asks before switching. */
@@ -579,7 +580,8 @@ window.MktforgeKit = (() => {
         if (!url) throw new HubSpotError('HubSpot didn’t return an approval link.', 'no_url', 0);
         window.location.assign(url);
       },
-      disconnect: (opts = {}) => request('POST', '/disconnect', opts),   // { keepalive } survives a page reload
+      disconnect: (opts = {}) => request('POST', '/disconnect', opts)    // { keepalive } survives a page reload
+        .then((r) => { track('hubspot_disconnected', {}); return r; }),
       call: (path, body, opts = {}) => request('POST', path, { body, ...opts })
     };
   }
@@ -742,12 +744,14 @@ window.MktforgeKit = (() => {
     async function save(key) {
       const data = await request('POST', { provider: 'anthropic', key: String(key || '').trim() });
       set(data);
+      track('api_key_added', { key_status: data.status || undefined });
       return data;
     }
 
     async function remove() {
       const data = await request('DELETE');
       set({ ...data, hasKey: false });
+      track('api_key_removed', {});
       return data;
     }
 
@@ -783,9 +787,34 @@ window.MktforgeKit = (() => {
       billingListeners.forEach((fn) => { try { fn(lastBilling); } catch (e) { console.error(e); } });
     }
 
+    /* ---- module runs ----
+       Every non-GET request to a module Worker is a run leaving the browser:
+       it gets a run id (to be sent as X-Mktforge-Run-Id so the Worker's own
+       module_run_completed can be joined to it) and a module_run_started
+       event. The access, HubSpot and Slack Workers are plumbing, not runs. */
+    const NOT_A_MODULE = /^(mktforge-access|hubspot-connect|mktforge-slack)\./;
+    function runStarting(input, init) {
+      try {
+        const url = new URL(typeof input === 'string' ? input : (input && input.url) || '', location.href);
+        if (!/\.workers\.dev$/.test(url.hostname) || NOT_A_MODULE.test(url.hostname)) return null;
+        const method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+        if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return null;
+        return { worker: url.hostname.split('.')[0] };
+      } catch (e) { return null; }
+    }
+
     if (typeof window.fetch === 'function' && !window.fetch.__mktforgeByok) {
       const original = window.fetch.bind(window);
       const wrapped = async (...args) => {
+        const run = window.MktforgeAnalytics && runStarting(args[0], args[1]);
+        if (run) {
+          const runId = window.MktforgeAnalytics.runId();
+          const module = (window.Mktforge && window.Mktforge.activeId) || undefined;
+          // TODO Day 6: send runId as X-Mktforge-Run-Id once the Workers' CORS
+          // allow-list (shared/mktforge-auth.js) accepts it; today it would
+          // fail the preflight and block the run.
+          track('module_run_started', { module, worker: run.worker, run_id: runId });
+        }
         const res = await original(...args);
         try {
           const b = res && res.headers && res.headers.get('X-Mktforge-Billing');

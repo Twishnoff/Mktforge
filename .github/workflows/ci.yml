@@ -1,0 +1,17 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  analytics-contract:
+    name: Analytics event names match docs/analytics-events.md
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: node scripts/check-analytics-events.mjs
