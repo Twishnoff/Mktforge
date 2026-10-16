@@ -789,9 +789,9 @@ window.MktforgeKit = (() => {
 
     /* ---- module runs ----
        Every non-GET request to a module Worker is a run leaving the browser:
-       it gets a run id (to be sent as X-Mktforge-Run-Id so the Worker's own
-       module_run_completed can be joined to it) and a module_run_started
-       event. The access, HubSpot and Slack Workers are plumbing, not runs. */
+       it gets a run id (sent as X-Mktforge-Run-Id, with the module id as
+       X-Mktforge-Module, so the Worker's own module_run_completed can be
+       joined to it) and a module_run_started event. The access, HubSpot and Slack Workers are plumbing, not runs. */
     const NOT_A_MODULE = /^(mktforge-access|hubspot-connect|mktforge-slack)\./;
     function runStarting(input, init) {
       try {
@@ -810,9 +810,17 @@ window.MktforgeKit = (() => {
         if (run) {
           const runId = window.MktforgeAnalytics.runId();
           const module = (window.Mktforge && window.Mktforge.activeId) || undefined;
-          // TODO Day 6: send runId as X-Mktforge-Run-Id once the Workers' CORS
-          // allow-list (shared/mktforge-auth.js) accepts it; today it would
-          // fail the preflight and block the run.
+          // The Worker echoes both in its own module_run_completed event, so
+          // the two halves of a run can be joined (CORS allows the headers
+          // since the Day 6 shared-module change).
+          if (typeof args[0] === 'string' || args[0] instanceof URL) {
+            const init = { ...(args[1] || {}) };
+            const headers = new Headers(init.headers || {});
+            headers.set('X-Mktforge-Run-Id', runId);
+            if (module) headers.set('X-Mktforge-Module', module);
+            init.headers = headers;
+            args[1] = init;
+          }
           track('module_run_started', { module, worker: run.worker, run_id: runId });
         }
         const res = await original(...args);
