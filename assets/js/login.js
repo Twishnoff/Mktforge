@@ -19,8 +19,18 @@
 
   const $ = (id) => document.getElementById(id);
 
+  const track = (name, props, opts) => {
+    const a = window.MktforgeAnalytics;
+    if (a) a.capture(name, props, opts);
+  };
+  let signupStarted = false;
+
   function show(name) {
     Object.entries(views).forEach(([key, node]) => { node.hidden = key !== name; });
+    if (name === 'create' && !signupStarted) {
+      signupStarted = true;
+      track('signup_started', { invite_code_present: !!$('create-invite').value.trim() });
+    }
     const focusTarget = views[name].querySelector('input');
     if (focusTarget) focusTarget.focus();
   }
@@ -139,9 +149,9 @@
       // address that already has one, so a bad code would otherwise strand
       // their real email on a permanently useless login that only the
       // administrator can delete.
+      let access;
       try {
-        if (code) await MktforgeInvite.redeem(code);
-        else await MktforgeInvite.register();
+        access = code ? await MktforgeInvite.redeem(code) : await MktforgeInvite.register();
       } catch (redeemErr) {
         try {
           await user.delete();
@@ -152,6 +162,18 @@
         setMsg('create-msg', redeemErr.message || (code ? 'That invite code is not valid.' : 'Could not set up your account. Try again.'));
         return;
       }
+
+      // The account is on the allowlist, so the plan is known. The person
+      // properties let PostHog filter people, not only events.
+      const plan = (access && access.plan) || (code ? 'hosted' : 'byok');
+      const source = window.MktforgeAnalytics
+        ? window.MktforgeAnalytics.signupSource(access && access.label) : undefined;
+      track('signup_completed', {
+        invite_code_present: !!code,
+        invite_label: (access && access.label) || undefined,
+        plan,
+        $set: { plan, signup_source: source, signed_up_at: new Date().toISOString() }
+      });
 
       $('verify-email').textContent = user.email;
       setMsg('verify-msg', '');
@@ -170,8 +192,12 @@
     busy($('verify-continue'), true, 'Checking…');
     try {
       const user = await MktforgeAuth.refresh();
-      if (user && user.verified) window.location.replace(APP_PAGE);
-      else setMsg('verify-msg', 'Not verified yet — click the link in the email, then try again.');
+      if (user && user.verified) {
+        track('email_verified', {}, { beforeUnload: true });
+        window.location.replace(APP_PAGE);
+      } else {
+        setMsg('verify-msg', 'Not verified yet — click the link in the email, then try again.');
+      }
     } catch (err) {
       setMsg('verify-msg', MktforgeAuth.messageFor(err));
     } finally {

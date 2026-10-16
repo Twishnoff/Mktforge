@@ -1130,9 +1130,15 @@ window.MktforgeData = (() => {
       try {
         const extra = { source: 'generated', ext: '.pdf', mimeType: 'application/pdf', kind: 'pdf', createdVia: 'app' };
         if (inputs) extra.inputs = inputs;
-        const id = await storeFile({ name, moduleId, moduleName, blob: doc.output('blob'), extra, result });
+        const blob = doc.output('blob');
+        const id = await storeFile({ name, moduleId, moduleName, blob, extra, result });
         tellFiles();
         notify(`Saved to My Company as “${name}”.`);
+        if (window.MktforgeAnalytics) {
+          window.MktforgeAnalytics.capture('pdf_saved', {
+            module: moduleId, file_id: id, format: 'pdf', size_bytes: blob.size, inputs_summary: name
+          });
+        }
         return { id, name };
       } catch (err) {
         console.error('[Mktforge] could not save the PDF to the company', err);
@@ -1780,6 +1786,7 @@ window.MktforgeData = (() => {
     const u = auth().getUser();
     let existing = null;
     let orphans = {};
+    let created = 0;
     await withTimeout(d.runTransaction(async (tx) => {
       existing = null;
       orphans = {};
@@ -1800,7 +1807,11 @@ window.MktforgeData = (() => {
       tx.set(cRef, { status: 'active', code, name: '', profile: { ...EMPTY_PROFILE },
                      createdAt: firebase.firestore.FieldValue.serverTimestamp() });
       tx.set(uRef, { email: (u && u.email) || '', companyIds: { ...orphans, [cRef.id]: code } }, { merge: true });
+      created = Object.keys(ids).length + 1;
     }), TIMEOUT_MS, 'Adding a company');
+    if (!existing && window.MktforgeAnalytics) {
+      window.MktforgeAnalytics.capture('company_created', { company_count: created, auto: !!onlyIfNone });
+    }
     return existing || cRef.id;
   }
 
