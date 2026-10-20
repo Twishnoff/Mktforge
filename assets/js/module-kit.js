@@ -247,6 +247,11 @@ window.MktforgeKit = (() => {
   const BEAT_MS = 30 * 1000;
   const instances = [];
   const owned = new Set();            // run flags this tab is keeping alive
+  /* One analytics run id per module run (pc.begin → pc.end), keyed by module
+     id. The fetch wrapper below sends it on every Worker call the run makes,
+     so Find My Customer's three calls share one id and the server can count
+     the run once. Exposed for the wrapper only. */
+  const runIds = new Map();
 
   /* A refresh or a closed tab aborts the run's request, and the run's own
      error handling fires on the way out. It must not tidy away the flag
@@ -427,6 +432,7 @@ window.MktforgeKit = (() => {
         st._interrupted = false;
         if (!again || !st.running) flagOn(st);
         if (st._cid) saveHeld(st);
+        if (window.MktforgeAnalytics) runIds.set(moduleId, window.MktforgeAnalytics.runId());
         return st._run;
       },
       live(st, id) { return st._run === id; },
@@ -435,6 +441,7 @@ window.MktforgeKit = (() => {
         st.prev = null;
         st.controller = null;
         flagOff(st);          // (kept while the page unloads: that's the "interrupted" notice)
+        runIds.delete(moduleId);
         return true;
       },
 
@@ -788,10 +795,11 @@ window.MktforgeKit = (() => {
     }
 
     /* ---- module runs ----
-       Every non-GET request to a module Worker is a run leaving the browser:
-       it gets a run id (sent as X-Mktforge-Run-Id, with the module id as
+       Every non-GET request to a module Worker is a paid call leaving the
+       browser: it carries the module run's id (X-Mktforge-Run-Id, minted in
+       pc.begin so every call in one run shares it, with the module id as
        X-Mktforge-Module, so the Worker's own module_run_completed can be
-       joined to it) and a module_run_started event. The access, HubSpot and Slack Workers are plumbing, not runs. */
+       joined to it) and fires a module_run_started event. The access, HubSpot and Slack Workers are plumbing, not runs. */
     const NOT_A_MODULE = /^(mktforge-access|hubspot-connect|mktforge-slack)\./;
     function runStarting(input, init) {
       try {
@@ -808,8 +816,10 @@ window.MktforgeKit = (() => {
       const wrapped = async (...args) => {
         const run = window.MktforgeAnalytics && runStarting(args[0], args[1]);
         if (run) {
-          const runId = window.MktforgeAnalytics.runId();
           const module = (window.Mktforge && window.Mktforge.activeId) || undefined;
+          // The module's current run id if it is inside pc.begin/pc.end;
+          // a fresh one for a call made outside a run.
+          const runId = (module && runIds.get(module)) || window.MktforgeAnalytics.runId();
           // The Worker echoes both in its own module_run_completed event, so
           // the two halves of a run can be joined (CORS allows the headers
           // since the Day 6 shared-module change).

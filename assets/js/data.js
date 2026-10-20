@@ -1112,6 +1112,22 @@ window.MktforgeData = (() => {
       await withTimeout(meta.set(fields, { merge: true }), TIMEOUT_MS, 'Saving text');
     }
 
+    /* HubSpot counts saved PDFs (mktforge_pdfs_saved, one of the activation
+       ingredients). The save goes straight to Firestore, so the access Worker
+       only hears about it from here. Fire-and-forget: a lost call costs one
+       count, never the save. */
+    function tellServerPdfSaved() {
+      try {
+        const base = String(((window.MKTFORGE_CONFIG || {}).access || {}).API_BASE_URL || '').replace(/\/+$/, '');
+        const a = auth();
+        if (!base || !a || !a.getIdToken) return;
+        a.getIdToken().then((token) => {
+          if (!token) return;
+          return fetch(`${base}/events/pdf-saved`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, keepalive: true });
+        }).catch((err) => console.warn('[Mktforge] pdf-saved not reported', err));
+      } catch (err) { console.warn('[Mktforge] pdf-saved not reported', err); }
+    }
+
     async function savePdfDoc(doc, { moduleId, moduleName, fallbackName, inputs = null, result = null }) {
       let name = null;
       try {
@@ -1139,6 +1155,7 @@ window.MktforgeData = (() => {
             module: moduleId, file_id: id, format: 'pdf', size_bytes: blob.size, inputs_summary: name
           });
         }
+        tellServerPdfSaved();
         return { id, name };
       } catch (err) {
         console.error('[Mktforge] could not save the PDF to the company', err);
