@@ -680,6 +680,27 @@ window.MktforgeData = (() => {
     return handles.get(cid);
   }
 
+  /* HubSpot mirrors each company as a Company record on the user's contact,
+     and enrichment keys on the first company's URL (Day 15). Companies live
+     in Firestore, so like PDFs the access Worker only hears about them from
+     here. Fire-and-forget. action: 'created' (empty, from createCompany) or
+     'updated' (every profile save). */
+  function tellServerCompanySaved(action, company) {
+    try {
+      const base = String(((window.MKTFORGE_CONFIG || {}).access || {}).API_BASE_URL || '').replace(/\/+$/, '');
+      const a = auth();
+      if (!base || !a || !a.getIdToken) return;
+      a.getIdToken().then((token) => {
+        if (!token) return;
+        return fetch(`${base}/events/company-saved`, {
+          method: 'POST', keepalive: true,
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, company })
+        });
+      }).catch((err) => console.warn('[Mktforge] company-saved not reported', err));
+    } catch (err) { console.warn('[Mktforge] company-saved not reported', err); }
+  }
+
   function makeHandle(cid) {
 
     let profileCache = null;
@@ -770,6 +791,9 @@ window.MktforgeData = (() => {
           tx.set(cRef, { profile: { ...clean, updatedAt: FV.serverTimestamp() }, name: clean.companyName },
                  { merge: true });
         }), TIMEOUT_MS, 'Saving your profile');
+        tellServerCompanySaved('updated', {
+          id: cid, name: clean.companyName, url: clean.companyUrl, industry: clean.industry, competitors: clean.competitors
+        });
       }
       profileCache = clean;
       tellProfile(clean);
@@ -1828,6 +1852,9 @@ window.MktforgeData = (() => {
     }), TIMEOUT_MS, 'Adding a company');
     if (!existing && window.MktforgeAnalytics) {
       window.MktforgeAnalytics.capture('company_created', { company_count: created, auto: !!onlyIfNone });
+    }
+    if (!existing) {
+      tellServerCompanySaved('created', { id: cRef.id, name: '', url: '', industry: '', competitors: [], created_at: new Date().toISOString() });
     }
     return existing || cRef.id;
   }

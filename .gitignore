@@ -1,3 +1,6 @@
 # Backups Claude leaves beside files it replaces
 *.bak
 protect.json
+
+# Firestore company export for the HubSpot seed (scripts/backfill/export-companies.mjs); uids + URLs, keep out of the public repo
+scripts/backfill/companies.json
