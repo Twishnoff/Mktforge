@@ -33,52 +33,63 @@ Names on the left are how mktforge.io describes each module; the name in the app
 
 ## How a signup moves through the system
 
-The app and site report product events to PostHog; Mktforge's own HubSpot portal is the system of record for every user (being built, Week 2 of the [GTM build log](https://twishnoff.github.io/GTM-Build-Tracker/)); the Workers write state back and act on it. Dashed pieces are planned, solid ones are live. The event contract is [`docs/analytics-events.md`](docs/analytics-events.md).
+The app and site report product events to PostHog; Mktforge's own HubSpot portal is the system of record for every user, and eleven Cloudflare Workers write state into it and act on it. Prospects arrive from Apollo through Clay, go out through a HubSpot Sequence, and replies come back to a Worker for triage. Everything lands in BigQuery daily, where dbt defines the metrics and Looker Studio reads them. Solid lines are the lead and data path; dotted lines are write-backs into the product or the CRM. Built Oct 12 to Nov 10, 2026 ([build log](https://twishnoff.github.io/GTM-Build-Tracker/), [case study](https://twishnoff.github.io/Portfolio/GTM-Engineering)). The event contract is [`docs/analytics-events.md`](docs/analytics-events.md).
 
 ```mermaid
 flowchart LR
-    subgraph browser["Site + app (browser)"]
-        site["mktforge.io<br/>$pageview"]
-        form["Sign-up form<br/>signup_started → signup_completed"]
-        verify["Email link clicked<br/>email_verified"]
-        key["Manage Profile<br/>api_key_added"]
-        run["Module submit<br/>module_run_started"]
-        pdf["Save PDF<br/>pdf_saved"]
-    end
+    app["Site + app<br/>signup, verify, key, run, PDF events"]
 
-    subgraph workers["Cloudflare Workers"]
-        access["mktforge-access<br/>allowlist + plan"]
+    subgraph workers["Cloudflare Workers (11, deployed by CI)"]
+        access["mktforge-access<br/>auth · plan · KV allowlist"]
         modules["module Workers<br/>module_run_completed"]
-        sync["hubspot-sync<br/>(queued)"]
+        sync["hubspot-sync<br/>queue consumer<br/>lifecycle · score · flags"]
     end
 
-    posthog[("PostHog<br/>events + funnel")]
-    hubspot[("HubSpot portal<br/>contact properties<br/>+ timeline")]
-    workflows{{"HubSpot workflows<br/>lifecycle · score"}}
-    nudge["Nudge / hosted-access emails"]
-    zap["Zapier: score ≥ 80"]
-    slack["Slack alert + task"]
-    kv["KV allowlist<br/>(hosted plan)"]
+    subgraph crm["HubSpot (system of record)"]
+        hubspot[("Contacts + Companies<br/>mktforge_* properties, Notes")]
+        seq["Sequence<br/>2 steps · business days"]
+    end
 
-    site --> form --> verify --> key --> run --> pdf
-    site -.-> posthog
-    form --> posthog
-    verify --> posthog
-    key --> posthog
-    run --> posthog
-    pdf --> posthog
-    form --> access
-    run --> modules --> posthog
-    access -.-> sync
-    modules -.-> sync
-    sync -.-> hubspot
-    hubspot -.-> workflows
-    workflows -.-> nudge
-    workflows -.-> zap -.-> slack
-    hubspot -. "plan = hosted webhook" .-> access --> kv
+    subgraph outbound["Outbound"]
+        apollo["Apollo<br/>funded founders"]
+        clay["Clay<br/>enrich · B2B · ICP score"]
+        inbox["Founder inbox"]
+        triage["Reply triage (Worker)<br/>rules → Claude → deal / unsub / ask"]
+    end
 
-    classDef planned stroke-dasharray: 5 5
-    class sync,hubspot,workflows,nudge,zap,slack,kv planned
+    zapier["Zapier (3 Zaps)<br/>score ≥ 80 · plan changed · domain set"]
+    slack["Slack<br/>alert · approve / skip"]
+
+    subgraph data["Data layer"]
+        firestore[("Firestore")]
+        posthog[("PostHog")]
+        bq[("BigQuery<br/>raw_firestore · raw_posthog · raw_hubspot")]
+        dbt["dbt<br/>12 staging · 7 marts · 38 tests"]
+        looker["Looker Studio<br/>Mktforge GTM"]
+    end
+
+    app --> posthog
+    app --> access --> firestore
+    app --> modules --> posthog
+    access -- queue --> sync
+    modules -- queue --> sync
+    sync -- upsert --> hubspot
+
+    apollo -- domains --> clay
+    hubspot --> zapier -- webhook --> clay
+    clay -. "icp_score, company fields" .-> hubspot
+    hubspot -- enroll --> seq --> inbox
+    inbox -- "reply (webhook)" --> triage
+    triage --> hubspot
+    triage --> slack
+    slack -. "approve-and-send (Graph)" .-> inbox
+    zapier --> slack
+    zapier -. "signed /webhooks/plan" .-> access
+
+    firestore -- "Actions, daily" --> bq
+    posthog -- "batch export, daily" --> bq
+    hubspot -- "Actions, daily" --> bq
+    bq --> dbt --> looker
 ```
 
 ## Pricing and access
